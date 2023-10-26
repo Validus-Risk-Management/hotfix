@@ -196,8 +196,47 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             .await;
     }
 
-    async fn on_resend_request(&mut self, _message: &Message<'_, &[u8]>) {
-        // TODO: validate sequence numbers and send reject if needed
+    async fn on_resend_request(&mut self, message: &Message<'_, &[u8]>) {
+        // TODO: verify message and send reject as necessary
+
+        let begin_seq_number: usize = match message.fv(fix44::BEGIN_SEQ_NO) {
+            Ok(seq_number) => seq_number,
+            Err(_) => {
+                // send reject if there is no valid begin number
+                todo!()
+            }
+        };
+
+        let end_seq_number: usize = match message.fv(fix44::END_SEQ_NO) {
+            Ok(seq_number) => {
+                let last_seq_number = self.store.next_sender_seq_number().await as usize - 1;
+                if seq_number == 0 {
+                    last_seq_number
+                } else {
+                    std::cmp::min(seq_number, last_seq_number)
+                }
+            }
+            Err(_) => {
+                // send reject if there is no valid end number
+                todo!()
+            }
+        };
+
+        self.resend_messages(begin_seq_number, end_seq_number, message)
+            .await;
+    }
+
+    async fn resend_messages(&self, begin: usize, end: usize, _message: &Message<'_, &[u8]>) {
+        debug!(begin, end, "resending messages as requested");
+        let messages = self.store.get_slice(begin, end).await;
+
+        let no = messages.len();
+        debug!(no, "number of messages");
+
+        for msg in messages {
+            let message = String::from_utf8(msg).unwrap();
+            debug!(message, "resending message")
+        }
     }
 
     fn reset_timer(&mut self) {
@@ -216,6 +255,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             seq_num as usize,
             message,
         );
+        self.store.add(seq_num, &msg).await;
         self.state
             .send_message(&msg_type, RawFixMessage::new(msg))
             .await;

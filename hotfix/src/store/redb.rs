@@ -30,6 +30,18 @@ impl MessageStore for RedbMessageStore {
         write_txn.commit().unwrap();
     }
 
+    async fn get_slice(&self, begin: usize, end: usize) -> Vec<Vec<u8>> {
+        let read_txn = self.db.begin_read().unwrap();
+        {
+            let table = read_txn.open_table(MESSAGES_TABLE).unwrap();
+            table
+                .range(begin as u64..=end as u64)
+                .unwrap()
+                .map(|m| m.unwrap().1.value().to_vec())
+                .collect()
+        }
+    }
+
     async fn next_sender_seq_number(&self) -> u64 {
         let read_txn = self.db.begin_read().unwrap();
         let opened_table = read_txn.open_table(SEQ_NUMBER_TABLE);

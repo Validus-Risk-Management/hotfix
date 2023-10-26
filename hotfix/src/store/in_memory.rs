@@ -1,18 +1,21 @@
-use std::collections::HashMap;
-
 use crate::store::MessageStore;
 
 #[derive(Debug, Default)]
 pub struct InMemoryMessageStore {
     sender_seq_number: u64,
     target_seq_number: u64,
-    messages: HashMap<u64, Vec<u8>>,
+    messages: Vec<Vec<u8>>,
 }
 
 #[async_trait::async_trait]
 impl MessageStore for InMemoryMessageStore {
     async fn add(&mut self, sequence_number: u64, message: &[u8]) {
-        self.messages.insert(sequence_number, message.to_vec());
+        assert_eq!(sequence_number as usize, self.messages.len());
+        self.messages.push(message.to_vec());
+    }
+
+    async fn get_slice(&self, begin: usize, end: usize) -> Vec<Vec<u8>> {
+        self.messages.as_slice()[begin..=end].to_vec()
     }
 
     async fn next_sender_seq_number(&self) -> u64 {
