@@ -1,6 +1,7 @@
 mod message;
 mod state;
 
+use fefix::definitions::fix44;
 use fefix::tagvalue::{Config, Decoder, FieldAccess, Message};
 use fefix::Dictionary;
 use std::pin::Pin;
@@ -85,7 +86,6 @@ struct Session<M, S> {
     application: ApplicationRef<M>,
     store: S,
     heartbeat_timer: Pin<Box<Sleep>>,
-    decoder: Decoder,
 }
 
 impl<M: FixMessage, S: MessageStore> Session<M, S> {
@@ -106,40 +106,37 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             application,
             store,
             heartbeat_timer: Box::pin(heartbeat_timer),
-            decoder: Decoder::<Config>::new(Dictionary::fix44()),
         }
-    }
-
-    fn decode_message<'a>(&'a mut self, data: &'a [u8]) -> Message<&[u8]> {
-        self.decoder.decode(data).expect("decodable FIX message")
     }
 
     async fn on_incoming(&mut self, message: RawFixMessage) {
         debug!("received message: {}", message);
         self.store.increment_target_seq_number().await;
 
-        let decoded_message = self.decode_message(message.as_bytes());
-        let message_type = decoded_message.fv_raw(&35).unwrap();
+        let mut decoder = Decoder::<Config>::new(Dictionary::fix44());
+        let decoded_message = decoder.decode(message.as_bytes()).unwrap();
+        let message_type = decoded_message.fv(fix44::MSG_TYPE).unwrap();
+
         match message_type {
-            b"0" => {
+            "0" => {
                 // TODO: handle heartbeat
             }
-            b"1" => {
+            "1" => {
                 // TODO: handle test request
             }
-            b"2" => {
-                // TODO: handle resend request
+            "2" => {
+                self.on_resend_request(&decoded_message).await;
             }
-            b"3" => {
+            "3" => {
                 // TODO: handle reject
             }
-            b"4" => {
+            "4" => {
                 // TODO: handle sequence reset
             }
-            b"5" => {
+            "5" => {
                 self.on_logout().await;
             }
-            b"A" => {
+            "A" => {
                 self.on_logon().await;
             }
             _ => {
@@ -197,6 +194,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         self.application
             .send_logout("peer has logged us out".to_string())
             .await;
+    }
+
+    async fn on_resend_request(&mut self, _message: &Message<'_, &[u8]>) {
+        // TODO: validate sequence numbers and send reject if needed
     }
 
     fn reset_timer(&mut self) {
