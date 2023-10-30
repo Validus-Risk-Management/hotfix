@@ -1,0 +1,1 @@
+//! Fefix decoder implementation.

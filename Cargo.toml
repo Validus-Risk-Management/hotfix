@@ -4,6 +4,13 @@ members = [
 ]
 resolver = "2"
 
+[workspace.package]
+version = "0.0.9"
+authors = ["David Steiner <david_j_steiner@yahoo.co.nz>"]
+edition = "2021"
+license = "MIT"
+readme = "README.md"
+
 [workspace.dependencies]
 serde = "^1.0.177"
 tracing = "^0.1.37"

@@ -1,13 +1,19 @@
 [package]
 name = "hotfix-encoding"
-version = "0.0.1"
-authors = ["David Steiner <david_j_steiner@yahoo.co.nz>"]
-edition = "2021"
-license = "MIT"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
 description = "Message encoding for hotfix, an experimental FIX engine"
 keywords = []
-readme = "../../README.md"
 
 [dependencies]
+nohash-hasher = "^0.2"
 serde = { workspace = true, features = ["derive"] }
 tracing = { workspace = true }
+
+[dev-dependencies]
+quickcheck = "1"
+quickcheck_derive = "0.3"
+quickcheck_macros = "1"
