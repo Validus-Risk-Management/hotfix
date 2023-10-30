@@ -1,12 +1,12 @@
 [package]
 name = "hotfix"
-version = "0.0.7"
+version = "0.0.8"
 authors = ["David Steiner <david_j_steiner@yahoo.co.nz>"]
 edition = "2021"
 license = "MIT"
 description = "An experimental FIX engine"
 keywords = []
-readme = "../README.md"
+readme = "../../README.md"
 
 [features]
 redb = ["dep:redb"]
@@ -15,6 +15,7 @@ redb = ["dep:redb"]
 async-trait = "^0.1.73"
 fefix = { version = "^0.7.0", features = ["fix44"] }
 futures = "^0.3.28"
+hotfix-encoding = { version = "0.0.1", path = "../hotfix-encoding" }
 pki-types = { package = "rustls-pki-types", version = "^0.2" }
 redb = { version = "^1.1.0", optional = true }
 rustls = "^0.21.5"

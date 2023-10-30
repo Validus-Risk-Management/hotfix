@@ -657,11 +657,12 @@ dependencies = [
 
 [[package]]
 name = "hotfix"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "async-trait",
  "fefix",
  "futures",
+ "hotfix-encoding",
  "redb",
  "rustls 0.21.7",
  "rustls-pemfile",
@@ -671,6 +672,14 @@ dependencies = [
  "tokio-rustls 0.24.1",
  "tokio-stream",
  "toml",
+ "tracing",
+]
+
+[[package]]
+name = "hotfix-encoding"
+version = "0.0.1"
+dependencies = [
+ "serde",
  "tracing",
 ]
 
