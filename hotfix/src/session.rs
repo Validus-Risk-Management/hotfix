@@ -20,6 +20,7 @@ use crate::message::parser::RawFixMessage;
 use crate::message::FixMessage;
 use crate::store::MessageStore;
 
+use crate::message_utils::is_admin;
 use message::SessionMessage;
 use state::SessionState;
 
@@ -233,9 +234,38 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         let no = messages.len();
         debug!(no, "number of messages");
 
+        let mut decoder = Decoder::<Config>::new(Dictionary::fix44());
+        let mut reset_start: Option<u64> = None;
+        let mut sequence_number = 0;
+
         for msg in messages {
-            let message = String::from_utf8(msg).unwrap();
-            debug!(message, "resending message")
+            let m = String::from_utf8(msg.clone()).unwrap();
+            debug!(m, "resending message");
+            let decoded = decoder.decode(msg.as_slice()).unwrap();
+            sequence_number = decoded.fv(fix44::MSG_SEQ_NUM).unwrap();
+            let message_type: &str = decoded.fv(fix44::MSG_TYPE).unwrap();
+
+            if is_admin(message_type) {
+                debug!("skipping message as it's an admin message");
+                if reset_start.is_none() {
+                    reset_start = Some(sequence_number);
+                }
+                continue;
+            }
+
+            if let Some(begin) = reset_start {
+                let end = sequence_number;
+                debug!(begin, end, "reset sequence");
+                reset_start = None;
+            }
+
+            debug!(sequence_number, "resending message");
+        }
+
+        if let Some(begin) = reset_start {
+            // the final reset if needed
+            let end = sequence_number;
+            debug!(begin, end, "reset sequence");
         }
     }
 
