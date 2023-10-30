@@ -6,4 +6,31 @@ edition.workspace = true
 license.workspace = true
 readme.workspace = true
 
+[features]
+fix40 = []
+fix41 = []
+fix42 = []
+fix43 = []
+# FIX 4.4 is always enabled.
+fix50 = []
+fix50sp1 = []
+fix50sp2 = []
+fixt11 = []
+
 [dependencies]
+fnv = "1"
+quick-xml = "0.29"
+roxmltree = "0.14"
+smartstring = "1"
+strum = "0.24"
+strum_macros = "0.25"
+
+[dev-dependencies]
+arbitrary = { version = "1.0", features = ["derive"] }
+criterion = { version = "0.3", features = ["html_reports"] }
+enum-as-inner = "0.6"
+quickcheck = "1"
+quickcheck_derive = "0.3"
+quickcheck_macros = "1"
+tokio = { version = "1", features = ["full"] }
+syn = { version = "1", features = ["parsing"] }
