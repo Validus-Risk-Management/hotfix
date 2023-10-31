@@ -9,8 +9,11 @@ description = "Message encoding for hotfix, an experimental FIX engine"
 keywords = []
 
 [dependencies]
+chrono = "0.4"
+hotfix-dictionary = { version = "0.0.9", path = "../hotfix-dictionary" }
 nohash-hasher = "^0.2"
 serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

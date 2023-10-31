@@ -74,6 +74,7 @@ impl Default for Parser {
     }
 }
 
+// TODO: this is a duplicate of HeaderInfo in hotfix-encoding, delete it
 #[derive(Debug, Clone)]
 pub struct HeaderInfo {
     field_0: Range<usize>,

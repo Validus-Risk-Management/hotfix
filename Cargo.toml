@@ -13,4 +13,5 @@ readme = "README.md"
 
 [workspace.dependencies]
 serde = "^1.0.177"
+thiserror = "1.0.50"
 tracing = "^0.1.37"
