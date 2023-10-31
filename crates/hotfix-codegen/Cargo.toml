@@ -1,5 +1,6 @@
 [package]
 name = "hotfix-codegen"
+description = "Code generation for HotFIX."
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

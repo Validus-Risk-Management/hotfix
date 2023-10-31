@@ -1,5 +1,6 @@
 [package]
 name = "hotfix-derive"
+description = "Derive macros for HotFIX."
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
