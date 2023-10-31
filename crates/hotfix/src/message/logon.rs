@@ -1,5 +1,4 @@
-use fefix::definitions::fix44;
-use fefix::tagvalue::{EncoderHandle, FvWrite};
+use hotfix_encoding::{fix44, EncoderHandle, SetField};
 
 use crate::message::{DecodedMessage, FixMessage};
 
@@ -33,12 +32,12 @@ impl Logon {
 
 impl FixMessage for Logon {
     fn write(&self, msg: &mut EncoderHandle<Vec<u8>>) {
-        msg.set_fv(fix44::ENCRYPT_METHOD, self.encrypt_method);
-        msg.set_fv(fix44::HEART_BT_INT, self.heartbeat_interval);
-        msg.set_fv(fix44::RESET_SEQ_NUM_FLAG, self.reset_seq_num_flag);
+        msg.set(fix44::ENCRYPT_METHOD, self.encrypt_method);
+        msg.set(fix44::HEART_BT_INT, self.heartbeat_interval);
+        msg.set(fix44::RESET_SEQ_NUM_FLAG, self.reset_seq_num_flag);
 
         if let Some(next) = self.next_expected_msg_seq_num {
-            msg.set_fv(fix44::NEXT_EXPECTED_MSG_SEQ_NUM, next);
+            msg.set(fix44::NEXT_EXPECTED_MSG_SEQ_NUM, next);
         }
     }
 

@@ -13,7 +13,6 @@ redb = ["dep:redb"]
 
 [dependencies]
 async-trait = "^0.1.73"
-fefix = { version = "^0.7.0", features = ["fix44"] }
 futures = "^0.3.28"
 hotfix-encoding = { version = "0.0.9", path = "../hotfix-encoding" }
 pki-types = { package = "rustls-pki-types", version = "^0.2" }

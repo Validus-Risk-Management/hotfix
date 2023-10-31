@@ -1,9 +1,9 @@
 mod message;
 mod state;
 
-use fefix::definitions::fix44;
-use fefix::tagvalue::{Config, Decoder, FieldAccess, Message};
-use fefix::Dictionary;
+use hotfix_encoding::dict::Dictionary;
+use hotfix_encoding::field_access::FieldMap;
+use hotfix_encoding::{fix44, Decoder, Message};
 use std::pin::Pin;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
@@ -114,9 +114,9 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         debug!("received message: {}", message);
         self.store.increment_target_seq_number().await;
 
-        let mut decoder = Decoder::<Config>::new(Dictionary::fix44());
+        let mut decoder = Decoder::new(Dictionary::fix44());
         let decoded_message = decoder.decode(message.as_bytes()).unwrap();
-        let message_type = decoded_message.fv(fix44::MSG_TYPE).unwrap();
+        let message_type = decoded_message.get(fix44::MSG_TYPE).unwrap();
 
         match message_type {
             "0" => {
@@ -200,7 +200,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     async fn on_resend_request(&mut self, message: &Message<'_, &[u8]>) {
         // TODO: verify message and send reject as necessary
 
-        let begin_seq_number: usize = match message.fv(fix44::BEGIN_SEQ_NO) {
+        let begin_seq_number: usize = match message.get(fix44::BEGIN_SEQ_NO) {
             Ok(seq_number) => seq_number,
             Err(_) => {
                 // send reject if there is no valid begin number
@@ -208,7 +208,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             }
         };
 
-        let end_seq_number: usize = match message.fv(fix44::END_SEQ_NO) {
+        let end_seq_number: usize = match message.get(fix44::END_SEQ_NO) {
             Ok(seq_number) => {
                 let last_seq_number = self.store.next_sender_seq_number().await as usize - 1;
                 if seq_number == 0 {
@@ -234,7 +234,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         let no = messages.len();
         debug!(no, "number of messages");
 
-        let mut decoder = Decoder::<Config>::new(Dictionary::fix44());
+        let mut decoder = Decoder::new(Dictionary::fix44());
         let mut reset_start: Option<u64> = None;
         let mut sequence_number = 0;
 
@@ -242,8 +242,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             let m = String::from_utf8(msg.clone()).unwrap();
             debug!(m, "resending message");
             let decoded = decoder.decode(msg.as_slice()).unwrap();
-            sequence_number = decoded.fv(fix44::MSG_SEQ_NUM).unwrap();
-            let message_type: &str = decoded.fv(fix44::MSG_TYPE).unwrap();
+            sequence_number = decoded.get(fix44::MSG_SEQ_NUM).unwrap();
+            let message_type: &str = decoded.get(fix44::MSG_TYPE).unwrap();
 
             if is_admin(message_type) {
                 debug!("skipping message as it's an admin message");

@@ -1,4 +1,4 @@
-use fefix::tagvalue::EncoderHandle;
+use hotfix_encoding::EncoderHandle;
 
 use crate::message::{DecodedMessage, FixMessage};
 

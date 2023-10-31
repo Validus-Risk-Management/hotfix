@@ -1,6 +1,6 @@
 //! HeaderInfo taken from ferrumfix
-use fefix::tagvalue::{Config, Decoder};
-use fefix::Dictionary;
+use hotfix_encoding::dict::Dictionary;
+use hotfix_encoding::Decoder;
 use std::fmt::{Display, Formatter};
 use std::ops::Range;
 
@@ -36,7 +36,7 @@ impl Display for RawFixMessage {
 
 pub struct Parser {
     buffer: Vec<u8>,
-    decoder: Decoder<Config>,
+    decoder: Decoder,
 }
 
 impl Parser {

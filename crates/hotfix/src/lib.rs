@@ -8,3 +8,4 @@ pub mod store;
 pub(crate) mod transport;
 
 pub use actors::application::Application;
+pub use hotfix_encoding::{field_types, fix44, Encoder, EncoderHandle, SetField};
