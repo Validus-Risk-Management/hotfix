@@ -32,7 +32,6 @@
 //! # Quick tour of [`FieldType`]
 //!
 //! ```
-//! use serde::{Deserialize, Serialize};
 //! use hotfix_encoding::field_access::FieldType;
 //! use hotfix_encoding::field_types::Timestamp;
 //!

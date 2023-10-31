@@ -66,7 +66,7 @@ impl Date {
     /// # Examples
     ///
     /// ```
-    /// use fefix::field_types::Date;
+    /// use hotfix_encoding::field_types::Date;
     ///
     /// assert_eq!(&Date::new(2021, 01, 01).unwrap().to_yyyymmdd(), b"20210101");
     /// ```

@@ -8,7 +8,7 @@ const SEPARATOR: u8 = b' ';
 /// # Example
 ///
 /// ```
-/// use fefix::field_types::MultipleStrings;
+/// use hotfix_encoding::field_types::MultipleStrings;
 ///
 /// let mut words = MultipleStrings::new(b"foo bar qwerty");
 /// assert_eq!(words.next(), Some("foo".as_bytes()));

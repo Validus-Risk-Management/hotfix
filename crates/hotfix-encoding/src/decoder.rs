@@ -98,7 +98,8 @@ impl Decoder {
     /// # Examples
     ///
     /// ```no_run
-    /// use hotfix_dictionary::{fix44, Dictionary};
+    /// use hotfix_dictionary::{Dictionary};
+    /// use hotfix_encoding::fix44;
     /// use hotfix_encoding::config::{Config, GetConfig};
     /// use hotfix_encoding::decoder::Decoder;
     /// use hotfix_encoding::field_access::FieldMap;

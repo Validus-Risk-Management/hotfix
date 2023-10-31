@@ -6,7 +6,7 @@ use crate::{Buffer, FieldType};
 /// # Examples
 ///
 /// ```
-/// use hotfix_encoding::FieldType;
+/// use hotfix_encoding::field_access::FieldType;
 /// use hotfix_encoding::field_types::{Tz, TzTime};
 ///
 /// let tztime = TzTime::deserialize(b"07:39:20Z").unwrap();

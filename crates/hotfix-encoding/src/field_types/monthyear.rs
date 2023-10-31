@@ -47,8 +47,8 @@ impl MonthYear {
     /// # Examples
     ///
     /// ```
-    /// use fefix::prelude::*;
-    /// use fefix::field_types::MonthYear;
+    /// use hotfix_encoding::field_access::FieldType;
+    /// use hotfix_encoding::field_types::MonthYear;
     ///
     /// let dtf = MonthYear::deserialize(b"19390901").unwrap();
     /// assert_eq!(dtf.year(), 1939)
@@ -62,8 +62,8 @@ impl MonthYear {
     /// # Examples
     ///
     /// ```
-    /// use fefix::prelude::*;
-    /// use fefix::field_types::MonthYear;
+    /// use hotfix_encoding::field_access::FieldType;
+    /// use hotfix_encoding::field_types::MonthYear;
     ///
     /// let dtf = MonthYear::deserialize(b"20000101").unwrap();
     /// assert_eq!(dtf.month(), 1)
@@ -79,8 +79,8 @@ impl MonthYear {
     /// Day included in the definition:
     ///
     /// ```
-    /// use fefix::prelude::*;
-    /// use fefix::field_types::MonthYear;
+    /// use hotfix_encoding::field_access::FieldType;
+    /// use hotfix_encoding::field_types::MonthYear;
     ///
     /// let dtf = MonthYear::deserialize(b"20191225").unwrap();
     /// assert_eq!(dtf.day(), Some(25))
@@ -89,8 +89,8 @@ impl MonthYear {
     /// Day not included:
     ///
     /// ```
-    /// use fefix::prelude::*;
-    /// use fefix::field_types::MonthYear;
+    /// use hotfix_encoding::field_access::FieldType;
+    /// use hotfix_encoding::field_types::MonthYear;
     ///
     /// let dtf = MonthYear::deserialize(b"201801w3").unwrap();
     /// assert_eq!(dtf.day(), None)
@@ -111,8 +111,8 @@ impl MonthYear {
     /// Present week code:
     ///
     /// ```
-    /// use fefix::prelude::*;
-    /// use fefix::field_types::MonthYear;
+    /// use hotfix_encoding::field_access::FieldType;
+    /// use hotfix_encoding::field_types::MonthYear;
     ///
     /// let dtf = MonthYear::deserialize(b"201912w1").unwrap();
     /// assert_eq!(dtf.week(), Some(1))
@@ -121,8 +121,8 @@ impl MonthYear {
     /// Absent week code:
     ///
     /// ```
-    /// use fefix::prelude::*;
-    /// use fefix::field_types::MonthYear;
+    /// use hotfix_encoding::field_access::FieldType;
+    /// use hotfix_encoding::field_types::MonthYear;
     ///
     /// let dtf = MonthYear::deserialize(b"20191225").unwrap();
     /// assert_eq!(dtf.week(), None)

@@ -6,7 +6,7 @@ use std::iter::FusedIterator;
 /// # Example
 ///
 /// ```
-/// use fefix::field_types::MultipleChars;
+/// use hotfix_encoding::field_types::MultipleChars;
 ///
 /// let mut chars = MultipleChars::new(b"a b c");
 /// assert_eq!(chars.next(), Some(b'a'));

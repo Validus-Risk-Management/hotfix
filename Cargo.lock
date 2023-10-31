@@ -508,7 +508,7 @@ dependencies = [
  "futures",
  "futures-timer",
  "heck 0.3.3",
- "indoc",
+ "indoc 1.0.9",
  "lazy_static",
  "nohash-hasher",
  "openssl",
@@ -827,6 +827,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "hotfix-codegen"
+version = "0.0.9"
+dependencies = [
+ "arbitrary",
+ "chrono",
+ "criterion",
+ "enum-as-inner",
+ "fnv",
+ "heck 0.4.1",
+ "hotfix-dictionary",
+ "indoc 2.0.4",
+ "quickcheck",
+ "quickcheck_derive",
+ "quickcheck_macros",
+ "strum 0.24.1",
+ "strum_macros 0.25.3",
+ "syn 1.0.109",
+ "tokio",
+]
+
+[[package]]
+name = "hotfix-derive"
+version = "0.0.9"
+dependencies = [
+ "darling",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "hotfix-dictionary"
 version = "0.0.9"
 dependencies = [
@@ -851,12 +883,23 @@ name = "hotfix-encoding"
 version = "0.0.9"
 dependencies = [
  "chrono",
+ "fnv",
+ "heck 0.4.1",
+ "hotfix-codegen",
+ "hotfix-derive",
  "hotfix-dictionary",
+ "indoc 2.0.4",
+ "lazy_static",
  "nohash-hasher",
+ "quick-xml 0.29.0",
  "quickcheck",
  "quickcheck_derive",
  "quickcheck_macros",
+ "rayon",
+ "roxmltree",
  "serde",
+ "strum 0.24.1",
+ "strum_macros 0.25.3",
  "thiserror",
  "tracing",
 ]
@@ -925,6 +968,12 @@ name = "indoc"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa799dd5ed20a7e349f3b4639aa80d74549c81716d9ec4f994c9b5815598306"
+
+[[package]]
+name = "indoc"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e186cfbae8084e513daff4240b4797e342f988cecda4fb6c939150f96315fd8"
 
 [[package]]
 name = "instant"

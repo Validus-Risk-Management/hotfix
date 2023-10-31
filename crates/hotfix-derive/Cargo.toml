@@ -1,0 +1,18 @@
+[package]
+name = "hotfix-derive"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+
+[lib]
+name = "hotfix_derive"
+proc-macro = true
+
+[dependencies]
+darling = "0.12"
+proc-macro-crate = "1"
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "1", features = ["derive", "parsing"] }

@@ -12,8 +12,8 @@ const MINUTE: u32 = 60;
 /// # Examples
 ///
 /// ```
-/// use fefix::FieldType;
-/// use fefix::field_types::Tz;
+/// use hotfix_encoding::field_access::FieldType;
+/// use hotfix_encoding::field_types::Tz;
 /// use std::time::Duration;
 ///
 /// let timezone = Tz::deserialize(b"Z").unwrap();
