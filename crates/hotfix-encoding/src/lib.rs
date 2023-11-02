@@ -8,7 +8,6 @@ mod error;
 pub mod field_access;
 pub mod field_types;
 pub mod raw_decoder;
-mod streaming_decoder;
 mod utils;
 
 pub use hotfix_derive::FieldType;

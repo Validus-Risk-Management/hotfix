@@ -5,12 +5,10 @@ use std::fmt::Debug;
 use std::iter::FusedIterator;
 use std::marker::PhantomData;
 
-use crate::buffer::Buffer;
 use crate::config::{Config, GetConfig};
 use crate::error::DecodeError;
 use crate::field_access::{FieldMap, FieldType, FieldValueError, RepeatingGroup};
 use crate::raw_decoder::{RawDecoder, RawFrame};
-use crate::streaming_decoder::DecoderStreaming;
 use hotfix_dictionary::{Dictionary, FixDatatype, IsFieldDefinition, TagU32};
 
 /// Univocally locates a tag within a FIX message, even with nested groups.
@@ -75,20 +73,6 @@ impl Decoder {
                     }
                 })
                 .collect(),
-        }
-    }
-
-    /// Adds a [`Buffer`] to `self`, turning it into a [`StreamingDecoder`].
-    pub fn streaming<B>(self, buffer: B) -> DecoderStreaming<B>
-    where
-        B: Buffer,
-    {
-        let raw_decoder = self.raw_decoder.clone().streaming(buffer);
-
-        DecoderStreaming {
-            decoder: self,
-            raw_decoder,
-            is_ready: false,
         }
     }
 
@@ -539,6 +523,15 @@ where
 {
     type Group = MessageGroup<'a, T>;
 
+    fn get_raw(&self, tag: u32) -> Option<&[u8]> {
+        let tag = TagU32::new(tag)?;
+        let field_locator = FieldLocator {
+            tag,
+            context: self.field_locator_context,
+        };
+        self.builder.fields.get(&field_locator).map(|field| field.1)
+    }
+
     fn group(&self, tag: u32) -> Result<Self::Group, FieldValueError<<usize as FieldType>::Error>> {
         let tag = TagU32::new(tag).ok_or(FieldValueError::Missing)?;
         let field_locator_of_group_tag = FieldLocator {
@@ -562,15 +555,6 @@ where
             len: num_entries,
         })
     }
-
-    fn get_raw(&self, tag: u32) -> Option<&[u8]> {
-        let tag = TagU32::new(tag)?;
-        let field_locator = FieldLocator {
-            tag,
-            context: self.field_locator_context,
-        };
-        self.builder.fields.get(&field_locator).map(|field| field.1)
-    }
 }
 
 impl<'a, F, T> FieldMap<&F> for Message<'a, T>
@@ -580,15 +564,15 @@ where
 {
     type Group = MessageGroup<'a, T>;
 
+    fn get_raw(&self, field: &F) -> Option<&[u8]> {
+        self.get_raw(field.tag().get())
+    }
+
     fn group(
         &self,
         field: &F,
     ) -> Result<Self::Group, FieldValueError<<usize as FieldType>::Error>> {
         self.group(field.tag().get())
-    }
-
-    fn get_raw(&self, field: &F) -> Option<&[u8]> {
-        self.get_raw(field.tag().get())
     }
 }
 
@@ -639,7 +623,6 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::streaming_decoder::StreamingDecoder;
 
     // Use http://www.validfix.com/fix-analyzer.html for testing.
 
@@ -768,25 +751,5 @@ mod test {
         let mut codec = decoder();
         let result = codec.decode(msg.as_bytes());
         assert!(matches!(result, Err(DecodeError::Invalid)));
-    }
-
-    #[test]
-    fn decoder_streaming_state_management() {
-        use std::io::{Cursor, Read};
-        let mut stream = Cursor::new(b"\
-            8=FIX.4.2|9=40|35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|10=091|\
-            8=FIX.4.2|9=196|35=X|49=A|56=B|34=12|52=20100318-03:21:11.364|262=A|268=2|279=0|269=0|278=BID|55=EUR/USD|270=1.37215|15=EUR|271=2500000|346=1|279=0|269=1|278=OFFER|55=EUR/USD|270=1.37224|15=EUR|271=2503200|346=1|10=171|\
-        ");
-        let mut codec = decoder().streaming(vec![]);
-        for msg_type in [b"D", b"X"] {
-            loop {
-                stream.read_exact(codec.fillable()).unwrap();
-                if codec.try_parse().unwrap().is_some() {
-                    assert_eq!(codec.message().get_raw(35), Some(&msg_type[..]));
-                    break;
-                }
-            }
-            codec.clear();
-        }
     }
 }

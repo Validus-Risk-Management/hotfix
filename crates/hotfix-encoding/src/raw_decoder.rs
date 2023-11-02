@@ -1,9 +1,7 @@
 use std::ops::Range;
 
-use crate::buffer::Buffer;
 use crate::config::{Config, GetConfig};
 use crate::error::DecodeError;
-use crate::streaming_decoder::RawDecoderStreaming;
 use crate::utils;
 
 /// An immutable view over the contents of a FIX message by a [`RawDecoder`].
@@ -106,18 +104,6 @@ impl RawDecoder {
         Self::default()
     }
 
-    /// Adds a [`Buffer`] to `self`, turning it into a [`RawDecoderStreaming`].
-    pub fn streaming<B>(self, buffer: B) -> RawDecoderStreaming<B>
-    where
-        B: Buffer,
-    {
-        RawDecoderStreaming {
-            config: self.config,
-            buffer,
-            state: ParserState::Empty,
-        }
-    }
-
     /// Does minimal parsing on `data` and returns a [`RawFrame`] if it's valid.
     pub fn decode<T>(&self, src: T) -> Result<RawFrame<T>, DecodeError>
     where
@@ -213,7 +199,6 @@ impl HeaderInfo {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::streaming_decoder::StreamingDecoder;
 
     fn new_decoder() -> RawDecoder {
         let config = Config {
@@ -283,38 +268,5 @@ mod test {
         decoder.decode("9999999999999|".as_bytes()).ok();
         decoder.decode("|999999999999=|".as_bytes()).ok();
         decoder.decode("|999=999999999999999999|=".as_bytes()).ok();
-    }
-
-    #[test]
-    fn new_streaming_decoder_has_no_current_frame() {
-        let decoder = new_decoder().streaming(vec![]);
-        assert!(decoder.num_bytes_required() > 0);
-    }
-
-    #[test]
-    fn new_streaming_decoder() {
-        let stream = {
-            let mut stream = Vec::new();
-            for _ in 0..42 {
-                stream.extend_from_slice(
-                    b"8=FIX.4.2|9=40|35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|10=091|",
-                );
-            }
-            stream
-        };
-        let mut i = 0;
-        let mut decoder = new_decoder().streaming(vec![]);
-        let mut ready = false;
-        while !ready || i >= stream.len() {
-            let buf = decoder.fillable();
-            buf.clone_from_slice(&stream[i..i + buf.len()]);
-            i += buf.len();
-            ready = decoder.try_parse().unwrap().is_some();
-        }
-        assert_eq!(decoder.raw_frame().begin_string(), b"FIX.4.2");
-        assert_eq!(
-            decoder.raw_frame().payload(),
-            b"35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|"
-        );
     }
 }
