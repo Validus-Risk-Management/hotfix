@@ -1,4 +1,5 @@
-use hotfix_dictionary::{Dictionary, TagU32};
+use hotfix_dictionary::{Dictionary, LayoutItem, LayoutItemKind, TagU32};
+use std::collections::HashSet;
 
 use crate::field_map::{Field, FieldMap};
 
@@ -64,11 +65,17 @@ impl<'a> MessageBuilder<'a> {
         // https://www.onixs.biz/fix-dictionary/4.4/compblock_standardheader.html
         let mut header = Header::default();
 
-        let field = self.next_field();
-        header.fields.insert(field);
+        let header_tags = self.get_tags_for_component("StandardHeader");
 
-        let field = self.next_field();
-        header.fields.insert(field);
+        loop {
+            let field = self.next_field();
+
+            if header_tags.contains(&field.tag) {
+                header.fields.insert(field);
+            } else {
+                break;
+            }
+        }
 
         header
     }
@@ -87,6 +94,18 @@ impl<'a> MessageBuilder<'a> {
 
         field
     }
+
+    fn get_tags_for_component(&self, component_name: &str) -> HashSet<TagU32> {
+        let mut tags = HashSet::new();
+        let component = self.dict.component_by_name(component_name).unwrap();
+        for item in component.items() {
+            if let LayoutItemKind::Field(field) = item.kind() {
+                tags.insert(field.tag());
+            }
+        }
+
+        tags
+    }
 }
 
 fn tag_from_bytes(bytes: &[u8]) -> Option<TagU32> {
@@ -101,13 +120,24 @@ fn tag_from_bytes(bytes: &[u8]) -> Option<TagU32> {
 #[cfg(test)]
 mod tests {
     use crate::message::{Config, Message};
-    use hotfix_dictionary::{Dictionary, TagU32};
+    use hotfix_dictionary::{Dictionary, LayoutItemKind, TagU32};
 
     #[test]
     fn parse_simple_message() {
         let config = Config { separator: b'|' };
         let raw = b"8=FIX.4.2|9=40|35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|10=091|";
         let dict = Dictionary::fix44();
+
+        let header_comp = dict.component_by_name("StandardHeader").unwrap();
+        let mut tags = vec![];
+        for item in header_comp.items() {
+            match item.kind() {
+                LayoutItemKind::Component(_) => {}
+                LayoutItemKind::Group(_, _) => {}
+                LayoutItemKind::Field(field) => tags.push(field.tag()),
+            }
+        }
+        println!("tags = {}", tags.len());
 
         let message = Message::from_bytes(config, &dict, raw);
 
