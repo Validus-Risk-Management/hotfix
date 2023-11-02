@@ -1,0 +1,17 @@
+[package]
+name = "hotfix-message"
+description = "FIX messages for HotFIX."
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+
+[features]
+
+[dependencies]
+hotfix-derive = { version = "0.0.9", path = "../hotfix-derive" }
+hotfix-dictionary = { version = "0.0.9", path = "../hotfix-dictionary" }
+hotfix-encoding = { version = "0.0.9", path = "../hotfix-encoding" }
+
+[dev-dependencies]

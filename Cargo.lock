@@ -592,6 +592,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hotfix-message"
+version = "0.0.9"
+dependencies = [
+ "hotfix-derive",
+ "hotfix-dictionary",
+ "hotfix-encoding",
+]
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
