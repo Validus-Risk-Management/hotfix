@@ -1,4 +1,5 @@
-use hotfix_dictionary::{Dictionary, LayoutItemKind, TagU32};
+use hotfix_dictionary::{Dictionary, FieldLocation, LayoutItemKind, TagU32};
+use hotfix_encoding::HardCodedFixFieldDefinition;
 use std::collections::HashSet;
 
 use crate::field_map::{Field, FieldMap};
@@ -31,6 +32,17 @@ impl Message {
         let mut builder = MessageParser::new(dict, config, data);
 
         builder.build()
+    }
+
+    pub fn get(&self, field: &HardCodedFixFieldDefinition) -> Option<&[u8]> {
+        let tag = TagU32::new(field.tag).unwrap();
+        let f = match field.location {
+            FieldLocation::Header => self.header.fields.get(tag),
+            FieldLocation::Body => self.body.fields.get(tag),
+            FieldLocation::Trailer => self.trailer.fields.get(tag),
+        };
+
+        f.map(|value| value.data.as_slice())
     }
 }
 
@@ -158,16 +170,8 @@ fn tag_from_bytes(bytes: &[u8]) -> Option<TagU32> {
 #[cfg(test)]
 mod tests {
     use crate::message::{Config, Message};
-    use hotfix_dictionary::{Dictionary, TagU32};
-
-    #[test]
-    fn mess_with_comps() {
-        let dict = Dictionary::fix44();
-
-        for comp in dict.components() {
-            println!("{}", comp.name());
-        }
-    }
+    use hotfix_dictionary::Dictionary;
+    use hotfix_encoding::fix44;
 
     #[test]
     fn parse_simple_message() {
@@ -176,26 +180,23 @@ mod tests {
         let dict = Dictionary::fix44();
 
         let message = Message::from_bytes(config, &dict, raw);
-        let header_fields = message.header.fields;
-        let body_fields = message.body.fields;
-        let trailer_fields = message.trailer.fields;
 
-        let field = header_fields.get(TagU32::new(8).unwrap()).unwrap();
-        assert_eq!(field.data, b"FIX.4.2");
+        let begin = message.get(fix44::BEGIN_STRING).unwrap();
+        assert_eq!(begin, b"FIX.4.2");
 
-        let field = header_fields.get(TagU32::new(9).unwrap()).unwrap();
-        assert_eq!(field.data, b"40");
+        let body_length = message.get(fix44::BODY_LENGTH).unwrap();
+        assert_eq!(body_length, b"40");
 
-        let field = header_fields.get(TagU32::new(35).unwrap()).unwrap();
-        assert_eq!(field.data, b"D");
+        let message_type = message.get(fix44::MSG_TYPE).unwrap();
+        assert_eq!(message_type, b"D");
 
-        let field = body_fields.get(TagU32::new(15).unwrap()).unwrap();
-        assert_eq!(field.data, b"USD");
+        let currency = message.get(fix44::CURRENCY).unwrap();
+        assert_eq!(currency, b"USD");
 
-        let field = body_fields.get(TagU32::new(59).unwrap()).unwrap();
-        assert_eq!(field.data, b"0");
+        let time_in_force = message.get(fix44::TIME_IN_FORCE).unwrap();
+        assert_eq!(time_in_force, b"0");
 
-        let field = trailer_fields.get(TagU32::new(10).unwrap()).unwrap();
-        assert_eq!(field.data, b"091");
+        let checksum = message.get(fix44::CHECK_SUM).unwrap();
+        assert_eq!(checksum, b"091");
     }
 }
