@@ -7,7 +7,7 @@ pub struct Field {
 }
 
 impl Field {
-    fn new(tag: TagU32, data: Vec<u8>) -> Self {
+    pub fn new(tag: TagU32, data: Vec<u8>) -> Self {
         Self { tag, data }
     }
 }
