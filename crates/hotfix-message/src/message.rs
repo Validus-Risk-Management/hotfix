@@ -2,24 +2,10 @@ use hotfix_dictionary::{Dictionary, FieldLocation, LayoutItemKind, TagU32};
 use hotfix_encoding::HardCodedFixFieldDefinition;
 use std::collections::HashSet;
 
-use crate::field_map::{Field, FieldMap};
+use crate::field_map::Field;
+use crate::parts::{Body, Header, Part, Trailer};
 
 const SOH: u8 = 0x1;
-
-#[derive(Default)]
-struct Header {
-    pub fields: FieldMap,
-}
-
-#[derive(Default)]
-struct Trailer {
-    fields: FieldMap,
-}
-
-#[derive(Default)]
-struct Body {
-    fields: FieldMap,
-}
 
 pub struct Message {
     header: Header,
@@ -37,9 +23,9 @@ impl Message {
     pub fn get(&self, field: &HardCodedFixFieldDefinition) -> Option<&[u8]> {
         let tag = TagU32::new(field.tag).unwrap();
         let f = match field.location {
-            FieldLocation::Header => self.header.fields.get(tag),
-            FieldLocation::Body => self.body.fields.get(tag),
-            FieldLocation::Trailer => self.trailer.fields.get(tag),
+            FieldLocation::Header => self.header.get(tag),
+            FieldLocation::Body => self.body.get(tag),
+            FieldLocation::Trailer => self.trailer.get(tag),
         };
 
         f.map(|value| value.data.as_slice())
@@ -57,6 +43,7 @@ impl Default for Config {
 }
 
 struct MessageParser<'a> {
+    dict: &'a Dictionary,
     header_tags: HashSet<TagU32>,
     trailer_tags: HashSet<TagU32>,
     position: usize,
@@ -67,6 +54,7 @@ struct MessageParser<'a> {
 impl<'a> MessageParser<'a> {
     fn new(dict: &'a Dictionary, config: Config, data: &'a [u8]) -> Self {
         Self {
+            dict,
             position: 0,
             header_tags: Self::get_tags_for_component(dict, "StandardHeader"),
             trailer_tags: Self::get_tags_for_component(dict, "StandardTrailer"),
@@ -110,7 +98,15 @@ impl<'a> MessageParser<'a> {
         let mut field = next_field;
 
         while !self.trailer_tags.contains(&field.tag) {
-            body.fields.insert(field);
+            let tag = field.tag.get();
+            body.store_field(field);
+
+            // check if it's the start of a group and parse the group as needed
+            let field_def = self.dict.field_by_tag(tag).unwrap();
+            if field_def.is_num_in_group() {
+                self.parse_group()
+            }
+
             field = self
                 .next_field()
                 .expect("message to not end within the body");
@@ -124,12 +120,14 @@ impl<'a> MessageParser<'a> {
         let mut trailer = Trailer::default();
         let mut field = Some(next_field);
         while let Some(f) = field {
-            trailer.fields.insert(f);
+            trailer.store_field(f);
             field = self.next_field();
         }
 
         trailer
     }
+
+    fn parse_group(&mut self) {}
 
     fn next_field(&mut self) -> Option<Field> {
         let mut iter = self.raw_data[self.position..].iter();
