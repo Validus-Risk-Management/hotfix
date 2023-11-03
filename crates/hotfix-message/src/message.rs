@@ -120,6 +120,7 @@ impl<'a> MessageParser<'a> {
     }
 
     fn build_trailer(&mut self, next_field: Field) -> Trailer {
+        // https://www.onixs.biz/fix-dictionary/4.4/compblock_standardtrailer.html
         let mut trailer = Trailer::default();
         let mut field = Some(next_field);
         while let Some(f) = field {
