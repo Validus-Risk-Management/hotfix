@@ -104,7 +104,7 @@ impl<'a> MessageParser<'a> {
             // check if it's the start of a group and parse the group as needed
             let field_def = self.dict.field_by_tag(tag).unwrap();
             if field_def.is_num_in_group() {
-                self.parse_group()
+                self.parse_group(field_def.tag())
             }
 
             field = self
@@ -127,7 +127,7 @@ impl<'a> MessageParser<'a> {
         trailer
     }
 
-    fn parse_group(&mut self) {}
+    fn parse_group(&mut self, _tag: TagU32) {}
 
     fn next_field(&mut self) -> Option<Field> {
         let mut iter = self.raw_data[self.position..].iter();

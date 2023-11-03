@@ -670,6 +670,7 @@ mod test {
         let group = message.group(268).unwrap();
         assert_eq!(group.len(), 2);
         assert_eq!(group.get(0).unwrap().get_raw(278).unwrap(), b"BID" as &[u8]);
+        // assert_eq!(message.get_raw(10), Some("171".as_bytes()));
     }
 
     #[test]
