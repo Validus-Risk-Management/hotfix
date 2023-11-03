@@ -177,13 +177,13 @@ mod tests {
     #[test]
     fn parse_simple_message() {
         let config = Config { separator: b'|' };
-        let raw = b"8=FIX.4.2|9=40|35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|10=091|";
+        let raw = b"8=FIX.4.4|9=40|35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|10=091|";
         let dict = Dictionary::fix44();
 
         let message = Message::from_bytes(config, &dict, raw);
 
         let begin = message.get(fix44::BEGIN_STRING).unwrap();
-        assert_eq!(begin, b"FIX.4.2");
+        assert_eq!(begin, b"FIX.4.4");
 
         let body_length = message.get(fix44::BODY_LENGTH).unwrap();
         assert_eq!(body_length, b"40");
