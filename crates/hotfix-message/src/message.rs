@@ -172,7 +172,7 @@ fn tag_from_bytes(bytes: &[u8]) -> Option<TagU32> {
 mod tests {
     use crate::message::{Config, Message};
     use hotfix_dictionary::Dictionary;
-    use hotfix_encoding::fix44;
+    use hotfix_encoding::{fix42, fix44};
 
     #[test]
     fn parse_simple_message() {
@@ -199,5 +199,18 @@ mod tests {
 
         let checksum = message.get(fix44::CHECK_SUM).unwrap();
         assert_eq!(checksum, b"091");
+    }
+
+    #[test]
+    fn repeating_group_entries() {
+        let config = Config { separator: b'|' };
+        let raw = b"8=FIX.4.2|9=196|35=X|49=A|56=B|34=12|52=20100318-03:21:11.364|262=A|268=2|279=0|269=0|278=BID|55=EUR/USD|270=1.37215|15=EUR|271=2500000|346=1|279=0|269=1|278=OFFER|55=EUR/USD|270=1.37224|15=EUR|271=2503200|346=1|10=171|";
+        let dict = Dictionary::fix42();
+
+        let message = Message::from_bytes(config, &dict, raw);
+        let begin = message.get(fix42::BEGIN_STRING).unwrap();
+        assert_eq!(begin, b"FIX.4.2");
+
+        // TODO: add logic for repeating groups and expand this test case
     }
 }
