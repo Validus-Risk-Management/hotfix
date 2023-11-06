@@ -1,4 +1,4 @@
-use hotfix_dictionary::{Dictionary, FieldLocation, LayoutItemKind, TagU32};
+use hotfix_dictionary::{Dictionary, FieldLocation, LayoutItem, LayoutItemKind, TagU32};
 use hotfix_encoding::HardCodedFixFieldDefinition;
 use std::collections::{HashMap, HashSet};
 
@@ -169,9 +169,15 @@ impl<'a> MessageParser<'a> {
                         // if the next field is the delimiter, we start a new group
                         break;
                     } else {
-                        // TODO: we should handle nested groups here
-                        // this could be done by recursively calling `parse_groups`
+                        let tag = field.tag;
                         group.store_field(field);
+                        let field_def = self.dict.field_by_tag(tag.get()).unwrap();
+                        if field_def.is_num_in_group() {
+                            let (groups, next) = self.parse_groups(tag);
+                            group.set_groups(tag, groups);
+                            field = next;
+                            continue;
+                        }
                     }
                 } else {
                     // otherwise we have finished parsing the groups
@@ -220,15 +226,31 @@ impl<'a> MessageParser<'a> {
                 if let LayoutItemKind::Group(field, items) = item.kind() {
                     let group = groups.entry(field.tag()).or_default();
                     for nested in items {
-                        if let LayoutItemKind::Field(f) = nested.kind() {
-                            group.insert(f.tag());
-                        }
+                        group.extend(Self::get_tags_for_layout_item(nested));
                     }
                 }
             }
         }
 
         groups
+    }
+
+    fn get_tags_for_layout_item(item: LayoutItem) -> HashSet<TagU32> {
+        let mut tags = HashSet::new();
+        match item.kind() {
+            LayoutItemKind::Component(comp) => {
+                for i in comp.items() {
+                    tags.extend(Self::get_tags_for_layout_item(i));
+                }
+            }
+            LayoutItemKind::Group(f, _) => {
+                tags.insert(f.tag());
+            }
+            LayoutItemKind::Field(f) => {
+                tags.insert(f.tag());
+            }
+        }
+        tags
     }
 }
 
@@ -245,7 +267,7 @@ fn tag_from_bytes(bytes: &[u8]) -> Option<TagU32> {
 mod tests {
     use crate::message::{Config, Message};
     use crate::Part;
-    use hotfix_dictionary::{Dictionary, TagU32};
+    use hotfix_dictionary::{Dictionary, IsFieldDefinition};
     use hotfix_encoding::fix44;
 
     #[test]
@@ -286,18 +308,40 @@ mod tests {
         assert_eq!(begin, b"FIX.4.4");
 
         let fee1 = message.get_group(fix44::NO_MISC_FEES, 0).unwrap();
-        let amt = fee1
-            .get(TagU32::new(fix44::MISC_FEE_AMT.tag).unwrap())
-            .unwrap();
+        let amt = fee1.get(fix44::MISC_FEE_AMT.tag()).unwrap();
         assert_eq!(amt.data, b"100");
 
         let fee2 = message.get_group(fix44::NO_MISC_FEES, 1).unwrap();
-        let amt = fee2
-            .get(TagU32::new(fix44::MISC_FEE_TYPE.tag).unwrap())
-            .unwrap();
+        let amt = fee2.get(fix44::MISC_FEE_TYPE.tag()).unwrap();
         assert_eq!(amt.data, b"7");
 
         let checksum = message.get(fix44::CHECK_SUM).unwrap();
         assert_eq!(checksum, b"128");
+    }
+
+    #[test]
+    fn nested_repeating_group_entries() {
+        let config = Config { separator: b'|' };
+        // TODO: this message isn't complete, would be nicer to have a valid FIX message
+        let raw = b"8=FIX.4.4|9=000|35=8|34=2|49=Broker|52=20231103-09:30:00|56=Client|11=Order12345|17=Exec12345|150=0|39=0|55=APPL|54=1|38=100|32=50|31=150.00|151=50|14=50|6=150.00|453=2|448=PARTYA|447=D|452=1|802=2|523=SUBPARTYA1|803=1|523=SUBPARTYA2|803=2|448=PARTYB|447=D|452=2|10=111|";
+        let dict = Dictionary::fix44();
+
+        let message = Message::from_bytes(config, &dict, raw);
+        let party_a = message.get_group(fix44::NO_PARTY_I_DS, 0).unwrap();
+        let party_a_0 = party_a
+            .get_group(fix44::NO_PARTY_SUB_I_DS.tag(), 0)
+            .unwrap();
+        let sub_id_0 = party_a_0.get(fix44::PARTY_SUB_ID.tag()).unwrap();
+        assert_eq!(sub_id_0.data, b"SUBPARTYA1");
+
+        let party_b = message.get_group(fix44::NO_PARTY_I_DS, 1).unwrap();
+        let party_b_id = party_b.get(fix44::PARTY_ID.tag()).unwrap();
+        assert_eq!(party_b_id.data, b"PARTYB");
+
+        let party_b_role = party_b.get(fix44::PARTY_ROLE.tag()).unwrap();
+        assert_eq!(party_b_role.data, b"2");
+
+        let checksum = message.get(fix44::CHECK_SUM).unwrap();
+        assert_eq!(checksum, b"111");
     }
 }
