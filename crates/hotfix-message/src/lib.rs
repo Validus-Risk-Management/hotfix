@@ -1,5 +1,6 @@
 mod field_map;
 pub mod message;
+mod parser;
 pub(crate) mod parts;
 
 pub use hotfix_derive::FieldType;
