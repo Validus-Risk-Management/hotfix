@@ -1,9 +1,9 @@
 use hotfix_dictionary::{Dictionary, FieldLocation, LayoutItemKind, TagU32};
 use hotfix_encoding::HardCodedFixFieldDefinition;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::field_map::Field;
-use crate::parts::{Body, Header, Part, Trailer};
+use crate::parts::{Body, Header, Part, RepeatingGroup, Trailer};
 
 const SOH: u8 = 0x1;
 
@@ -30,6 +30,19 @@ impl Message {
 
         f.map(|value| value.data.as_slice())
     }
+
+    pub fn get_group(
+        &self,
+        start_field: &HardCodedFixFieldDefinition,
+        index: usize,
+    ) -> Option<&RepeatingGroup> {
+        let tag = TagU32::new(start_field.tag).unwrap();
+        match start_field.location {
+            FieldLocation::Header => self.header.get_group(tag, index),
+            FieldLocation::Body => self.body.get_group(tag, index),
+            FieldLocation::Trailer => self.trailer.get_group(tag, index),
+        }
+    }
 }
 
 pub struct Config {
@@ -46,6 +59,7 @@ struct MessageParser<'a> {
     dict: &'a Dictionary,
     header_tags: HashSet<TagU32>,
     trailer_tags: HashSet<TagU32>,
+    group_tags: HashMap<TagU32, HashSet<TagU32>>,
     position: usize,
     raw_data: &'a [u8],
     config: Config,
@@ -58,6 +72,7 @@ impl<'a> MessageParser<'a> {
             position: 0,
             header_tags: Self::get_tags_for_component(dict, "StandardHeader"),
             trailer_tags: Self::get_tags_for_component(dict, "StandardTrailer"),
+            group_tags: Self::get_group_tags(dict),
             raw_data: data,
             config,
         }
@@ -104,12 +119,14 @@ impl<'a> MessageParser<'a> {
             // check if it's the start of a group and parse the group as needed
             let field_def = self.dict.field_by_tag(tag).unwrap();
             if field_def.is_num_in_group() {
-                self.parse_group(field_def.tag())
+                let (groups, next) = self.parse_groups(field_def.tag());
+                body.set_groups(field_def.tag(), groups);
+                field = next;
+            } else {
+                field = self
+                    .next_field()
+                    .expect("message to not end within the body");
             }
-
-            field = self
-                .next_field()
-                .expect("message to not end within the body");
         }
 
         (body, field)
@@ -127,7 +144,46 @@ impl<'a> MessageParser<'a> {
         trailer
     }
 
-    fn parse_group(&mut self, _tag: TagU32) {}
+    fn parse_groups(&mut self, start_tag: TagU32) -> (Vec<RepeatingGroup>, Field) {
+        let first_field = self.next_field().unwrap();
+        let delimiter = first_field.tag;
+        let mut groups = vec![];
+
+        let mut field = first_field;
+        loop {
+            let mut group = RepeatingGroup::new(start_tag, delimiter);
+
+            // we store the first field, which is the delimiter
+            group.store_field(field);
+            field = self.next_field().unwrap();
+
+            loop {
+                if self
+                    .group_tags
+                    .get(&start_tag)
+                    .unwrap()
+                    .contains(&field.tag)
+                {
+                    // the next tag is still part of this group
+                    if field.tag == delimiter {
+                        // if the next field is the delimiter, we start a new group
+                        break;
+                    } else {
+                        // TODO: we should handle nested groups here
+                        // this could be done by recursively calling `parse_groups`
+                        group.store_field(field);
+                    }
+                } else {
+                    // otherwise we have finished parsing the groups
+                    groups.push(group);
+                    return (groups, field);
+                }
+                field = self.next_field().unwrap();
+            }
+
+            groups.push(group)
+        }
+    }
 
     fn next_field(&mut self) -> Option<Field> {
         let mut iter = self.raw_data[self.position..].iter();
@@ -155,6 +211,25 @@ impl<'a> MessageParser<'a> {
 
         tags
     }
+
+    fn get_group_tags(dict: &Dictionary) -> HashMap<TagU32, HashSet<TagU32>> {
+        let mut groups: HashMap<_, HashSet<_>> = HashMap::new();
+
+        for component in dict.components() {
+            for item in component.items() {
+                if let LayoutItemKind::Group(field, items) = item.kind() {
+                    let group = groups.entry(field.tag()).or_default();
+                    for nested in items {
+                        if let LayoutItemKind::Field(f) = nested.kind() {
+                            group.insert(f.tag());
+                        }
+                    }
+                }
+            }
+        }
+
+        groups
+    }
 }
 
 fn tag_from_bytes(bytes: &[u8]) -> Option<TagU32> {
@@ -169,8 +244,9 @@ fn tag_from_bytes(bytes: &[u8]) -> Option<TagU32> {
 #[cfg(test)]
 mod tests {
     use crate::message::{Config, Message};
-    use hotfix_dictionary::Dictionary;
-    use hotfix_encoding::{fix42, fix44};
+    use crate::Part;
+    use hotfix_dictionary::{Dictionary, TagU32};
+    use hotfix_encoding::fix44;
 
     #[test]
     fn parse_simple_message() {
@@ -202,13 +278,26 @@ mod tests {
     #[test]
     fn repeating_group_entries() {
         let config = Config { separator: b'|' };
-        let raw = b"8=FIX.4.2|9=196|35=X|49=A|56=B|34=12|52=20100318-03:21:11.364|262=A|268=2|279=0|269=0|278=BID|55=EUR/USD|270=1.37215|15=EUR|271=2500000|346=1|279=0|269=1|278=OFFER|55=EUR/USD|270=1.37224|15=EUR|271=2503200|346=1|10=171|";
-        let dict = Dictionary::fix42();
+        let raw = b"8=FIX.4.4|9=219|35=8|49=SENDER|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|139=7|10=128|";
+        let dict = Dictionary::fix44();
 
         let message = Message::from_bytes(config, &dict, raw);
-        let begin = message.get(fix42::BEGIN_STRING).unwrap();
-        assert_eq!(begin, b"FIX.4.2");
+        let begin = message.get(fix44::BEGIN_STRING).unwrap();
+        assert_eq!(begin, b"FIX.4.4");
 
-        // TODO: add logic for repeating groups and expand this test case
+        let fee1 = message.get_group(fix44::NO_MISC_FEES, 0).unwrap();
+        let amt = fee1
+            .get(TagU32::new(fix44::MISC_FEE_AMT.tag).unwrap())
+            .unwrap();
+        assert_eq!(amt.data, b"100");
+
+        let fee2 = message.get_group(fix44::NO_MISC_FEES, 1).unwrap();
+        let amt = fee2
+            .get(TagU32::new(fix44::MISC_FEE_TYPE.tag).unwrap())
+            .unwrap();
+        assert_eq!(amt.data, b"7");
+
+        let checksum = message.get(fix44::CHECK_SUM).unwrap();
+        assert_eq!(checksum, b"128");
     }
 }

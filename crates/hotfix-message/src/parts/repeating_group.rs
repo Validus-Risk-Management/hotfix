@@ -3,7 +3,7 @@ use crate::parts::Part;
 use hotfix_dictionary::TagU32;
 
 #[allow(dead_code)]
-struct RepeatingGroup {
+pub struct RepeatingGroup {
     start_tag: TagU32,
     delimiter_tag: TagU32,
     fields: FieldMap,

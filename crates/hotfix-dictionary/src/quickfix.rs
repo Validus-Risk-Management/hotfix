@@ -150,6 +150,12 @@ fn import_message(dict: &mut Dictionary, node: roxmltree::Node) -> ParseResult<(
 }
 
 fn import_component(dict: &mut Dictionary, node: roxmltree::Node, name: &str) -> ParseResult<()> {
+    if node.has_attribute("required") {
+        // components appear as a definition but also as fields in other components
+        // if it's a field, it will contain the required attribute and we don't need to import it
+        return Ok(());
+    }
+
     let mut layout_items = LayoutItems::new();
     for child in node.children() {
         if child.is_element() {
