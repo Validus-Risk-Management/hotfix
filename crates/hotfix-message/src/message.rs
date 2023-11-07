@@ -43,9 +43,16 @@ impl Message {
         self.set(fix44::BODY_LENGTH, format!("{}", body_length).as_str());
         let check_sum_start = buffer.len();
 
-        self.header.fields.write(config, &mut buffer);
-        self.body.fields.write(config, &mut buffer);
-        self.trailer.fields.write(config, &mut buffer);
+        let starting_fields = vec![
+            fix44::BEGIN_STRING.tag(),
+            fix44::BODY_LENGTH.tag(),
+            fix44::MSG_TYPE.tag(),
+        ];
+        self.header
+            .fields
+            .write(config, &mut buffer, &starting_fields);
+        self.body.fields.write(config, &mut buffer, &[]);
+        self.trailer.fields.write(config, &mut buffer, &[]);
 
         let checksum = buffer.as_slice()[check_sum_start..]
             .iter()

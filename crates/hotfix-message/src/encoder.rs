@@ -1,23 +1,36 @@
-use crate::field_map::FieldMap;
+use crate::field_map::{Field, FieldMap};
 use crate::message::Config;
+use hotfix_dictionary::TagU32;
 use std::io::Write;
 
 pub trait Encode {
-    fn write(&self, config: &Config, buffer: &mut Vec<u8>);
+    fn write(&self, config: &Config, buffer: &mut Vec<u8>, pre_fields: &[TagU32]);
 }
 
 impl Encode for FieldMap {
-    fn write(&self, config: &Config, buffer: &mut Vec<u8>) {
-        for (tag, field) in &self.fields {
-            let formatted_tag = format!("{}=", tag.get());
+    fn write(&self, config: &Config, buffer: &mut Vec<u8>, pre_fields: &[TagU32]) {
+        let mut write_field = |field: &Field| {
+            let formatted_tag = format!("{}=", field.tag.get());
             buffer.write_all(formatted_tag.as_bytes()).unwrap();
             buffer.write_all(&field.data).unwrap();
             buffer.push(config.separator);
 
-            if let Some(groups) = self.groups.get(tag) {
+            if let Some(groups) = self.groups.get(&field.tag) {
                 for group in groups {
-                    group.get_fields().write(config, buffer);
+                    group.get_fields().write(config, buffer, &[]);
                 }
+            }
+        };
+
+        for pre_field_tag in pre_fields {
+            if let Some(field) = self.fields.get(pre_field_tag) {
+                write_field(field);
+            }
+        }
+
+        for (tag, field) in &self.fields {
+            if !pre_fields.contains(tag) {
+                write_field(field);
             }
         }
     }
@@ -141,9 +154,7 @@ mod tests {
         assert_eq!(party_b_role.data, b"2");
 
         let checksum = parsed_message.get(fix44::CHECK_SUM).unwrap();
-        let x = String::from_utf8(raw_message).unwrap();
-        println!("{}", x);
-        assert_eq!(checksum, b"036"); // TODO: this isn't correct
+        assert_eq!(checksum, b"036");
 
         let qty = parsed_message.get(fix44::BODY_LENGTH).unwrap();
         assert_eq!(qty, b"253");
