@@ -25,8 +25,41 @@ impl Encode for FieldMap {
 
 #[cfg(test)]
 mod tests {
+    use crate::message::{Config, Message};
+    use hotfix_dictionary::Dictionary;
+    use hotfix_encoding::field_types::Timestamp;
+    use hotfix_encoding::fix44;
+
+    #[test]
+    fn encode_simple_message() {
+        let mut msg = Message::new("FIX.4.4", "D");
+        msg.set(fix44::MSG_SEQ_NUM, 1);
+        msg.set(fix44::SENDER_COMP_ID, "CLIENT_A");
+        msg.set(fix44::TARGET_COMP_ID, "BROKER_B");
+        msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
+        msg.set(fix44::CL_ORD_ID, "0001");
+        msg.set(fix44::SYMBOL, "AAPL");
+        msg.set(fix44::SIDE, fix44::Side::Buy);
+        msg.set(fix44::TRANSACT_TIME, Timestamp::utc_now());
+        msg.set(fix44::ORD_TYPE, fix44::OrdType::Limit);
+        msg.set(fix44::PRICE, 150);
+        msg.set(fix44::ORDER_QTY, 60);
+
+        let config = Config::default();
+        let raw_message = msg.encode(&config);
+
+        let dict = Dictionary::fix44();
+        let parsed_message = Message::from_bytes(config, &dict, &raw_message);
+
+        let symbol = parsed_message.get(fix44::SYMBOL).unwrap();
+        assert_eq!(symbol, b"AAPL");
+
+        let qty = parsed_message.get(fix44::ORDER_QTY).unwrap();
+        assert_eq!(qty, b"60");
+    }
+
     #[test]
     fn encode_message_with_repeating_group() {
-        todo!()
+        // TODO
     }
 }
