@@ -17,6 +17,10 @@ impl RepeatingGroup {
             fields: FieldMap::default(),
         }
     }
+
+    pub fn get_fields(&self) -> &FieldMap {
+        &self.fields
+    }
 }
 
 impl Part for RepeatingGroup {

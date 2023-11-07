@@ -1,3 +1,4 @@
+use crate::encoder::Encode;
 use crate::parser::{MessageParser, SOH};
 use crate::parts::{Body, Header, Part, RepeatingGroup, Trailer};
 use hotfix_dictionary::{Dictionary, FieldLocation, TagU32};
@@ -14,6 +15,15 @@ impl Message {
         let mut builder = MessageParser::new(dict, config, data);
 
         builder.build()
+    }
+
+    pub fn encode(&self, config: &Config) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        self.header.fields.write(config, &mut buffer);
+        self.body.fields.write(config, &mut buffer);
+        self.trailer.fields.write(config, &mut buffer);
+
+        buffer
     }
 
     pub fn get(&self, field: &HardCodedFixFieldDefinition) -> Option<&[u8]> {

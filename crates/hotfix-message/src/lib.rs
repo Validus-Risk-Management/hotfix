@@ -1,3 +1,4 @@
+mod encoder;
 mod field_map;
 pub mod message;
 mod parser;

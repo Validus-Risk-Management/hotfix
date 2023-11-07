@@ -3,7 +3,7 @@ use crate::parts::Part;
 
 #[derive(Default)]
 pub struct Trailer {
-    fields: FieldMap,
+    pub(crate) fields: FieldMap,
 }
 
 impl Part for Trailer {

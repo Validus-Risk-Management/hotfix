@@ -206,6 +206,15 @@ impl<'a> MessageParser<'a> {
     }
 }
 
+fn tag_from_bytes(bytes: &[u8]) -> Option<TagU32> {
+    let mut tag = 0u32;
+    for byte in bytes.iter().copied() {
+        tag = tag * 10 + (byte as u32 - b'0' as u32);
+    }
+
+    TagU32::new(tag)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::message::{Config, Message};
@@ -265,7 +274,6 @@ mod tests {
     #[test]
     fn nested_repeating_group_entries() {
         let config = Config { separator: b'|' };
-        // TODO: this message isn't complete, would be nicer to have a valid FIX message
         let raw = b"8=FIX.4.4|9=000|35=8|34=2|49=Broker|52=20231103-09:30:00|56=Client|11=Order12345|17=Exec12345|150=0|39=0|55=APPL|54=1|38=100|32=50|31=150.00|151=50|14=50|6=150.00|453=2|448=PARTYA|447=D|452=1|802=2|523=SUBPARTYA1|803=1|523=SUBPARTYA2|803=2|448=PARTYB|447=D|452=2|10=111|";
         let dict = Dictionary::fix44();
 
@@ -287,13 +295,4 @@ mod tests {
         let checksum = message.get(fix44::CHECK_SUM).unwrap();
         assert_eq!(checksum, b"111");
     }
-}
-
-fn tag_from_bytes(bytes: &[u8]) -> Option<TagU32> {
-    let mut tag = 0u32;
-    for byte in bytes.iter().copied() {
-        tag = tag * 10 + (byte as u32 - b'0' as u32);
-    }
-
-    TagU32::new(tag)
 }

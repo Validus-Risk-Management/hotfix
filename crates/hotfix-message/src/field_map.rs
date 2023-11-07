@@ -16,8 +16,8 @@ impl Field {
 
 #[derive(Default)]
 pub struct FieldMap {
-    fields: BTreeMap<TagU32, Field>,
-    groups: BTreeMap<TagU32, Vec<RepeatingGroup>>,
+    pub fields: BTreeMap<TagU32, Field>,
+    pub groups: BTreeMap<TagU32, Vec<RepeatingGroup>>,
 }
 
 impl FieldMap {

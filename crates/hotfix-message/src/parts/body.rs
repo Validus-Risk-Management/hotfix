@@ -3,7 +3,7 @@ use crate::parts::Part;
 
 #[derive(Default)]
 pub struct Body {
-    fields: FieldMap,
+    pub(crate) fields: FieldMap,
 }
 
 impl Part for Body {
