@@ -1,8 +1,10 @@
+use std::io::Write;
+
 use crate::encoder::Encode;
 use crate::field_map::Field;
 use crate::parser::{MessageParser, SOH};
 use crate::parts::{Body, Header, Part, RepeatingGroup, Trailer};
-use hotfix_dictionary::{Dictionary, FieldLocation, TagU32};
+use hotfix_dictionary::{Dictionary, FieldLocation, IsFieldDefinition, TagU32};
 use hotfix_encoding::field_access::FieldType;
 use hotfix_encoding::{fix44, HardCodedFixFieldDefinition};
 
@@ -34,16 +36,25 @@ impl Message {
     pub fn encode(&mut self, config: &Config) -> Vec<u8> {
         let mut buffer = Vec::new();
 
+        self.trailer.pop(&fix44::CHECK_SUM.tag());
         let body_length = self.header.calculate_length()
             + self.body.calculate_length()
             + self.trailer.calculate_length();
         self.set(fix44::BODY_LENGTH, format!("{}", body_length).as_str());
-        // TODO: this should be the actual computed checksum
-        self.set(fix44::CHECK_SUM, b"100");
+        let check_sum_start = buffer.len();
 
         self.header.fields.write(config, &mut buffer);
         self.body.fields.write(config, &mut buffer);
         self.trailer.fields.write(config, &mut buffer);
+
+        let checksum = buffer.as_slice()[check_sum_start..]
+            .iter()
+            .fold(0u8, |acc, &x| acc.wrapping_add(x));
+        let checksum_value = format!("{:03}", checksum);
+        self.set(fix44::CHECK_SUM, checksum_value.as_str());
+        buffer.write_all(b"10=").unwrap();
+        buffer.write_all(checksum_value.as_bytes()).unwrap();
+        buffer.push(config.separator);
 
         buffer
     }

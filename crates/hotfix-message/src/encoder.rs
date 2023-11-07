@@ -30,7 +30,7 @@ mod tests {
     use crate::parts::RepeatingGroup;
     use crate::Part;
     use hotfix_dictionary::{Dictionary, IsFieldDefinition};
-    use hotfix_encoding::field_types::Timestamp;
+    use hotfix_encoding::field_types::{Date, Time, Timestamp};
     use hotfix_encoding::fix44;
 
     #[test]
@@ -66,11 +66,15 @@ mod tests {
 
     #[test]
     fn encode_message_with_repeating_group() {
+        let sending_time = Timestamp::new(
+            Date::new(2023, 11, 7).unwrap(),
+            Time::from_hmsm(11, 0, 0, 0).unwrap(),
+        );
         let mut msg = Message::new("FIX.4.4", "8");
         msg.set(fix44::MSG_SEQ_NUM, 1);
         msg.set(fix44::SENDER_COMP_ID, "BROKER_B");
         msg.set(fix44::TARGET_COMP_ID, "CLIENT_A");
-        msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
+        msg.set(fix44::SENDING_TIME, sending_time);
         msg.set(fix44::CL_ORD_ID, "ORDER_0001");
         msg.set(fix44::EXEC_ID, "Exec12345");
         msg.set(fix44::ORD_STATUS, "0");
@@ -137,7 +141,9 @@ mod tests {
         assert_eq!(party_b_role.data, b"2");
 
         let checksum = parsed_message.get(fix44::CHECK_SUM).unwrap();
-        assert_eq!(checksum, b"100"); // TODO: this isn't correct
+        let x = String::from_utf8(raw_message).unwrap();
+        println!("{}", x);
+        assert_eq!(checksum, b"036"); // TODO: this isn't correct
 
         let qty = parsed_message.get(fix44::BODY_LENGTH).unwrap();
         assert_eq!(qty, b"253");

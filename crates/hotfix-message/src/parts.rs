@@ -24,6 +24,10 @@ pub trait Part {
         self.get_field_map().get(tag)
     }
 
+    fn pop(&mut self, tag: &TagU32) -> Option<Field> {
+        self.get_field_map_mut().fields.remove(tag)
+    }
+
     fn set_groups(&mut self, start_tag: TagU32, groups: Vec<RepeatingGroup>) {
         self.get_field_map_mut().set_groups(start_tag, groups);
     }
