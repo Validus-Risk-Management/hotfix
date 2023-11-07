@@ -31,4 +31,8 @@ pub trait Part {
     fn get_group(&self, start_tag: TagU32, index: usize) -> Option<&RepeatingGroup> {
         self.get_field_map().get_group(start_tag, index)
     }
+
+    fn calculate_length(&self) -> usize {
+        self.get_field_map().calculate_length(&[])
+    }
 }

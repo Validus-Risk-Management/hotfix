@@ -48,7 +48,7 @@ mod tests {
         msg.set(fix44::PRICE, 150);
         msg.set(fix44::ORDER_QTY, 60);
 
-        let config = Config::default();
+        let config = Config { separator: b'|' };
         let raw_message = msg.encode(&config);
 
         let dict = Dictionary::fix44();
@@ -59,6 +59,9 @@ mod tests {
 
         let qty = parsed_message.get(fix44::ORDER_QTY).unwrap();
         assert_eq!(qty, b"60");
+
+        let qty = parsed_message.get(fix44::BODY_LENGTH).unwrap();
+        assert_eq!(qty, b"129");
     }
 
     #[test]
@@ -113,7 +116,7 @@ mod tests {
 
         msg.body
             .set_groups(fix44::NO_PARTY_I_DS.tag(), vec![party_1, party_2]);
-        let config = Config::default();
+        let config = Config { separator: b'|' };
         let raw_message = msg.encode(&config);
 
         let dict = Dictionary::fix44();
@@ -135,5 +138,8 @@ mod tests {
 
         let checksum = parsed_message.get(fix44::CHECK_SUM).unwrap();
         assert_eq!(checksum, b"100"); // TODO: this isn't correct
+
+        let qty = parsed_message.get(fix44::BODY_LENGTH).unwrap();
+        assert_eq!(qty, b"253");
     }
 }

@@ -34,8 +34,10 @@ impl Message {
     pub fn encode(&mut self, config: &Config) -> Vec<u8> {
         let mut buffer = Vec::new();
 
-        // TODO: this should be the actual length based on the message
-        self.set(fix44::BODY_LENGTH, b"100");
+        let body_length = self.header.calculate_length()
+            + self.body.calculate_length()
+            + self.trailer.calculate_length();
+        self.set(fix44::BODY_LENGTH, format!("{}", body_length).as_str());
         // TODO: this should be the actual computed checksum
         self.set(fix44::CHECK_SUM, b"100");
 
