@@ -231,13 +231,13 @@ mod tests {
 
         let message = Message::from_bytes(config, &dict, raw);
 
-        let begin: &str = message.get(fix44::BEGIN_STRING).unwrap();
+        let begin: &str = message.header().get(fix44::BEGIN_STRING).unwrap();
         assert_eq!(begin, "FIX.4.4");
 
-        let body_length: u32 = message.get(fix44::BODY_LENGTH).unwrap();
+        let body_length: u32 = message.header().get(fix44::BODY_LENGTH).unwrap();
         assert_eq!(body_length, 40);
 
-        let message_type: &str = message.get(fix44::MSG_TYPE).unwrap();
+        let message_type: &str = message.header().get(fix44::MSG_TYPE).unwrap();
         assert_eq!(message_type, "D");
 
         let currency: &Currency = message.get(fix44::CURRENCY).unwrap();
@@ -246,7 +246,7 @@ mod tests {
         let time_in_force: &str = message.get(fix44::TIME_IN_FORCE).unwrap();
         assert_eq!(time_in_force, "0");
 
-        let checksum: &str = message.get(fix44::CHECK_SUM).unwrap();
+        let checksum: &str = message.trailer().get(fix44::CHECK_SUM).unwrap();
         assert_eq!(checksum, "091");
     }
 
@@ -257,19 +257,19 @@ mod tests {
         let dict = Dictionary::fix44();
 
         let message = Message::from_bytes(config, &dict, raw);
-        let begin = message.get_raw(fix44::BEGIN_STRING).unwrap();
-        assert_eq!(begin, b"FIX.4.4");
+        let begin: &str = message.header().get(fix44::BEGIN_STRING).unwrap();
+        assert_eq!(begin, "FIX.4.4");
 
         let fee1 = message.get_group(fix44::NO_MISC_FEES, 0).unwrap();
-        let amt = fee1.get_raw(fix44::MISC_FEE_AMT.tag()).unwrap();
-        assert_eq!(amt, b"100");
+        let amt: f64 = fee1.get(fix44::MISC_FEE_AMT).unwrap();
+        assert_eq!(amt, 100.0);
 
         let fee2 = message.get_group(fix44::NO_MISC_FEES, 1).unwrap();
-        let amt = fee2.get_raw(fix44::MISC_FEE_TYPE.tag()).unwrap();
-        assert_eq!(amt, b"7");
+        let fee_type: &str = fee2.get(fix44::MISC_FEE_TYPE).unwrap();
+        assert_eq!(fee_type, "7");
 
-        let checksum = message.get_raw(fix44::CHECK_SUM).unwrap();
-        assert_eq!(checksum, b"128");
+        let checksum: &str = message.trailer().get(fix44::CHECK_SUM).unwrap();
+        assert_eq!(checksum, "128");
     }
 
     #[test]
@@ -283,17 +283,17 @@ mod tests {
         let party_a_0 = party_a
             .get_group(fix44::NO_PARTY_SUB_I_DS.tag(), 0)
             .unwrap();
-        let sub_id_0 = party_a_0.get_raw(fix44::PARTY_SUB_ID.tag()).unwrap();
-        assert_eq!(sub_id_0, b"SUBPARTYA1");
+        let sub_id_0: &str = party_a_0.get(fix44::PARTY_SUB_ID).unwrap();
+        assert_eq!(sub_id_0, "SUBPARTYA1");
 
         let party_b = message.get_group(fix44::NO_PARTY_I_DS, 1).unwrap();
-        let party_b_id = party_b.get_raw(fix44::PARTY_ID.tag()).unwrap();
-        assert_eq!(party_b_id, b"PARTYB");
+        let party_b_id: &str = party_b.get(fix44::PARTY_ID).unwrap();
+        assert_eq!(party_b_id, "PARTYB");
 
-        let party_b_role = party_b.get_raw(fix44::PARTY_ROLE.tag()).unwrap();
-        assert_eq!(party_b_role, b"2");
+        let party_b_role: u32 = party_b.get(fix44::PARTY_ROLE).unwrap();
+        assert_eq!(party_b_role, 2);
 
-        let checksum = message.get_raw(fix44::CHECK_SUM).unwrap();
-        assert_eq!(checksum, b"111");
+        let checksum: &str = message.trailer().get(fix44::CHECK_SUM).unwrap();
+        assert_eq!(checksum, "111");
     }
 }

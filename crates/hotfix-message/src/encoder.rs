@@ -67,14 +67,14 @@ mod tests {
         let dict = Dictionary::fix44();
         let parsed_message = Message::from_bytes(config, &dict, &raw_message);
 
-        let symbol = parsed_message.get_raw(fix44::SYMBOL).unwrap();
-        assert_eq!(symbol, b"AAPL");
+        let symbol: &str = parsed_message.get(fix44::SYMBOL).unwrap();
+        assert_eq!(symbol, "AAPL");
 
-        let qty = parsed_message.get_raw(fix44::ORDER_QTY).unwrap();
-        assert_eq!(qty, b"60");
+        let qty: u32 = parsed_message.get(fix44::ORDER_QTY).unwrap();
+        assert_eq!(qty, 60);
 
-        let qty = parsed_message.get_raw(fix44::BODY_LENGTH).unwrap();
-        assert_eq!(qty, b"129");
+        let body_length: usize = parsed_message.header().get(fix44::BODY_LENGTH).unwrap();
+        assert_eq!(body_length, 129);
     }
 
     #[test]
@@ -143,20 +143,20 @@ mod tests {
         let party_a_0 = party_a
             .get_group(fix44::NO_PARTY_SUB_I_DS.tag(), 0)
             .unwrap();
-        let sub_id_0 = party_a_0.get_raw(fix44::PARTY_SUB_ID.tag()).unwrap();
-        assert_eq!(sub_id_0, b"SUBPARTY_A_1");
+        let sub_id_0: &str = party_a_0.get(fix44::PARTY_SUB_ID).unwrap();
+        assert_eq!(sub_id_0, "SUBPARTY_A_1");
 
         let party_b = parsed_message.get_group(fix44::NO_PARTY_I_DS, 1).unwrap();
-        let party_b_id = party_b.get_raw(fix44::PARTY_ID.tag()).unwrap();
-        assert_eq!(party_b_id, b"PARTY_B");
+        let party_b_id: &str = party_b.get(fix44::PARTY_ID).unwrap();
+        assert_eq!(party_b_id, "PARTY_B");
 
-        let party_b_role = party_b.get_raw(fix44::PARTY_ROLE.tag()).unwrap();
-        assert_eq!(party_b_role, b"2");
+        let party_b_role: &str = party_b.get(fix44::PARTY_ROLE).unwrap();
+        assert_eq!(party_b_role, "2");
 
-        let checksum = parsed_message.get_raw(fix44::CHECK_SUM).unwrap();
-        assert_eq!(checksum, b"036");
+        let checksum: &str = parsed_message.trailer().get(fix44::CHECK_SUM).unwrap();
+        assert_eq!(checksum, "036");
 
-        let qty = parsed_message.get_raw(fix44::BODY_LENGTH).unwrap();
-        assert_eq!(qty, b"253");
+        let qty: usize = parsed_message.header().get(fix44::BODY_LENGTH).unwrap();
+        assert_eq!(qty, 253);
     }
 }

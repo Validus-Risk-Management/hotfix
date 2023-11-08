@@ -1,11 +1,11 @@
 use std::io::Write;
 
 use crate::encoder::Encode;
-use crate::field_map::Field;
+use crate::field_map::{Field, FieldMap};
 use crate::parser::{MessageParser, SOH};
 use crate::parts::{Body, Header, Part, RepeatingGroup, Trailer};
 use hotfix_dictionary::{Dictionary, FieldLocation, IsFieldDefinition, TagU32};
-use hotfix_encoding::field_access::{FieldType, FieldValueError};
+use hotfix_encoding::field_access::FieldType;
 use hotfix_encoding::{fix44, HardCodedFixFieldDefinition};
 
 pub struct Message {
@@ -66,29 +66,12 @@ impl Message {
         buffer
     }
 
-    #[inline]
-    pub fn get<'a, V>(
-        &'a self,
-        field: &HardCodedFixFieldDefinition,
-    ) -> Result<V, FieldValueError<V::Error>>
-    where
-        V: FieldType<'a>,
-    {
-        self.get_raw(field)
-            .map(V::deserialize)
-            .transpose()
-            .map_err(FieldValueError::Invalid)
-            .and_then(|opt| opt.ok_or(FieldValueError::Missing))
+    pub fn header(&self) -> &Header {
+        &self.header
     }
 
-    #[inline]
-    pub fn get_raw(&self, field: &HardCodedFixFieldDefinition) -> Option<&[u8]> {
-        let tag = TagU32::new(field.tag).unwrap();
-        match field.location {
-            FieldLocation::Header => self.header.get_raw(tag),
-            FieldLocation::Body => self.body.get_raw(tag),
-            FieldLocation::Trailer => self.trailer.get_raw(tag),
-        }
+    pub fn trailer(&self) -> &Trailer {
+        &self.trailer
     }
 
     pub fn get_group(
@@ -116,6 +99,16 @@ impl Message {
             FieldLocation::Body => self.body.store_field(field),
             FieldLocation::Trailer => self.trailer.store_field(field),
         };
+    }
+}
+
+impl Part for Message {
+    fn get_field_map(&self) -> &FieldMap {
+        self.body.get_field_map()
+    }
+
+    fn get_field_map_mut(&mut self) -> &mut FieldMap {
+        self.body.get_field_map_mut()
     }
 }
 
