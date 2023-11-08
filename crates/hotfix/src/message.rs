@@ -2,6 +2,7 @@
 pub use hotfix_encoding::field_types::Timestamp;
 pub use hotfix_encoding::{fix44, Encoder, EncoderHandle, Message as DecodedMessage};
 use hotfix_message::message::{Config, Message};
+pub use hotfix_message::Part;
 
 pub(crate) mod heartbeat;
 pub(crate) mod logon;
@@ -12,7 +13,7 @@ pub trait FixMessage: Clone + Send + 'static {
 
     fn message_type(&self) -> &str;
 
-    fn parse(message: DecodedMessage<&[u8]>) -> Self;
+    fn parse(message: &Message) -> Self;
 }
 
 pub(crate) fn generate_message(

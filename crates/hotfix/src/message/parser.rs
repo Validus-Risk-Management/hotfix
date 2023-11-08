@@ -1,6 +1,3 @@
-//! HeaderInfo taken from ferrumfix
-use hotfix_encoding::dict::Dictionary;
-use hotfix_encoding::Decoder;
 use std::fmt::{Display, Formatter};
 use std::ops::Range;
 
@@ -34,9 +31,9 @@ impl Display for RawFixMessage {
     }
 }
 
+#[derive(Default)]
 pub struct Parser {
     buffer: Vec<u8>,
-    decoder: Decoder,
 }
 
 impl Parser {
@@ -50,10 +47,9 @@ impl Parser {
             }
 
             let (msg_data, remainder) = self.buffer.split_at(message_length + 1);
-            let msg = self.decoder.decode(msg_data).expect("valid message");
 
             let raw_message = RawFixMessage {
-                data: msg.as_bytes().to_vec(),
+                data: msg_data.to_vec(),
             };
             messages.push(raw_message);
 
@@ -61,16 +57,6 @@ impl Parser {
         }
 
         messages
-    }
-}
-
-impl Default for Parser {
-    fn default() -> Self {
-        let decoder = Decoder::new(Dictionary::fix44());
-        Self {
-            buffer: vec![],
-            decoder,
-        }
     }
 }
 

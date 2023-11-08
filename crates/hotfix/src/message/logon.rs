@@ -1,7 +1,7 @@
 use hotfix_encoding::fix44;
 use hotfix_message::message::Message;
 
-use crate::message::{DecodedMessage, FixMessage};
+use crate::message::FixMessage;
 
 #[derive(Clone, Debug)]
 pub struct Logon {
@@ -46,7 +46,7 @@ impl FixMessage for Logon {
         "A"
     }
 
-    fn parse(_message: DecodedMessage<&[u8]>) -> Self {
+    fn parse(_message: &Message) -> Self {
         todo!()
     }
 }

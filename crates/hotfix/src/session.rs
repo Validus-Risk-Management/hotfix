@@ -2,8 +2,9 @@ mod message;
 mod state;
 
 use hotfix_encoding::dict::Dictionary;
-use hotfix_encoding::field_access::FieldMap;
-use hotfix_encoding::{fix44, Decoder, Message};
+use hotfix_encoding::fix44;
+use hotfix_message::message::{Config, Message};
+use hotfix_message::Part;
 use std::pin::Pin;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
@@ -83,6 +84,7 @@ impl<M: FixMessage> SessionRef<M> {
 struct Session<M, S> {
     mailbox: mpsc::Receiver<SessionMessage<M>>,
     config: SessionConfig,
+    dictionary: Dictionary,
     state: SessionState,
     application: ApplicationRef<M>,
     store: S,
@@ -100,6 +102,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         Self {
             mailbox,
             config,
+            dictionary: Dictionary::fix44(),
             state: SessionState::Disconnected {
                 reconnect: true,
                 reason: "initialising".to_string(),
@@ -110,13 +113,13 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         }
     }
 
-    async fn on_incoming(&mut self, message: RawFixMessage) {
-        debug!("received message: {}", message);
+    async fn on_incoming(&mut self, raw_message: RawFixMessage) {
+        debug!("received message: {}", raw_message);
         self.store.increment_target_seq_number().await;
 
-        let mut decoder = Decoder::new(Dictionary::fix44());
-        let decoded_message = decoder.decode(message.as_bytes()).unwrap();
-        let message_type = decoded_message.get(fix44::MSG_TYPE).unwrap();
+        let config = Config::default();
+        let message = Message::from_bytes(config, &self.dictionary, raw_message.as_bytes());
+        let message_type = message.header().get(fix44::MSG_TYPE).unwrap();
 
         match message_type {
             "0" => {
@@ -126,7 +129,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 // TODO: handle test request
             }
             "2" => {
-                self.on_resend_request(&decoded_message).await;
+                self.on_resend_request(&message).await;
             }
             "3" => {
                 // TODO: handle reject
@@ -141,7 +144,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 self.on_logon().await;
             }
             _ => {
-                let parsed_message = M::parse(decoded_message);
+                let parsed_message = M::parse(&message);
                 let app_message = ApplicationMessage::ReceivedMessage(parsed_message);
                 self.application.send_message(app_message).await;
             }
@@ -197,7 +200,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             .await;
     }
 
-    async fn on_resend_request(&mut self, message: &Message<'_, &[u8]>) {
+    async fn on_resend_request(&mut self, message: &Message) {
         // TODO: verify message and send reject as necessary
 
         let begin_seq_number: usize = match message.get(fix44::BEGIN_SEQ_NO) {
@@ -227,23 +230,23 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             .await;
     }
 
-    async fn resend_messages(&self, begin: usize, end: usize, _message: &Message<'_, &[u8]>) {
+    async fn resend_messages(&self, begin: usize, end: usize, _message: &Message) {
         debug!(begin, end, "resending messages as requested");
         let messages = self.store.get_slice(begin, end).await;
 
         let no = messages.len();
         debug!(no, "number of messages");
 
-        let mut decoder = Decoder::new(Dictionary::fix44());
         let mut reset_start: Option<u64> = None;
         let mut sequence_number = 0;
 
         for msg in messages {
             let m = String::from_utf8(msg.clone()).unwrap();
             debug!(m, "resending message");
-            let decoded = decoder.decode(msg.as_slice()).unwrap();
-            sequence_number = decoded.get(fix44::MSG_SEQ_NUM).unwrap();
-            let message_type: &str = decoded.get(fix44::MSG_TYPE).unwrap();
+            let config = Config::default();
+            let message = Message::from_bytes(config, &self.dictionary, msg.as_slice());
+            sequence_number = message.get(fix44::MSG_SEQ_NUM).unwrap();
+            let message_type: &str = message.get(fix44::MSG_TYPE).unwrap();
 
             if is_admin(message_type) {
                 debug!("skipping message as it's an admin message");
