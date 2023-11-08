@@ -1,11 +1,15 @@
 [package]
 name = "hotfix-derive"
 description = "Derive macros for HotFIX."
+readme = "./README.md"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
-readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [lib]
 name = "hotfix_derive"

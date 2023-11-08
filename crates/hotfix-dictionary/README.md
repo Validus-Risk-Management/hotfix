@@ -1,5 +1,8 @@
 ## hotfix-dictionary
 
-This is essentially the same as
+A fork of
 [fefix-dictionary](https://github.com/ferrumfix/ferrumfix/tree/develop/crates/fefix-dictionary)
-by `FerrumFIX`. All credit goes to the original author.
+by `FerrumFIX` with very few modifications for
+[hotfix](https://crates.io/crates/hotfix).
+
+All credit goes to the original author.

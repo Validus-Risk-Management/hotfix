@@ -5,11 +5,15 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.0.10"
+version = "0.0.11"
 authors = ["David Steiner <david_j_steiner@yahoo.co.nz>"]
 edition = "2021"
 license = "MIT"
 readme = "README.md"
+homepage = "https://github.com/Validus-Risk-Management/hotfix"
+repository = "https://github.com/Validus-Risk-Management/hotfix"
+keywords = ["fix", "fix-protocol", "finance", "trading", "fx"]
+categories = ["finance", "encoding", "parsing"]
 
 [workspace.dependencies]
 serde = "^1.0.177"

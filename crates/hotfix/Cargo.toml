@@ -1,12 +1,15 @@
 [package]
 name = "hotfix"
+description = "An experimental FIX engine"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "An experimental FIX engine"
-keywords = []
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [features]
 redb = ["dep:redb"]
@@ -14,7 +17,7 @@ redb = ["dep:redb"]
 [dependencies]
 async-trait = "^0.1.73"
 futures = "^0.3.28"
-hotfix-message = { version = "0.0.10", path = "../hotfix-message" }
+hotfix-message = { version = "0.0.11", path = "../hotfix-message" }
 pki-types = { package = "rustls-pki-types", version = "^0.2" }
 redb = { version = "^1.1.0", optional = true }
 rustls = "^0.21.5"
