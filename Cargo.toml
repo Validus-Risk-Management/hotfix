@@ -5,7 +5,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.0.11"
+version = "0.0.12"
 authors = ["David Steiner <david_j_steiner@yahoo.co.nz>"]
 edition = "2021"
 license = "MIT"
