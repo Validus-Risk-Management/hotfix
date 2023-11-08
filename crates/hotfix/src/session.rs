@@ -1,10 +1,9 @@
 mod message;
 mod state;
 
-use hotfix_encoding::dict::Dictionary;
-use hotfix_encoding::fix44;
+use hotfix_message::dict::Dictionary;
 use hotfix_message::message::{Config, Message};
-use hotfix_message::Part;
+use hotfix_message::{fix44, Part};
 use std::pin::Pin;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};

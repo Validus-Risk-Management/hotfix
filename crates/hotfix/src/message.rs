@@ -1,6 +1,6 @@
 // re-exposing these as applications need this to define their own messages
-pub use hotfix_encoding::field_types::Timestamp;
-pub use hotfix_encoding::{fix44, Encoder, EncoderHandle, Message as DecodedMessage};
+pub use hotfix_message::field_types::Timestamp;
+pub use hotfix_message::fix44;
 use hotfix_message::message::{Config, Message};
 pub use hotfix_message::Part;
 

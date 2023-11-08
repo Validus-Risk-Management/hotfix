@@ -14,7 +14,6 @@ redb = ["dep:redb"]
 [dependencies]
 async-trait = "^0.1.73"
 futures = "^0.3.28"
-hotfix-encoding = { version = "0.0.10", path = "../hotfix-encoding" }
 hotfix-message = { version = "0.0.10", path = "../hotfix-message" }
 pki-types = { package = "rustls-pki-types", version = "^0.2" }
 redb = { version = "^1.1.0", optional = true }

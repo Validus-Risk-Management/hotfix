@@ -1,4 +1,4 @@
-use hotfix_encoding::fix44;
+use hotfix_message::fix44;
 use hotfix_message::message::Message;
 
 use crate::message::FixMessage;

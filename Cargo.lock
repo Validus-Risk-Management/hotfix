@@ -500,7 +500,6 @@ version = "0.0.10"
 dependencies = [
  "async-trait",
  "futures",
- "hotfix-encoding",
  "hotfix-message",
  "redb",
  "rustls",
