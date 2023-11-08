@@ -20,7 +20,7 @@ pub trait Part {
         self.get_field_map_mut().insert(field)
     }
 
-    fn get_raw(&self, tag: TagU32) -> Option<&Field> {
+    fn get_raw(&self, tag: TagU32) -> Option<&[u8]> {
         self.get_field_map().get_raw(tag)
     }
 

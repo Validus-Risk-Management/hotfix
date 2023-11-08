@@ -84,13 +84,11 @@ impl Message {
     #[inline]
     pub fn get_raw(&self, field: &HardCodedFixFieldDefinition) -> Option<&[u8]> {
         let tag = TagU32::new(field.tag).unwrap();
-        let f = match field.location {
+        match field.location {
             FieldLocation::Header => self.header.get_raw(tag),
             FieldLocation::Body => self.body.get_raw(tag),
             FieldLocation::Trailer => self.trailer.get_raw(tag),
-        };
-
-        f.map(|value| value.data.as_slice())
+        }
     }
 
     pub fn get_group(

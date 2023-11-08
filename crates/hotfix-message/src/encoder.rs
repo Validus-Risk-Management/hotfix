@@ -144,14 +144,14 @@ mod tests {
             .get_group(fix44::NO_PARTY_SUB_I_DS.tag(), 0)
             .unwrap();
         let sub_id_0 = party_a_0.get_raw(fix44::PARTY_SUB_ID.tag()).unwrap();
-        assert_eq!(sub_id_0.data, b"SUBPARTY_A_1");
+        assert_eq!(sub_id_0, b"SUBPARTY_A_1");
 
         let party_b = parsed_message.get_group(fix44::NO_PARTY_I_DS, 1).unwrap();
         let party_b_id = party_b.get_raw(fix44::PARTY_ID.tag()).unwrap();
-        assert_eq!(party_b_id.data, b"PARTY_B");
+        assert_eq!(party_b_id, b"PARTY_B");
 
         let party_b_role = party_b.get_raw(fix44::PARTY_ROLE.tag()).unwrap();
-        assert_eq!(party_b_role.data, b"2");
+        assert_eq!(party_b_role, b"2");
 
         let checksum = parsed_message.get_raw(fix44::CHECK_SUM).unwrap();
         assert_eq!(checksum, b"036");

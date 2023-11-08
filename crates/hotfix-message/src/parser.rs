@@ -262,11 +262,11 @@ mod tests {
 
         let fee1 = message.get_group(fix44::NO_MISC_FEES, 0).unwrap();
         let amt = fee1.get_raw(fix44::MISC_FEE_AMT.tag()).unwrap();
-        assert_eq!(amt.data, b"100");
+        assert_eq!(amt, b"100");
 
         let fee2 = message.get_group(fix44::NO_MISC_FEES, 1).unwrap();
         let amt = fee2.get_raw(fix44::MISC_FEE_TYPE.tag()).unwrap();
-        assert_eq!(amt.data, b"7");
+        assert_eq!(amt, b"7");
 
         let checksum = message.get_raw(fix44::CHECK_SUM).unwrap();
         assert_eq!(checksum, b"128");
@@ -284,14 +284,14 @@ mod tests {
             .get_group(fix44::NO_PARTY_SUB_I_DS.tag(), 0)
             .unwrap();
         let sub_id_0 = party_a_0.get_raw(fix44::PARTY_SUB_ID.tag()).unwrap();
-        assert_eq!(sub_id_0.data, b"SUBPARTYA1");
+        assert_eq!(sub_id_0, b"SUBPARTYA1");
 
         let party_b = message.get_group(fix44::NO_PARTY_I_DS, 1).unwrap();
         let party_b_id = party_b.get_raw(fix44::PARTY_ID.tag()).unwrap();
-        assert_eq!(party_b_id.data, b"PARTYB");
+        assert_eq!(party_b_id, b"PARTYB");
 
         let party_b_role = party_b.get_raw(fix44::PARTY_ROLE.tag()).unwrap();
-        assert_eq!(party_b_role.data, b"2");
+        assert_eq!(party_b_role, b"2");
 
         let checksum = message.get_raw(fix44::CHECK_SUM).unwrap();
         assert_eq!(checksum, b"111");

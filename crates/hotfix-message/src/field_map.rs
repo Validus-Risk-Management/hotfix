@@ -35,8 +35,8 @@ impl FieldMap {
         self.groups.insert(start_tag, groups);
     }
 
-    pub fn get_raw(&self, tag: TagU32) -> Option<&Field> {
-        self.fields.get(&tag)
+    pub fn get_raw(&self, tag: TagU32) -> Option<&[u8]> {
+        self.fields.get(&tag).map(|f| f.data.as_slice())
     }
 
     pub fn get_group(&self, start_tag: TagU32, index: usize) -> Option<&RepeatingGroup> {
