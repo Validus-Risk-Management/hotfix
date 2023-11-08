@@ -5,7 +5,7 @@ use crate::field_map::Field;
 use crate::parser::{MessageParser, SOH};
 use crate::parts::{Body, Header, Part, RepeatingGroup, Trailer};
 use hotfix_dictionary::{Dictionary, FieldLocation, IsFieldDefinition, TagU32};
-use hotfix_encoding::field_access::FieldType;
+use hotfix_encoding::field_access::{FieldType, FieldValueError};
 use hotfix_encoding::{fix44, HardCodedFixFieldDefinition};
 
 pub struct Message {
@@ -66,7 +66,23 @@ impl Message {
         buffer
     }
 
-    pub fn get(&self, field: &HardCodedFixFieldDefinition) -> Option<&[u8]> {
+    #[inline]
+    pub fn get<'a, V>(
+        &'a self,
+        field: &HardCodedFixFieldDefinition,
+    ) -> Result<V, FieldValueError<V::Error>>
+    where
+        V: FieldType<'a>,
+    {
+        self.get_raw(field)
+            .map(V::deserialize)
+            .transpose()
+            .map_err(FieldValueError::Invalid)
+            .and_then(|opt| opt.ok_or(FieldValueError::Missing))
+    }
+
+    #[inline]
+    pub fn get_raw(&self, field: &HardCodedFixFieldDefinition) -> Option<&[u8]> {
         let tag = TagU32::new(field.tag).unwrap();
         let f = match field.location {
             FieldLocation::Header => self.header.get(tag),

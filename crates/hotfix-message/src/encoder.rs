@@ -67,13 +67,13 @@ mod tests {
         let dict = Dictionary::fix44();
         let parsed_message = Message::from_bytes(config, &dict, &raw_message);
 
-        let symbol = parsed_message.get(fix44::SYMBOL).unwrap();
+        let symbol = parsed_message.get_raw(fix44::SYMBOL).unwrap();
         assert_eq!(symbol, b"AAPL");
 
-        let qty = parsed_message.get(fix44::ORDER_QTY).unwrap();
+        let qty = parsed_message.get_raw(fix44::ORDER_QTY).unwrap();
         assert_eq!(qty, b"60");
 
-        let qty = parsed_message.get(fix44::BODY_LENGTH).unwrap();
+        let qty = parsed_message.get_raw(fix44::BODY_LENGTH).unwrap();
         assert_eq!(qty, b"129");
     }
 
@@ -153,10 +153,10 @@ mod tests {
         let party_b_role = party_b.get(fix44::PARTY_ROLE.tag()).unwrap();
         assert_eq!(party_b_role.data, b"2");
 
-        let checksum = parsed_message.get(fix44::CHECK_SUM).unwrap();
+        let checksum = parsed_message.get_raw(fix44::CHECK_SUM).unwrap();
         assert_eq!(checksum, b"036");
 
-        let qty = parsed_message.get(fix44::BODY_LENGTH).unwrap();
+        let qty = parsed_message.get_raw(fix44::BODY_LENGTH).unwrap();
         assert_eq!(qty, b"253");
     }
 }

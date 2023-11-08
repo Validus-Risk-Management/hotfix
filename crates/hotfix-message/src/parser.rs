@@ -220,6 +220,7 @@ mod tests {
     use crate::message::{Config, Message};
     use crate::Part;
     use hotfix_dictionary::{Dictionary, IsFieldDefinition};
+    use hotfix_encoding::field_types::Currency;
     use hotfix_encoding::fix44;
 
     #[test]
@@ -230,23 +231,23 @@ mod tests {
 
         let message = Message::from_bytes(config, &dict, raw);
 
-        let begin = message.get(fix44::BEGIN_STRING).unwrap();
-        assert_eq!(begin, b"FIX.4.4");
+        let begin: &str = message.get(fix44::BEGIN_STRING).unwrap();
+        assert_eq!(begin, "FIX.4.4");
 
-        let body_length = message.get(fix44::BODY_LENGTH).unwrap();
-        assert_eq!(body_length, b"40");
+        let body_length: u32 = message.get(fix44::BODY_LENGTH).unwrap();
+        assert_eq!(body_length, 40);
 
-        let message_type = message.get(fix44::MSG_TYPE).unwrap();
-        assert_eq!(message_type, b"D");
+        let message_type: &str = message.get(fix44::MSG_TYPE).unwrap();
+        assert_eq!(message_type, "D");
 
-        let currency = message.get(fix44::CURRENCY).unwrap();
+        let currency: &Currency = message.get(fix44::CURRENCY).unwrap();
         assert_eq!(currency, b"USD");
 
-        let time_in_force = message.get(fix44::TIME_IN_FORCE).unwrap();
-        assert_eq!(time_in_force, b"0");
+        let time_in_force: &str = message.get(fix44::TIME_IN_FORCE).unwrap();
+        assert_eq!(time_in_force, "0");
 
-        let checksum = message.get(fix44::CHECK_SUM).unwrap();
-        assert_eq!(checksum, b"091");
+        let checksum: &str = message.get(fix44::CHECK_SUM).unwrap();
+        assert_eq!(checksum, "091");
     }
 
     #[test]
@@ -256,7 +257,7 @@ mod tests {
         let dict = Dictionary::fix44();
 
         let message = Message::from_bytes(config, &dict, raw);
-        let begin = message.get(fix44::BEGIN_STRING).unwrap();
+        let begin = message.get_raw(fix44::BEGIN_STRING).unwrap();
         assert_eq!(begin, b"FIX.4.4");
 
         let fee1 = message.get_group(fix44::NO_MISC_FEES, 0).unwrap();
@@ -267,7 +268,7 @@ mod tests {
         let amt = fee2.get(fix44::MISC_FEE_TYPE.tag()).unwrap();
         assert_eq!(amt.data, b"7");
 
-        let checksum = message.get(fix44::CHECK_SUM).unwrap();
+        let checksum = message.get_raw(fix44::CHECK_SUM).unwrap();
         assert_eq!(checksum, b"128");
     }
 
@@ -292,7 +293,7 @@ mod tests {
         let party_b_role = party_b.get(fix44::PARTY_ROLE.tag()).unwrap();
         assert_eq!(party_b_role.data, b"2");
 
-        let checksum = message.get(fix44::CHECK_SUM).unwrap();
+        let checksum = message.get_raw(fix44::CHECK_SUM).unwrap();
         assert_eq!(checksum, b"111");
     }
 }
