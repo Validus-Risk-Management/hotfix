@@ -1,4 +1,16 @@
 # HotFIX, an experimental FIX engine in Rust
+<div align="center">
+
+# FinQuant
+
+**Open-source (experimental) rust library for quantitative financial market modelling.**
+
+[![CI](https://github.com/Validus-Risk-Management/hotfix/actions/workflows/test.yml/badge.svg)](https://github.com/Validus-Risk-Management/hotfix/actions/workflows/test.yml)
+[![crates-badge]](https://crates.io/crates/hotfix)
+[![docs-badge]](https://docs.rs/hotfix)
+[![Crates.io](https://img.shields.io/crates/l/hotfix)](LICENSE)
+
+</div>
 
 
 > **Warning**
@@ -48,3 +60,6 @@ We welcome committed contributors who want to work with us to turn this
 into a successful project. There are many components that can be developed
 in parallel. If you are interested in participating, don't hesitate to
 reach out.
+
+[crates-badge]: https://img.shields.io/crates/v/hotfix.svg
+[docs-badge]: https://docs.rs/hotfix/badge.svg
