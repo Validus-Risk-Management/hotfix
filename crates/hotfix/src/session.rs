@@ -278,7 +278,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         let seq_num = self.store.next_sender_seq_number().await;
         self.store.increment_sender_seq_number().await;
 
-        let msg_type = message.message_type().to_vec();
+        let msg_type = message.message_type().as_bytes().to_vec();
         let msg = generate_message(
             &self.config.sender_comp_id,
             &self.config.target_comp_id,

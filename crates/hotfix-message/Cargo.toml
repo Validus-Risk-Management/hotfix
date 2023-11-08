@@ -11,10 +11,10 @@ readme.workspace = true
 fix42 = ["hotfix-dictionary/fix42", "hotfix-encoding/fix42"]
 
 [dependencies]
-hotfix-derive = { version = "0.0.9", path = "../hotfix-derive" }
-hotfix-dictionary = { version = "0.0.9", path = "../hotfix-dictionary" }
-hotfix-encoding = { version = "0.0.9", path = "../hotfix-encoding" }
+hotfix-derive = { version = "0.0.10", path = "../hotfix-derive" }
+hotfix-dictionary = { version = "0.0.10", path = "../hotfix-dictionary" }
+hotfix-encoding = { version = "0.0.10", path = "../hotfix-encoding" }
 
 [dev-dependencies]
-hotfix-dictionary = { version = "0.0.9", path = "../hotfix-dictionary", features = ["fix42"] }
-hotfix-encoding = { version = "0.0.9", path = "../hotfix-encoding", features = ["fix42"] }
+hotfix-dictionary = { version = "0.0.10", path = "../hotfix-dictionary", features = ["fix42"] }
+hotfix-encoding = { version = "0.0.10", path = "../hotfix-encoding", features = ["fix42"] }

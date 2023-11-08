@@ -1,4 +1,5 @@
-use hotfix_encoding::{fix44, EncoderHandle, SetField};
+use hotfix_encoding::fix44;
+use hotfix_message::message::Message;
 
 use crate::message::{DecodedMessage, FixMessage};
 
@@ -31,7 +32,7 @@ impl Logon {
 }
 
 impl FixMessage for Logon {
-    fn write(&self, msg: &mut EncoderHandle<Vec<u8>>) {
+    fn write(&self, msg: &mut Message) {
         msg.set(fix44::ENCRYPT_METHOD, self.encrypt_method);
         msg.set(fix44::HEART_BT_INT, self.heartbeat_interval);
         msg.set(fix44::RESET_SEQ_NUM_FLAG, self.reset_seq_num_flag);
@@ -41,8 +42,8 @@ impl FixMessage for Logon {
         }
     }
 
-    fn message_type(&self) -> &[u8] {
-        b"A"
+    fn message_type(&self) -> &str {
+        "A"
     }
 
     fn parse(_message: DecodedMessage<&[u8]>) -> Self {

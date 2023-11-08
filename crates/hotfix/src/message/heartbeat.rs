@@ -1,4 +1,4 @@
-use hotfix_encoding::EncoderHandle;
+use hotfix_message::message::Message;
 
 use crate::message::{DecodedMessage, FixMessage};
 
@@ -6,10 +6,10 @@ use crate::message::{DecodedMessage, FixMessage};
 pub struct Heartbeat;
 
 impl FixMessage for Heartbeat {
-    fn write(&self, _msg: &mut EncoderHandle<Vec<u8>>) {}
+    fn write(&self, _msg: &mut Message) {}
 
-    fn message_type(&self) -> &[u8] {
-        b"0"
+    fn message_type(&self) -> &str {
+        "0"
     }
 
     fn parse(_message: DecodedMessage<&[u8]>) -> Self {

@@ -13,8 +13,8 @@ fix42 = []
 
 [dependencies]
 chrono = "0.4"
-hotfix-derive = { version = "0.0.9", path = "../hotfix-derive" }
-hotfix-dictionary = { version = "0.0.9", path = "../hotfix-dictionary" }
+hotfix-derive = { version = "0.0.10", path = "../hotfix-derive" }
+hotfix-dictionary = { version = "0.0.10", path = "../hotfix-dictionary" }
 nohash-hasher = "^0.2"
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
@@ -27,8 +27,8 @@ quickcheck_macros = "1"
 
 [build-dependencies]
 chrono = "0.4"
-hotfix-codegen = { version = "0.0.9", path = "../hotfix-codegen" }
-hotfix-dictionary = { version = "0.0.9", path = "../hotfix-dictionary", features = ["fix42"] }
+hotfix-codegen = { version = "0.0.10", path = "../hotfix-codegen" }
+hotfix-dictionary = { version = "0.0.10", path = "../hotfix-dictionary", features = ["fix42"] }
 fnv = "1"
 heck = "0.4"
 indoc = "2"
