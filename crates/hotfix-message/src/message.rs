@@ -85,9 +85,9 @@ impl Message {
     pub fn get_raw(&self, field: &HardCodedFixFieldDefinition) -> Option<&[u8]> {
         let tag = TagU32::new(field.tag).unwrap();
         let f = match field.location {
-            FieldLocation::Header => self.header.get(tag),
-            FieldLocation::Body => self.body.get(tag),
-            FieldLocation::Trailer => self.trailer.get(tag),
+            FieldLocation::Header => self.header.get_raw(tag),
+            FieldLocation::Body => self.body.get_raw(tag),
+            FieldLocation::Trailer => self.trailer.get_raw(tag),
         };
 
         f.map(|value| value.data.as_slice())

@@ -35,7 +35,7 @@ impl FieldMap {
         self.groups.insert(start_tag, groups);
     }
 
-    pub fn get(&self, tag: TagU32) -> Option<&Field> {
+    pub fn get_raw(&self, tag: TagU32) -> Option<&Field> {
         self.fields.get(&tag)
     }
 
