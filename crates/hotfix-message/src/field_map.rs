@@ -7,7 +7,7 @@ use crate::parts::RepeatingGroup;
 
 pub struct Field {
     pub(crate) tag: TagU32,
-    pub(crate) data: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 impl Field {

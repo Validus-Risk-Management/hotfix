@@ -65,7 +65,7 @@ mod tests {
         let raw_message = msg.encode(&config);
 
         let dict = Dictionary::fix44();
-        let parsed_message = Message::from_bytes(config, &dict, &raw_message);
+        let parsed_message = Message::from_bytes(&config, &dict, &raw_message);
 
         let symbol: &str = parsed_message.get(fix44::SYMBOL).unwrap();
         assert_eq!(symbol, "AAPL");
@@ -134,7 +134,7 @@ mod tests {
         let raw_message = msg.encode(&config);
 
         let dict = Dictionary::fix44();
-        let parsed_message = Message::from_bytes(config, &dict, &raw_message);
+        let parsed_message = Message::from_bytes(&config, &dict, &raw_message);
 
         let party_a = parsed_message.get_group(fix44::NO_PARTY_I_DS, 0).unwrap();
         let party_a_0 = party_a

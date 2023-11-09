@@ -2,8 +2,9 @@ mod message;
 mod state;
 
 use hotfix_message::dict::Dictionary;
-use hotfix_message::message::{Config, Message};
-use hotfix_message::{fix44, Part};
+use hotfix_message::field_types::Timestamp;
+use hotfix_message::message::{Config as MessageConfig, Message};
+use hotfix_message::{fix44, FieldType, Part};
 use std::pin::Pin;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
@@ -82,6 +83,7 @@ impl<M: FixMessage> SessionRef<M> {
 
 struct Session<M, S> {
     mailbox: mpsc::Receiver<SessionMessage<M>>,
+    message_config: MessageConfig,
     config: SessionConfig,
     dictionary: Dictionary,
     state: SessionState,
@@ -101,6 +103,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         Self {
             mailbox,
             config,
+            message_config: MessageConfig::default(),
             dictionary: Dictionary::fix44(),
             state: SessionState::Disconnected {
                 reconnect: true,
@@ -116,8 +119,11 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         debug!("received message: {}", raw_message);
         self.store.increment_target_seq_number().await;
 
-        let config = Config::default();
-        let message = Message::from_bytes(config, &self.dictionary, raw_message.as_bytes());
+        let message = Message::from_bytes(
+            &self.message_config,
+            &self.dictionary,
+            raw_message.as_bytes(),
+        );
         let message_type = message.header().get(fix44::MSG_TYPE).unwrap();
 
         match message_type {
@@ -229,7 +235,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             .await;
     }
 
-    async fn resend_messages(&self, begin: usize, end: usize, _message: &Message) {
+    async fn resend_messages(&mut self, begin: usize, end: usize, _message: &Message) {
         debug!(begin, end, "resending messages as requested");
         let messages = self.store.get_slice(begin, end).await;
 
@@ -242,12 +248,12 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         for msg in messages {
             let m = String::from_utf8(msg.clone()).unwrap();
             debug!(m, "resending message");
-            let config = Config::default();
-            let message = Message::from_bytes(config, &self.dictionary, msg.as_slice());
+            let mut message =
+                Message::from_bytes(&self.message_config, &self.dictionary, msg.as_slice());
             sequence_number = message.get(fix44::MSG_SEQ_NUM).unwrap();
-            let message_type: &str = message.get(fix44::MSG_TYPE).unwrap();
+            let message_type: String = message.get::<&str>(fix44::MSG_TYPE).unwrap().to_string();
 
-            if is_admin(message_type) {
+            if is_admin(message_type.as_str()) {
                 debug!("skipping message as it's an admin message");
                 if reset_start.is_none() {
                     reset_start = Some(sequence_number);
@@ -261,6 +267,12 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 reset_start = None;
             }
 
+            Self::prepare_message_for_resend(&mut message);
+            self.send_raw(
+                message_type.as_bytes(),
+                message.encode(&self.message_config),
+            )
+            .await;
             debug!(sequence_number, "resending message");
         }
 
@@ -269,6 +281,14 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             let end = sequence_number;
             debug!(begin, end, "reset sequence");
         }
+    }
+
+    fn prepare_message_for_resend(msg: &mut Message) {
+        let raw_sending_time = msg.pop(fix44::SENDING_TIME).unwrap();
+        let original_sending_time = Timestamp::deserialize(&raw_sending_time.data).unwrap();
+        msg.set(fix44::ORIG_SENDING_TIME, original_sending_time);
+        msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
+        msg.set(fix44::POSS_DUP_FLAG, true);
     }
 
     fn reset_timer(&mut self) {
@@ -288,8 +308,12 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             message,
         );
         self.store.add(seq_num, &msg).await;
+        self.send_raw(&msg_type, msg).await;
+    }
+
+    async fn send_raw(&mut self, message_type: &[u8], data: Vec<u8>) {
         self.state
-            .send_message(&msg_type, RawFixMessage::new(msg))
+            .send_message(message_type, RawFixMessage::new(data))
             .await;
         self.reset_timer();
     }

@@ -27,7 +27,7 @@ impl Message {
         msg
     }
 
-    pub fn from_bytes(config: Config, dict: &Dictionary, data: &[u8]) -> Self {
+    pub fn from_bytes(config: &Config, dict: &Dictionary, data: &[u8]) -> Self {
         let mut builder = MessageParser::new(dict, config, data);
 
         builder.build()
@@ -36,7 +36,7 @@ impl Message {
     pub fn encode(&mut self, config: &Config) -> Vec<u8> {
         let mut buffer = Vec::new();
 
-        self.trailer.pop(&fix44::CHECK_SUM.tag());
+        self.trailer.pop(fix44::CHECK_SUM);
         let body_length = self.header.calculate_length()
             + self.body.calculate_length()
             + self.trailer.calculate_length();
