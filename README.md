@@ -38,6 +38,9 @@ experimental code rather than good code at this stage.
 - [x] Basic logic for receiving messages
 - [ ] Resend flows - coming next
 
+Check out the [examples](https://github.com/Validus-Risk-Management/hotfix/tree/main/examples)
+to get started.
+
 ### Prior Art
 
 The two major influences for HotFIX are QuickFIX and [FerrumFIX](https://ferrumfix.org/).
@@ -60,6 +63,9 @@ We welcome committed contributors who want to work with us to turn this
 into a successful project. There are many components that can be developed
 in parallel. If you are interested in participating, don't hesitate to
 reach out.
+
+The best way to get in touch is by
+[starting a Discussion](https://github.com/Validus-Risk-Management/hotfix/discussions).
 
 [crates-badge]: https://img.shields.io/crates/v/hotfix.svg
 [docs-badge]: https://docs.rs/hotfix/badge.svg
