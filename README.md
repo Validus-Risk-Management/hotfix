@@ -31,7 +31,8 @@ experimental code rather than good code at this stage.
 
 - [x] TCP transport
 - [x] TLS support using `rustls`
-- [x] Basic message encoding and decoding
+- [x] Basic message encoding and decoding (FIX 4.4)
+- [x] Persistent message store using [redb](https://www.redb.org/)
 - [x] Heartbeats, logon, reconnecting sessions
 - [x] Basic logic for sending messages
 - [x] Basic logic for receiving messages

@@ -1,0 +1,11 @@
+[[sessions]]
+begin_string = "FIX.4.4"
+sender_comp_id = "dummy-initiator"
+target_comp_id = "dummy-acceptor"
+data_dictionary_path = "not-implemented"
+
+connection_port = 9880
+connection_host = "127.0.0.1"
+
+heartbeat_interval = 30
+reset_on_logon = true

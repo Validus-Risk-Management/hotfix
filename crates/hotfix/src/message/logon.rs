@@ -1,5 +1,5 @@
-use hotfix_message::fix44;
 use hotfix_message::message::Message;
+use hotfix_message::{fix44, Part};
 
 use crate::message::FixMessage;
 

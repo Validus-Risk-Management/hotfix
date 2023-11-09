@@ -1,16 +1,24 @@
 use crate::field_map::FieldMap;
 use crate::parts::Part;
-use hotfix_dictionary::TagU32;
+use crate::HardCodedFixFieldDefinition;
+use hotfix_dictionary::{IsFieldDefinition, TagU32};
 
 #[allow(dead_code)]
 pub struct RepeatingGroup {
-    start_tag: TagU32,
-    delimiter_tag: TagU32,
+    pub(crate) start_tag: TagU32,
+    pub(crate) delimiter_tag: TagU32,
     fields: FieldMap,
 }
 
 impl RepeatingGroup {
-    pub fn new(start_tag: TagU32, delimiter_tag: TagU32) -> Self {
+    pub fn new(
+        start_tag: &HardCodedFixFieldDefinition,
+        delimiter_tag: &HardCodedFixFieldDefinition,
+    ) -> Self {
+        Self::new_with_tags(start_tag.tag(), delimiter_tag.tag())
+    }
+
+    pub(crate) fn new_with_tags(start_tag: TagU32, delimiter_tag: TagU32) -> Self {
         Self {
             start_tag,
             delimiter_tag,

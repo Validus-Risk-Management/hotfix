@@ -1,8 +1,8 @@
 // re-exposing these as applications need this to define their own messages
 pub use hotfix_message::field_types::Timestamp;
 pub use hotfix_message::fix44;
-use hotfix_message::message::{Config, Message};
-pub use hotfix_message::Part;
+pub use hotfix_message::message::{Config, Message};
+pub use hotfix_message::{Part, RepeatingGroup};
 
 pub(crate) mod heartbeat;
 pub(crate) mod logon;

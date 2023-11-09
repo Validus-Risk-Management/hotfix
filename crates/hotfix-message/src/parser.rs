@@ -72,7 +72,7 @@ impl<'a> MessageParser<'a> {
             let field_def = self.dict.field_by_tag(tag).unwrap();
             if field_def.is_num_in_group() {
                 let (groups, next) = self.parse_groups(field_def.tag());
-                body.set_groups(field_def.tag(), groups);
+                body.set_groups(groups);
                 field = next;
             } else {
                 field = self
@@ -103,7 +103,7 @@ impl<'a> MessageParser<'a> {
 
         let mut field = first_field;
         loop {
-            let mut group = RepeatingGroup::new(start_tag, delimiter);
+            let mut group = RepeatingGroup::new_with_tags(start_tag, delimiter);
 
             // we store the first field, which is the delimiter
             group.store_field(field);
@@ -126,7 +126,7 @@ impl<'a> MessageParser<'a> {
                         let field_def = self.dict.field_by_tag(tag.get()).unwrap();
                         if field_def.is_num_in_group() {
                             let (groups, next) = self.parse_groups(tag);
-                            group.set_groups(tag, groups);
+                            group.set_groups(groups);
                             field = next;
                             continue;
                         }

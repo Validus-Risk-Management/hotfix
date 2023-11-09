@@ -102,37 +102,34 @@ mod tests {
 
         msg.set(fix44::NO_PARTY_I_DS, 2);
 
-        let mut party_1 = RepeatingGroup::new(fix44::NO_PARTY_I_DS.tag(), fix44::PARTY_ID.tag());
+        let mut party_1 = RepeatingGroup::new(fix44::NO_PARTY_I_DS, fix44::PARTY_ID);
         party_1.store_field(Field::new(fix44::PARTY_ID.tag(), b"PARTY_A".to_vec()));
         party_1.store_field(Field::new(fix44::PARTY_ID_SOURCE.tag(), b"D".to_vec()));
         party_1.store_field(Field::new(fix44::PARTY_ROLE.tag(), b"1".to_vec()));
         party_1.store_field(Field::new(fix44::NO_PARTY_SUB_I_DS.tag(), b"2".to_vec()));
 
-        let mut subparty_1 =
-            RepeatingGroup::new(fix44::NO_PARTY_SUB_I_DS.tag(), fix44::PARTY_SUB_ID.tag());
+        let mut subparty_1 = RepeatingGroup::new(fix44::NO_PARTY_SUB_I_DS, fix44::PARTY_SUB_ID);
         subparty_1.store_field(Field::new(
             fix44::PARTY_SUB_ID.tag(),
             b"SUBPARTY_A_1".to_vec(),
         ));
         subparty_1.store_field(Field::new(fix44::PARTY_SUB_ID_TYPE.tag(), b"1".to_vec()));
 
-        let mut subparty_2 =
-            RepeatingGroup::new(fix44::NO_PARTY_SUB_I_DS.tag(), fix44::PARTY_SUB_ID.tag());
+        let mut subparty_2 = RepeatingGroup::new(fix44::NO_PARTY_SUB_I_DS, fix44::PARTY_SUB_ID);
         subparty_2.store_field(Field::new(
             fix44::PARTY_SUB_ID.tag(),
             b"SUBPARTY_A_2".to_vec(),
         ));
         subparty_2.store_field(Field::new(fix44::PARTY_SUB_ID_TYPE.tag(), b"2".to_vec()));
 
-        party_1.set_groups(fix44::NO_PARTY_SUB_I_DS.tag(), vec![subparty_1, subparty_2]);
+        party_1.set_groups(vec![subparty_1, subparty_2]);
 
-        let mut party_2 = RepeatingGroup::new(fix44::NO_PARTY_I_DS.tag(), fix44::PARTY_ID.tag());
+        let mut party_2 = RepeatingGroup::new(fix44::NO_PARTY_I_DS, fix44::PARTY_ID);
         party_2.store_field(Field::new(fix44::PARTY_ID.tag(), b"PARTY_B".to_vec()));
         party_2.store_field(Field::new(fix44::PARTY_ID_SOURCE.tag(), b"D".to_vec()));
         party_2.store_field(Field::new(fix44::PARTY_ROLE.tag(), b"2".to_vec()));
 
-        msg.body
-            .set_groups(fix44::NO_PARTY_I_DS.tag(), vec![party_1, party_2]);
+        msg.body.set_groups(vec![party_1, party_2]);
         let config = Config { separator: b'|' };
         let raw_message = msg.encode(&config);
 

@@ -86,8 +86,18 @@ impl Message {
             FieldLocation::Trailer => self.trailer.get_group(tag, index),
         }
     }
+}
 
-    pub fn set<'a, V>(&'a mut self, field_definition: &HardCodedFixFieldDefinition, value: V)
+impl Part for Message {
+    fn get_field_map(&self) -> &FieldMap {
+        self.body.get_field_map()
+    }
+
+    fn get_field_map_mut(&mut self) -> &mut FieldMap {
+        self.body.get_field_map_mut()
+    }
+
+    fn set<'a, V>(&'a mut self, field_definition: &HardCodedFixFieldDefinition, value: V)
     where
         V: FieldType<'a>,
     {
@@ -99,16 +109,6 @@ impl Message {
             FieldLocation::Body => self.body.store_field(field),
             FieldLocation::Trailer => self.trailer.store_field(field),
         };
-    }
-}
-
-impl Part for Message {
-    fn get_field_map(&self) -> &FieldMap {
-        self.body.get_field_map()
-    }
-
-    fn get_field_map_mut(&mut self) -> &mut FieldMap {
-        self.body.get_field_map_mut()
     }
 }
 

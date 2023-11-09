@@ -1,4 +1,5 @@
 use crate::field_map::{Field, FieldMap};
+use std::collections::HashSet;
 
 mod body;
 mod header;
@@ -11,13 +12,23 @@ use crate::encoding::FieldValueError;
 use crate::{FieldType, HardCodedFixFieldDefinition};
 pub(crate) use body::Body;
 pub(crate) use header::Header;
-pub(crate) use repeating_group::RepeatingGroup;
+pub use repeating_group::RepeatingGroup;
 pub(crate) use trailer::Trailer;
 
 // TODO: what a rubbish name.. but can't think of anything better that's not overloaded with fefix names
 pub trait Part {
     fn get_field_map(&self) -> &FieldMap;
     fn get_field_map_mut(&mut self) -> &mut FieldMap;
+
+    fn set<'a, V>(&'a mut self, field_definition: &HardCodedFixFieldDefinition, value: V)
+    where
+        V: FieldType<'a>,
+    {
+        let tag = TagU32::new(field_definition.tag).unwrap();
+        let field = Field::new(tag, value.to_bytes());
+
+        self.store_field(field);
+    }
 
     fn store_field(&mut self, field: Field) {
         self.get_field_map_mut().insert(field)
@@ -47,7 +58,13 @@ pub trait Part {
         self.get_field_map_mut().fields.remove(tag)
     }
 
-    fn set_groups(&mut self, start_tag: TagU32, groups: Vec<RepeatingGroup>) {
+    fn set_groups(&mut self, groups: Vec<RepeatingGroup>) {
+        let tags: HashSet<(TagU32, TagU32)> = groups
+            .iter()
+            .map(|g| (g.start_tag, g.delimiter_tag))
+            .collect();
+        assert_eq!(tags.len(), 1);
+        let (start_tag, _) = tags.into_iter().next().unwrap();
         self.get_field_map_mut().set_groups(start_tag, groups);
     }
 

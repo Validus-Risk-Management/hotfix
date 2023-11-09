@@ -12,4 +12,4 @@ use encoding::Buffer;
 pub use encoding::HardCodedFixFieldDefinition;
 pub use hotfix_derive::FieldType;
 pub use hotfix_dictionary::{self as dict, TagU32};
-pub use parts::Part;
+pub use parts::{Part, RepeatingGroup};
