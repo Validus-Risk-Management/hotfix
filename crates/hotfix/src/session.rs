@@ -21,6 +21,7 @@ use crate::message::parser::RawFixMessage;
 use crate::message::FixMessage;
 use crate::store::MessageStore;
 
+use crate::message::sequence_reset::SequenceReset;
 use crate::message_utils::is_admin;
 use message::SessionMessage;
 use state::SessionState;
@@ -250,8 +251,12 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             debug!(m, "resending message");
             let mut message =
                 Message::from_bytes(&self.message_config, &self.dictionary, msg.as_slice());
-            sequence_number = message.get(fix44::MSG_SEQ_NUM).unwrap();
-            let message_type: String = message.get::<&str>(fix44::MSG_TYPE).unwrap().to_string();
+            sequence_number = message.header().get(fix44::MSG_SEQ_NUM).unwrap();
+            let message_type: String = message
+                .header()
+                .get::<&str>(fix44::MSG_TYPE)
+                .unwrap()
+                .to_string();
 
             if is_admin(message_type.as_str()) {
                 debug!("skipping message as it's an admin message");
@@ -263,7 +268,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
             if let Some(begin) = reset_start {
                 let end = sequence_number;
-                debug!(begin, end, "reset sequence");
+                self.send_sequence_reset(begin, end).await;
                 reset_start = None;
             }
 
@@ -273,22 +278,23 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 message.encode(&self.message_config),
             )
             .await;
-            debug!(sequence_number, "resending message");
+            debug!(sequence_number, "resent message");
         }
 
         if let Some(begin) = reset_start {
             // the final reset if needed
             let end = sequence_number;
-            debug!(begin, end, "reset sequence");
+            self.send_sequence_reset(begin, end).await;
         }
     }
 
     fn prepare_message_for_resend(msg: &mut Message) {
-        let raw_sending_time = msg.pop(fix44::SENDING_TIME).unwrap();
+        let header = msg.header_mut();
+        let raw_sending_time = header.pop(fix44::SENDING_TIME).unwrap();
         let original_sending_time = Timestamp::deserialize(&raw_sending_time.data).unwrap();
-        msg.set(fix44::ORIG_SENDING_TIME, original_sending_time);
-        msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
-        msg.set(fix44::POSS_DUP_FLAG, true);
+        header.set(fix44::ORIG_SENDING_TIME, original_sending_time);
+        header.set(fix44::SENDING_TIME, Timestamp::utc_now());
+        header.set(fix44::POSS_DUP_FLAG, true);
     }
 
     fn reset_timer(&mut self) {
@@ -316,6 +322,22 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             .send_message(message_type, RawFixMessage::new(data))
             .await;
         self.reset_timer();
+    }
+
+    async fn send_sequence_reset(&mut self, begin: u64, end: u64) {
+        let sequence_reset = SequenceReset {
+            gap_fill: true,
+            new_seq_no: end,
+        };
+        let raw_message = generate_message(
+            &self.config.sender_comp_id,
+            &self.config.target_comp_id,
+            begin as usize,
+            sequence_reset,
+        );
+
+        self.send_raw(b"4", raw_message).await;
+        debug!(begin, end, "sent reset sequence");
     }
 
     async fn send_logon(&mut self) {

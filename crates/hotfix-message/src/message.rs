@@ -70,6 +70,10 @@ impl Message {
         &self.header
     }
 
+    pub fn header_mut(&mut self) -> &mut Header {
+        &mut self.header
+    }
+
     pub fn trailer(&self) -> &Trailer {
         &self.trailer
     }

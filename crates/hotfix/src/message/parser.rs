@@ -46,7 +46,7 @@ impl Parser {
                 break;
             }
 
-            let (msg_data, remainder) = self.buffer.split_at(message_length + 1);
+            let (msg_data, remainder) = self.buffer.split_at(message_length);
 
             let raw_message = RawFixMessage {
                 data: msg_data.to_vec(),
@@ -103,7 +103,7 @@ impl HeaderInfo {
 
     #[inline]
     fn message_length(&self) -> usize {
-        self.field_1.end + self.nominal_body_len + FIELD_CHECKSUM_LEN_IN_BYTES
+        self.field_1.end + 1 + self.nominal_body_len + FIELD_CHECKSUM_LEN_IN_BYTES
     }
 }
 
