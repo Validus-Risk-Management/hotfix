@@ -12,11 +12,14 @@ use crate::store::MessageStore;
 struct SequenceMeta {
     #[serde(rename = "_id")]
     object_id: ObjectId,
+    sender_seq_number: u64,
+    target_seq_number: u64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Message {
-    sequence_id: u64,
+    sequence_id: ObjectId,
+    msg_seq_number: u64,
     data: Binary,
 }
 
@@ -24,7 +27,7 @@ struct Message {
 struct MongoDbMessageStore {
     meta_collection: Collection<SequenceMeta>,
     message_collection: Collection<Message>,
-    sequence_id: ObjectId,
+    current_sequence: SequenceMeta,
 }
 
 impl MongoDbMessageStore {
@@ -34,34 +37,38 @@ impl MongoDbMessageStore {
         let meta_collection = db.collection(collection_name);
         let message_collection = db.collection(collection_name);
 
-        let sequence_id = Self::get_or_default_sequence(&meta_collection).await;
+        let current_sequence = Self::get_or_default_sequence(&meta_collection).await;
 
         Self {
             meta_collection,
             message_collection,
-            sequence_id,
+            current_sequence,
         }
     }
 
-    async fn get_or_default_sequence(meta_collection: &Collection<SequenceMeta>) -> ObjectId {
+    async fn get_or_default_sequence(meta_collection: &Collection<SequenceMeta>) -> SequenceMeta {
         let options = FindOneOptions::builder().sort(doc! { "_id": -1 }).build();
         let meta = meta_collection.find_one(doc! {}, options).await.unwrap();
 
         match meta {
-            None => {
-                let sequence_id = ObjectId::new();
-                let initial_meta = SequenceMeta {
-                    object_id: sequence_id,
-                };
-                meta_collection
-                    .insert_one(initial_meta, None)
-                    .await
-                    .unwrap();
-
-                sequence_id
-            }
-            Some(meta) => meta.object_id,
+            None => Self::new_sequence(meta_collection).await,
+            Some(meta) => meta,
         }
+    }
+
+    async fn new_sequence(meta_collection: &Collection<SequenceMeta>) -> SequenceMeta {
+        let sequence_id = ObjectId::new();
+        let initial_meta = SequenceMeta {
+            object_id: sequence_id,
+            sender_seq_number: 0,
+            target_seq_number: 0,
+        };
+        meta_collection
+            .insert_one(&initial_meta, None)
+            .await
+            .unwrap();
+
+        initial_meta
     }
 }
 
@@ -76,22 +83,38 @@ impl MessageStore for MongoDbMessageStore {
     }
 
     async fn next_sender_seq_number(&self) -> u64 {
-        todo!()
+        self.current_sequence.sender_seq_number
     }
 
     async fn next_target_seq_number(&self) -> u64 {
-        todo!()
+        self.current_sequence.target_seq_number
     }
 
     async fn increment_sender_seq_number(&mut self) {
-        todo!()
+        self.current_sequence.sender_seq_number += 1;
+        self.meta_collection
+            .update_one(
+                doc! { "_id": self.current_sequence.object_id },
+                doc! { "$inc": { "sender_seq_number": 1 } },
+                None,
+            )
+            .await
+            .unwrap();
     }
 
     async fn increment_target_seq_number(&mut self) {
-        todo!()
+        self.current_sequence.target_seq_number += 1;
+        self.meta_collection
+            .update_one(
+                doc! { "_id": self.current_sequence.object_id },
+                doc! { "$inc": { "target_seq_number": 1 } },
+                None,
+            )
+            .await
+            .unwrap();
     }
 
     async fn reset(&mut self) {
-        todo!()
+        self.current_sequence = Self::new_sequence(&self.meta_collection).await;
     }
 }
