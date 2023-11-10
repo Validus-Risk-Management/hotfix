@@ -1,4 +1,6 @@
 pub mod in_memory;
+#[cfg(feature = "mongodb")]
+pub mod mongodb;
 #[cfg(feature = "redb")]
 pub mod redb;
 
