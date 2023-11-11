@@ -8,12 +8,15 @@ use mongodb::options::FindOneOptions;
 use mongodb::{Collection, Database};
 use serde::{Deserialize, Serialize};
 
+pub use mongodb::Client;
+
 use crate::store::MessageStore;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct SequenceMeta {
     #[serde(rename = "_id")]
     object_id: ObjectId,
+    meta: bool,
     sender_seq_number: u64,
     target_seq_number: u64,
 }
@@ -26,7 +29,7 @@ struct Message {
 }
 
 #[allow(dead_code)]
-struct MongoDbMessageStore {
+pub struct MongoDbMessageStore {
     meta_collection: Collection<SequenceMeta>,
     message_collection: Collection<Message>,
     current_sequence: SequenceMeta,
@@ -50,7 +53,10 @@ impl MongoDbMessageStore {
 
     async fn get_or_default_sequence(meta_collection: &Collection<SequenceMeta>) -> SequenceMeta {
         let options = FindOneOptions::builder().sort(doc! { "_id": -1 }).build();
-        let meta = meta_collection.find_one(doc! {}, options).await.unwrap();
+        let meta = meta_collection
+            .find_one(doc! { "meta": true }, options)
+            .await
+            .unwrap();
 
         match meta {
             None => Self::new_sequence(meta_collection).await,
@@ -62,8 +68,9 @@ impl MongoDbMessageStore {
         let sequence_id = ObjectId::new();
         let initial_meta = SequenceMeta {
             object_id: sequence_id,
-            sender_seq_number: 0,
-            target_seq_number: 0,
+            meta: true,
+            sender_seq_number: 1,
+            target_seq_number: 1,
         };
         meta_collection
             .insert_one(&initial_meta, None)

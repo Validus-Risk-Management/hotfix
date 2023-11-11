@@ -1,17 +1,25 @@
 mod application;
 mod messages;
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use hotfix::config::Config;
 use hotfix::field_types::{Date, Timestamp};
 use hotfix::fix44;
 use hotfix::initiator::Initiator;
+use hotfix::store::mongodb::Client;
 use std::path::Path;
 use tokio::task::spawn_blocking;
 use tracing_subscriber::EnvFilter;
 
 use crate::application::TestApplication;
 use crate::messages::{Message, NewOrderSingle};
+
+#[derive(ValueEnum, Clone, Debug)]
+#[clap(rename_all = "lower")]
+enum Database {
+    Redb,
+    Mongodb,
+}
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -20,6 +28,8 @@ struct Args {
     config: String,
     #[arg(short, long)]
     logfile: Option<String>,
+    #[arg(short, long)]
+    database: Option<Database>,
 }
 
 #[tokio::main]
@@ -46,8 +56,9 @@ async fn main() {
             .init();
     }
 
+    let db_config = args.database.unwrap_or(Database::Redb);
     let app = TestApplication::default();
-    let session = start_session(&args.config, app).await;
+    let session = start_session(&args.config, &db_config, app).await;
 
     user_loop(session).await;
 }
@@ -98,10 +109,28 @@ async fn send_message(session: &Initiator<Message>) {
     session.send_message(msg).await;
 }
 
-async fn start_session(config_path: &str, app: TestApplication) -> Initiator<Message> {
+async fn start_session(
+    config_path: &str,
+    db_config: &Database,
+    app: TestApplication,
+) -> Initiator<Message> {
     let mut config = Config::load_from_path(config_path);
     let session_config = config.sessions.pop().expect("config to include a session");
-    let store = hotfix::store::redb::RedbMessageStore::new("session.db");
 
-    Initiator::new(session_config, app, store).await
+    match db_config {
+        Database::Redb => {
+            let store = hotfix::store::redb::RedbMessageStore::new("session.db");
+            Initiator::new(session_config, app, store).await
+        }
+        Database::Mongodb => {
+            let uri = "mongodb://localhost:30001";
+            let client = Client::with_uri_str(uri)
+                .await
+                .expect("able to create client");
+            let store =
+                hotfix::store::mongodb::MongoDbMessageStore::new(client.database("hotfix"), None)
+                    .await;
+            Initiator::new(session_config, app, store).await
+        }
+    }
 }

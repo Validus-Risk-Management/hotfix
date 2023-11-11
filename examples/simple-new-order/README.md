@@ -27,3 +27,14 @@ the log levels accordingly:
 ```shell
 RUST_LOG=info,hotfix=debug
 ```
+
+## Message store selection
+
+You can run this example with either a `redb` message store, which
+requires no setup. This creates the `session.db` file in the working
+directory to hold state.
+
+Alternatively, you can try out the MongoDB store. This requires you to
+spin up MongoDB locally first using the provided `docker-compose` file.
+Once you have MongoDB running, you can run the application with the
+`--database mongodb` flag to use it.
