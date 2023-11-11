@@ -1,6 +1,8 @@
 use async_trait::async_trait;
+use futures::TryStreamExt;
 use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
+use mongodb::bson::spec::BinarySubtype;
 use mongodb::bson::Binary;
 use mongodb::options::FindOneOptions;
 use mongodb::{Collection, Database};
@@ -74,12 +76,37 @@ impl MongoDbMessageStore {
 
 #[async_trait]
 impl MessageStore for MongoDbMessageStore {
-    async fn add(&mut self, _sequence_number: u64, _message: &[u8]) {
-        todo!()
+    async fn add(&mut self, sequence_number: u64, message: &[u8]) {
+        let message = Message {
+            sequence_id: Default::default(),
+            msg_seq_number: sequence_number,
+            data: Binary {
+                subtype: BinarySubtype::Generic,
+                bytes: message.to_vec(),
+            },
+        };
+        self.message_collection
+            .insert_one(message, None)
+            .await
+            .unwrap();
     }
 
-    async fn get_slice(&self, _begin: usize, _end: usize) -> Vec<Vec<u8>> {
-        todo!()
+    async fn get_slice(&self, begin: usize, end: usize) -> Vec<Vec<u8>> {
+        let filter = doc! {
+            "sequence_id": self.current_sequence.object_id,
+            "msg_seq_number": doc! {
+                "$gt": begin as u32,
+                "$lt": end as u32,
+            }
+        };
+        let mut cursor = self.message_collection.find(filter, None).await.unwrap();
+
+        let mut messages = Vec::new();
+        while let Some(message) = cursor.try_next().await.unwrap() {
+            messages.push(message.data.bytes);
+        }
+
+        messages
     }
 
     async fn next_sender_seq_number(&self) -> u64 {
