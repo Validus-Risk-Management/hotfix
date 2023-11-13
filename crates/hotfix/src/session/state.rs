@@ -1,10 +1,15 @@
+use hotfix_message::message::Message;
+use std::collections::VecDeque;
+use tracing::{debug, error};
+
 use crate::actors::socket_writer::WriterRef;
 use crate::message::parser::RawFixMessage;
-use tracing::{debug, error};
 
 pub enum SessionState {
     /// We have established a connection, sent a logon message and await a response.
     AwaitingLogon { writer: WriterRef, logon_sent: bool },
+    /// We are awaiting the target to resend the gap we have.
+    AwaitingResend(AwaitingResendState),
     /// The session is active, we have connected and mutually logged on.
     Active { writer: WriterRef },
     /// The peer has logged us out.
@@ -54,5 +59,31 @@ impl SessionState {
             Self::Active { writer } => writer.disconnect().await,
             _ => debug!("disconnecting an already disconnected session"),
         }
+    }
+}
+/// Session state we're in while processing messages we requested to be resent.
+pub struct AwaitingResendState {
+    /// The reference to the writer loop.
+    writer: WriterRef,
+    /// The next sequence number we're expecting in the gap.
+    next_seq_number: u64,
+    /// The end of the gap we're waiting for the target to resend.
+    end_seq_number: u64,
+    /// Inbound messages we receive while processing the resend.
+    inbound_queue: VecDeque<Message>,
+}
+
+impl AwaitingResendState {
+    pub fn new(writer: WriterRef, next_seq_number: u64, end_seq_number: u64) -> Self {
+        Self {
+            writer,
+            next_seq_number,
+            end_seq_number,
+            inbound_queue: Default::default(),
+        }
+    }
+
+    pub async fn on_inbound_message(&mut self, message: Message) {
+        self.inbound_queue.push_back(message);
     }
 }

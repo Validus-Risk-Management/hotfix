@@ -25,6 +25,7 @@ use crate::store::MessageStore;
 use crate::error::MessageVerificationError;
 use crate::message::sequence_reset::SequenceReset;
 use crate::message_utils::is_admin;
+use crate::session::state::AwaitingResendState;
 use message::SessionMessage;
 use state::SessionState;
 
@@ -128,6 +129,15 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         );
         let message_type = message.header().get(fix44::MSG_TYPE).unwrap();
 
+        match &mut self.state {
+            SessionState::AwaitingResend(state) => {
+                return state.on_inbound_message(message).await;
+            }
+            _ => {
+                // TODO: all messages should eventually be handled through the state machine
+            }
+        }
+
         match message_type {
             "0" => {
                 // TODO: handle heartbeat
@@ -200,7 +210,9 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     async fn on_disconnect(&mut self, reason: String) {
         match self.state {
-            SessionState::Active { .. } | SessionState::AwaitingLogon { .. } => {
+            SessionState::Active { .. }
+            | SessionState::AwaitingLogon { .. }
+            | SessionState::AwaitingResend(_) => {
                 self.state = SessionState::Disconnected {
                     reconnect: true,
                     reason,
@@ -236,7 +248,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                     }
                     MessageVerificationError::SeqNumberTooHigh { actual, expected } => {
                         debug!("we are ahead behind target (ours: {expected}, theirs: {actual}), requesting resend.");
-                        todo!()
+                        let awaiting_resend =
+                            AwaitingResendState::new(writer.to_owned(), expected, actual);
+                        self.state = SessionState::AwaitingResend(awaiting_resend);
+                        todo!();
                     }
                     MessageVerificationError::IncorrectBeginString(_) => {
                         // TODO: handle incorrect begin string/comp ID by disconnecting session
