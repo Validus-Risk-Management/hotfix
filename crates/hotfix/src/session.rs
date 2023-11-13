@@ -23,6 +23,7 @@ use crate::message::FixMessage;
 use crate::store::MessageStore;
 
 use crate::error::MessageVerificationError;
+use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
 use crate::message_utils::is_admin;
 use crate::session::state::AwaitingResendState;
@@ -250,8 +251,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                         debug!("we are ahead behind target (ours: {expected}, theirs: {actual}), requesting resend.");
                         let awaiting_resend =
                             AwaitingResendState::new(writer.to_owned(), expected, actual);
+                        self.send_resend_request(expected, actual).await;
                         self.state = SessionState::AwaitingResend(awaiting_resend);
-                        todo!();
                     }
                     MessageVerificationError::IncorrectBeginString(_) => {
                         // TODO: handle incorrect begin string/comp ID by disconnecting session
@@ -409,6 +410,11 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
         self.send_raw(b"4", raw_message).await;
         debug!(begin, end, "sent reset sequence");
+    }
+
+    async fn send_resend_request(&mut self, begin: u64, end: u64) {
+        let request = ResendRequest::new(begin, end);
+        self.send_message(request).await;
     }
 
     async fn send_logon(&mut self) {

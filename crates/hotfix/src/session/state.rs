@@ -1,4 +1,5 @@
 use hotfix_message::message::Message;
+use hotfix_message::{fix44, Part};
 use std::collections::VecDeque;
 use tracing::{debug, error};
 
@@ -84,6 +85,19 @@ impl AwaitingResendState {
     }
 
     pub async fn on_inbound_message(&mut self, message: Message) {
-        self.inbound_queue.push_back(message);
+        let seq_number: u64 = message.get(fix44::MSG_SEQ_NUM).unwrap();
+        if seq_number > self.end_seq_number {
+            self.inbound_queue.push_back(message);
+        } else if seq_number == self.next_seq_number {
+            debug!("processing resent message {seq_number}");
+            // TODO: this should actually reprocess the message
+        } else {
+            panic!("unexpected seq number during resend");
+        }
+
+        if seq_number == self.end_seq_number {
+            debug!("resend request completed");
+            // TODO: we should process queued messages and put the state back to active
+        }
     }
 }
