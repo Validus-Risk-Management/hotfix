@@ -232,7 +232,6 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     async fn on_logon(&mut self, message: &Message) {
-        // TODO: this should check if logon message has the right sequence numbers
         // TODO: this should wait to see if a resend request is sent
         if let SessionState::AwaitingLogon { writer, .. } = &self.state {
             match self.verify_message(message).await {
@@ -251,8 +250,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                         debug!("we are ahead behind target (ours: {expected}, theirs: {actual}), requesting resend.");
                         let awaiting_resend =
                             AwaitingResendState::new(writer.to_owned(), expected, actual);
-                        self.send_resend_request(expected, actual).await;
                         self.state = SessionState::AwaitingResend(awaiting_resend);
+                        self.send_resend_request(expected, actual).await;
                     }
                     MessageVerificationError::IncorrectBeginString(_) => {
                         // TODO: handle incorrect begin string/comp ID by disconnecting session

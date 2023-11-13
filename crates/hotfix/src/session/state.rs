@@ -29,7 +29,7 @@ impl SessionState {
 
     pub async fn send_message(&mut self, message_type: &[u8], message: RawFixMessage) {
         match self {
-            Self::Active { writer } => {
+            Self::Active { writer } | Self::AwaitingResend(AwaitingResendState { writer, .. }) => {
                 if message_type == b"A" {
                     error!("logon message is invalid for active sessions")
                 } else {
@@ -85,12 +85,13 @@ impl AwaitingResendState {
     }
 
     pub async fn on_inbound_message(&mut self, message: Message) {
-        let seq_number: u64 = message.get(fix44::MSG_SEQ_NUM).unwrap();
+        let seq_number: u64 = message.header().get(fix44::MSG_SEQ_NUM).unwrap();
         if seq_number > self.end_seq_number {
             self.inbound_queue.push_back(message);
         } else if seq_number == self.next_seq_number {
             debug!("processing resent message {seq_number}");
             // TODO: this should actually reprocess the message
+            self.next_seq_number += 1;
         } else {
             panic!("unexpected seq number during resend");
         }
