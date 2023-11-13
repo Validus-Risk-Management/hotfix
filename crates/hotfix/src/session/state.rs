@@ -1,5 +1,4 @@
 use hotfix_message::message::Message;
-use hotfix_message::{fix44, Part};
 use std::collections::VecDeque;
 use tracing::{debug, error};
 
@@ -66,39 +65,18 @@ impl SessionState {
 pub struct AwaitingResendState {
     /// The reference to the writer loop.
     writer: WriterRef,
-    /// The next sequence number we're expecting in the gap.
-    next_seq_number: u64,
     /// The end of the gap we're waiting for the target to resend.
-    end_seq_number: u64,
+    pub(crate) end_seq_number: u64,
     /// Inbound messages we receive while processing the resend.
-    inbound_queue: VecDeque<Message>,
+    pub(crate) inbound_queue: VecDeque<Message>,
 }
 
 impl AwaitingResendState {
-    pub fn new(writer: WriterRef, next_seq_number: u64, end_seq_number: u64) -> Self {
+    pub fn new(writer: WriterRef, end_seq_number: u64) -> Self {
         Self {
             writer,
-            next_seq_number,
             end_seq_number,
             inbound_queue: Default::default(),
-        }
-    }
-
-    pub async fn on_inbound_message(&mut self, message: Message) {
-        let seq_number: u64 = message.header().get(fix44::MSG_SEQ_NUM).unwrap();
-        if seq_number > self.end_seq_number {
-            self.inbound_queue.push_back(message);
-        } else if seq_number == self.next_seq_number {
-            debug!("processing resent message {seq_number}");
-            // TODO: this should actually reprocess the message
-            self.next_seq_number += 1;
-        } else {
-            panic!("unexpected seq number during resend");
-        }
-
-        if seq_number == self.end_seq_number {
-            debug!("resend request completed");
-            // TODO: we should process queued messages and put the state back to active
         }
     }
 }

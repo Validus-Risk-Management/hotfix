@@ -121,24 +121,38 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     async fn on_incoming(&mut self, raw_message: RawFixMessage) {
+        // TODO: this whole thing should be refactored to tidy up ownership between the session and the nested state.
         debug!("received message: {}", raw_message);
-
         let message = Message::from_bytes(
             &self.message_config,
             &self.dictionary,
             raw_message.as_bytes(),
         );
-        let message_type = message.header().get(fix44::MSG_TYPE).unwrap();
 
-        match &mut self.state {
-            SessionState::AwaitingResend(state) => {
-                return state.on_inbound_message(message).await;
-            }
-            _ => {
-                // TODO: all messages should eventually be handled through the state machine
+        if let SessionState::AwaitingResend(state) = &mut self.state {
+            let seq_number: u64 = message.header().get(fix44::MSG_SEQ_NUM).unwrap();
+            if seq_number > state.end_seq_number {
+                state.inbound_queue.push_back(message);
+                return;
+            } else if seq_number == self.store.next_target_seq_number().await {
+                let msg_type: &str = message.get(fix44::MSG_TYPE).unwrap();
+                if msg_type == "4" {
+                    // a sequence reset message, which should be a gap fill
+                    let gap_fill: bool = message.get(fix44::GAP_FILL_FLAG).unwrap();
+                    if !gap_fill {
+                        panic!("expected sequence reset with gap fill");
+                    }
+
+                    let _end: u64 = message.get(fix44::NEW_SEQ_NO).unwrap();
+                    // TODO: set target seq number
+                    return;
+                }
+            } else {
+                panic!("unexpected seq number during resend");
             }
         }
 
+        let message_type = message.header().get(fix44::MSG_TYPE).unwrap();
         match message_type {
             "0" => {
                 // TODO: handle heartbeat
@@ -248,8 +262,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                     }
                     MessageVerificationError::SeqNumberTooHigh { actual, expected } => {
                         debug!("we are ahead behind target (ours: {expected}, theirs: {actual}), requesting resend.");
-                        let awaiting_resend =
-                            AwaitingResendState::new(writer.to_owned(), expected, actual);
+                        let awaiting_resend = AwaitingResendState::new(writer.to_owned(), actual);
                         self.state = SessionState::AwaitingResend(awaiting_resend);
                         self.send_resend_request(expected, actual).await;
                     }
