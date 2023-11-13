@@ -44,6 +44,8 @@ impl MongoDbMessageStore {
 
         let current_sequence = Self::get_or_default_sequence(&meta_collection).await;
 
+        // TODO: initialise indexes
+
         Self {
             meta_collection,
             message_collection,
@@ -85,7 +87,7 @@ impl MongoDbMessageStore {
 impl MessageStore for MongoDbMessageStore {
     async fn add(&mut self, sequence_number: u64, message: &[u8]) {
         let message = Message {
-            sequence_id: Default::default(),
+            sequence_id: self.current_sequence.object_id,
             msg_seq_number: sequence_number,
             data: Binary {
                 subtype: BinarySubtype::Generic,

@@ -1,5 +1,6 @@
 mod actors;
 pub mod config;
+pub(crate) mod error;
 pub mod initiator;
 pub mod message;
 mod message_utils;

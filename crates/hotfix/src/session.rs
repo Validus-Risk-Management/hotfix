@@ -5,6 +5,7 @@ use hotfix_message::dict::Dictionary;
 use hotfix_message::field_types::Timestamp;
 use hotfix_message::message::{Config as MessageConfig, Message};
 use hotfix_message::{fix44, FieldType, Part};
+use std::cmp::Ordering;
 use std::pin::Pin;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
@@ -21,6 +22,7 @@ use crate::message::parser::RawFixMessage;
 use crate::message::FixMessage;
 use crate::store::MessageStore;
 
+use crate::error::MessageVerificationError;
 use crate::message::sequence_reset::SequenceReset;
 use crate::message_utils::is_admin;
 use message::SessionMessage;
@@ -118,7 +120,6 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     async fn on_incoming(&mut self, raw_message: RawFixMessage) {
         debug!("received message: {}", raw_message);
-        self.store.increment_target_seq_number().await;
 
         let message = Message::from_bytes(
             &self.message_config,
@@ -147,7 +148,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 self.on_logout().await;
             }
             "A" => {
-                self.on_logon().await;
+                self.on_logon(&message).await;
             }
             _ => {
                 let parsed_message = M::parse(&message);
@@ -155,6 +156,38 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 self.application.send_message(app_message).await;
             }
         }
+
+        self.store.increment_target_seq_number().await;
+    }
+
+    async fn verify_message(&self, message: &Message) -> Result<(), MessageVerificationError> {
+        let begin_string: &str = message.header().get(fix44::BEGIN_STRING).unwrap();
+        if begin_string != "FIX.4.4" {
+            return Err(MessageVerificationError::IncorrectBeginString(
+                begin_string.to_string(),
+            ));
+        }
+
+        let expected_seq_number = self.store.next_target_seq_number().await;
+        let actual_seq_number: u64 = message.header().get(fix44::MSG_SEQ_NUM).unwrap();
+
+        match actual_seq_number.cmp(&expected_seq_number) {
+            Ordering::Greater => {
+                return Err(MessageVerificationError::SeqNumberTooHigh {
+                    actual: actual_seq_number,
+                    expected: expected_seq_number,
+                });
+            }
+            Ordering::Less => {
+                return Err(MessageVerificationError::SeqNumberTooLow {
+                    actual: actual_seq_number,
+                    expected: expected_seq_number,
+                });
+            }
+            _ => {}
+        }
+
+        Ok(())
     }
 
     async fn on_connect(&mut self, writer: WriterRef) {
@@ -185,12 +218,35 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         }
     }
 
-    async fn on_logon(&mut self) {
+    async fn on_logon(&mut self, message: &Message) {
         // TODO: this should check if logon message has the right sequence numbers
         // TODO: this should wait to see if a resend request is sent
         if let SessionState::AwaitingLogon { writer, .. } = &self.state {
-            self.state = SessionState::Active {
-                writer: writer.clone(),
+            match self.verify_message(message).await {
+                Ok(_) => {
+                    // happy logon flow, the session is now active
+                    self.state = SessionState::Active {
+                        writer: writer.clone(),
+                    }
+                }
+                Err(err) => match err {
+                    MessageVerificationError::SeqNumberTooLow { actual, expected } => {
+                        error!("we expected {expected} sequence number, but target sent lower ({actual}), terminating...");
+                        panic!("sequence number too low (actual {actual}, expected {expected})")
+                    }
+                    MessageVerificationError::SeqNumberTooHigh { actual, expected } => {
+                        debug!("we are ahead behind target (ours: {expected}, theirs: {actual}), requesting resend.");
+                        todo!()
+                    }
+                    MessageVerificationError::IncorrectBeginString(_) => {
+                        // TODO: handle incorrect begin string/comp ID by disconnecting session
+                        // see: https://www.fixtrading.org/standards/fix-session-layer-online/#when-to-terminate-a-fix-connection-by-terminating-the-transport-layer-connection-instead-of-sending-a-logout355
+                        panic!("incorrect begin string received");
+                    }
+                    MessageVerificationError::IncorrectCompId(_) => {
+                        panic!("incorrect comp ID received");
+                    }
+                },
             }
         } else {
             error!("received unexpected logon message");

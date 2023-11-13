@@ -847,6 +847,7 @@ dependencies = [
  "rustls-pemfile 2.0.0-alpha.1",
  "rustls-pki-types",
  "serde",
+ "thiserror",
  "tokio",
  "tokio-rustls",
  "tokio-stream",
