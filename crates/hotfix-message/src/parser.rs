@@ -34,7 +34,7 @@ impl<'a> MessageParser<'a> {
     }
 
     pub(crate) fn build(&mut self) -> ParserResult<Message> {
-        let (header, next) = self.build_header();
+        let (header, next) = self.build_header()?;
         let (body, next) = self.build_body(next)?;
         let trailer = self.build_trailer(next);
 
@@ -46,20 +46,20 @@ impl<'a> MessageParser<'a> {
         Ok(msg)
     }
 
-    fn build_header(&mut self) -> (Header, Field) {
+    fn build_header(&mut self) -> ParserResult<(Header, Field)> {
         // first three fields need to be BeginString (8), BodyLength (9), and MsgType(35)
         // https://www.onixs.biz/fix-dictionary/4.4/compblock_standardheader.html
         let mut header = Header::default();
 
         loop {
-            let field = self
-                .next_field()
-                .expect("the message to not end within the header");
+            let field = self.next_field().ok_or(ParserError::Malformed(
+                "message ended within header".to_string(),
+            ))?;
 
             if self.header_tags.contains(&field.tag) {
                 header.fields.insert(field);
             } else {
-                return (header, field);
+                return Ok((header, field));
             }
         }
     }
@@ -79,9 +79,9 @@ impl<'a> MessageParser<'a> {
                 body.set_groups(groups);
                 field = next;
             } else {
-                field = self
-                    .next_field()
-                    .expect("message to not end within the body");
+                field = self.next_field().ok_or(ParserError::Malformed(
+                    "message ended within the body".to_string(),
+                ))?;
             }
         }
 

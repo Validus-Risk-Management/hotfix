@@ -7,7 +7,7 @@ use crate::parser::{MessageParser, SOH};
 use crate::parts::{Body, Header, Part, RepeatingGroup, Trailer};
 use crate::FieldType;
 use crate::{fix44, HardCodedFixFieldDefinition};
-use hotfix_dictionary::{Dictionary, FieldLocation, IsFieldDefinition, TagU32};
+use hotfix_dictionary::{Dictionary, FieldLocation, IsFieldDefinition};
 
 pub struct Message {
     pub(crate) header: Header,
@@ -60,8 +60,8 @@ impl Message {
             .fold(0u8, |acc, &x| acc.wrapping_add(x));
         let checksum_value = format!("{:03}", checksum);
         self.set(fix44::CHECK_SUM, checksum_value.as_str());
-        buffer.write_all(b"10=").unwrap();
-        buffer.write_all(checksum_value.as_bytes()).unwrap();
+        buffer.write_all(b"10=")?;
+        buffer.write_all(checksum_value.as_bytes())?;
         buffer.push(config.separator);
 
         Ok(buffer)
@@ -84,7 +84,7 @@ impl Message {
         start_field: &HardCodedFixFieldDefinition,
         index: usize,
     ) -> Option<&RepeatingGroup> {
-        let tag = TagU32::new(start_field.tag).unwrap();
+        let tag = start_field.tag();
         match start_field.location {
             FieldLocation::Header => self.header.get_group(tag, index),
             FieldLocation::Body => self.body.get_group(tag, index),
@@ -106,8 +106,7 @@ impl Part for Message {
     where
         V: FieldType<'a>,
     {
-        let tag = TagU32::new(field_definition.tag).unwrap();
-        let field = Field::new(tag, value.to_bytes());
+        let field = Field::new(field_definition.tag(), value.to_bytes());
 
         match field_definition.location {
             FieldLocation::Header => self.header.store_field(field),
