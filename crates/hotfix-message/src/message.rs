@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use crate::encoder::Encode;
-use crate::error::Result;
+use crate::error::{ParserResult, Result};
 use crate::field_map::{Field, FieldMap};
 use crate::parser::{MessageParser, SOH};
 use crate::parts::{Body, Header, Part, RepeatingGroup, Trailer};
@@ -28,7 +28,7 @@ impl Message {
         msg
     }
 
-    pub fn from_bytes(config: &Config, dict: &Dictionary, data: &[u8]) -> Self {
+    pub fn from_bytes(config: &Config, dict: &Dictionary, data: &[u8]) -> ParserResult<Self> {
         let mut builder = MessageParser::new(dict, config, data);
 
         builder.build()

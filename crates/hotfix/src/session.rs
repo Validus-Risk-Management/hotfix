@@ -126,7 +126,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             &self.message_config,
             &self.dictionary,
             raw_message.as_bytes(),
-        );
+        )
+        .unwrap();
 
         self.process_message(message).await;
         self.check_end_of_resend().await;
@@ -364,7 +365,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             let m = String::from_utf8(msg.clone()).unwrap();
             debug!(m, "resending message");
             let mut message =
-                Message::from_bytes(&self.message_config, &self.dictionary, msg.as_slice());
+                Message::from_bytes(&self.message_config, &self.dictionary, msg.as_slice())
+                    .unwrap();
             sequence_number = message.header().get(fix44::MSG_SEQ_NUM).unwrap();
             let message_type: String = message
                 .header()

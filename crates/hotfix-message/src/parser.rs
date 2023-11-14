@@ -1,3 +1,4 @@
+use crate::error::{ParserError, ParserResult};
 use crate::field_map::Field;
 use crate::message::{Config, Message};
 use crate::parts::{Body, Header, RepeatingGroup, Trailer};
@@ -30,16 +31,17 @@ impl<'a> MessageParser<'a> {
         }
     }
 
-    pub(crate) fn build(&mut self) -> Message {
+    pub(crate) fn build(&mut self) -> ParserResult<Message> {
         let (header, next) = self.build_header();
-        let (body, next) = self.build_body(next);
+        let (body, next) = self.build_body(next)?;
         let trailer = self.build_trailer(next);
 
-        Message {
+        let msg = Message {
             header,
             body,
             trailer,
-        }
+        };
+        Ok(msg)
     }
 
     fn build_header(&mut self) -> (Header, Field) {
@@ -60,7 +62,7 @@ impl<'a> MessageParser<'a> {
         }
     }
 
-    fn build_body(&mut self, next_field: Field) -> (Body, Field) {
+    fn build_body(&mut self, next_field: Field) -> ParserResult<(Body, Field)> {
         let mut body = Body::default();
         let mut field = next_field;
 
@@ -69,7 +71,7 @@ impl<'a> MessageParser<'a> {
             body.store_field(field);
 
             // check if it's the start of a group and parse the group as needed
-            let field_def = self.dict.field_by_tag(tag).unwrap();
+            let field_def = self.get_dict_field_by_tag(tag)?;
             if field_def.is_num_in_group() {
                 let (groups, next) = self.parse_groups(field_def.tag());
                 body.set_groups(groups);
@@ -81,7 +83,7 @@ impl<'a> MessageParser<'a> {
             }
         }
 
-        (body, field)
+        Ok((body, field))
     }
 
     fn build_trailer(&mut self, next_field: Field) -> Trailer {
@@ -158,6 +160,12 @@ impl<'a> MessageParser<'a> {
         Some(field)
     }
 
+    fn get_dict_field_by_tag(&self, tag: u32) -> ParserResult<hotfix_dictionary::Field> {
+        self.dict
+            .field_by_tag(tag)
+            .ok_or(ParserError::InvalidField(tag))
+    }
+
     fn get_tags_for_component(dict: &Dictionary, component_name: &str) -> HashSet<TagU32> {
         let mut tags = HashSet::new();
         let component = dict.component_by_name(component_name).unwrap();
@@ -228,7 +236,7 @@ mod tests {
         let raw = b"8=FIX.4.4|9=40|35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|10=091|";
         let dict = Dictionary::fix44();
 
-        let message = Message::from_bytes(&config, &dict, raw);
+        let message = Message::from_bytes(&config, &dict, raw).unwrap();
 
         let begin: &str = message.header().get(fix44::BEGIN_STRING).unwrap();
         assert_eq!(begin, "FIX.4.4");
@@ -255,7 +263,7 @@ mod tests {
         let raw = b"8=FIX.4.4|9=219|35=8|49=SENDER|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|139=7|10=128|";
         let dict = Dictionary::fix44();
 
-        let message = Message::from_bytes(&config, &dict, raw);
+        let message = Message::from_bytes(&config, &dict, raw).unwrap();
         let begin: &str = message.header().get(fix44::BEGIN_STRING).unwrap();
         assert_eq!(begin, "FIX.4.4");
 
@@ -277,7 +285,7 @@ mod tests {
         let raw = b"8=FIX.4.4|9=000|35=8|34=2|49=Broker|52=20231103-09:30:00|56=Client|11=Order12345|17=Exec12345|150=0|39=0|55=APPL|54=1|38=100|32=50|31=150.00|151=50|14=50|6=150.00|453=2|448=PARTYA|447=D|452=1|802=2|523=SUBPARTYA1|803=1|523=SUBPARTYA2|803=2|448=PARTYB|447=D|452=2|10=111|";
         let dict = Dictionary::fix44();
 
-        let message = Message::from_bytes(&config, &dict, raw);
+        let message = Message::from_bytes(&config, &dict, raw).unwrap();
         let party_a = message.get_group(fix44::NO_PARTY_I_DS, 0).unwrap();
         let party_a_0 = party_a
             .get_group(fix44::NO_PARTY_SUB_I_DS.tag(), 0)
