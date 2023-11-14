@@ -18,7 +18,7 @@ mongodb = ["dep:mongodb"]
 [dependencies]
 async-trait = "^0.1.73"
 futures = "^0.3.28"
-hotfix-message = { version = "0.0.14", path = "../hotfix-message" }
+hotfix-message = { version = "0.0.15", path = "../hotfix-message" }
 mongodb = { version = "^2.7", optional = true }
 pki-types = { package = "rustls-pki-types", version = "^0.2" }
 redb = { version = "^1.1.0", optional = true }

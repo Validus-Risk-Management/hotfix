@@ -121,7 +121,6 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     async fn on_incoming(&mut self, raw_message: RawFixMessage) {
-        // TODO: this whole thing should be refactored to tidy up ownership between the session and the nested state.
         debug!("received message: {}", raw_message);
         let message = Message::from_bytes(
             &self.message_config,
@@ -134,23 +133,9 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             if seq_number > state.end_seq_number {
                 state.inbound_queue.push_back(message);
                 return;
-            } else if seq_number == self.store.next_target_seq_number().await {
-                let msg_type: &str = message.get(fix44::MSG_TYPE).unwrap();
-                if msg_type == "4" {
-                    // a sequence reset message, which should be a gap fill
-                    let gap_fill: bool = message.get(fix44::GAP_FILL_FLAG).unwrap();
-                    if !gap_fill {
-                        panic!("expected sequence reset with gap fill");
-                    }
-
-                    let _end: u64 = message.get(fix44::NEW_SEQ_NO).unwrap();
-                    // TODO: set target seq number
-                    return;
-                }
-            } else {
-                panic!("unexpected seq number during resend");
             }
         }
+        // TODO: should we verify messages here?
 
         let message_type = message.header().get(fix44::MSG_TYPE).unwrap();
         match message_type {
@@ -167,7 +152,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 // TODO: handle reject
             }
             "4" => {
-                // TODO: handle sequence reset
+                self.on_sequence_reset(&message).await;
+                return; // early return as we don't need to increment target seq number
             }
             "5" => {
                 self.on_logout().await;
@@ -181,7 +167,6 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 self.application.send_message(app_message).await;
             }
         }
-
         self.store.increment_target_seq_number().await;
     }
 
@@ -318,6 +303,17 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
         self.resend_messages(begin_seq_number, end_seq_number, message)
             .await;
+    }
+
+    async fn on_sequence_reset(&mut self, message: &Message) {
+        let gap_fill: bool = message.get(fix44::GAP_FILL_FLAG).unwrap();
+        if !gap_fill {
+            // TODO: non gap fill is valid as well of course, but I don't yet know the use-case for it is
+            panic!("expected sequence reset with gap fill");
+        }
+
+        let end: u64 = message.get(fix44::NEW_SEQ_NO).unwrap();
+        self.store.set_target_seq_number(end).await;
     }
 
     async fn resend_messages(&mut self, begin: usize, end: usize, _message: &Message) {
