@@ -4,8 +4,8 @@ use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::spec::BinarySubtype;
 use mongodb::bson::Binary;
-use mongodb::options::FindOneOptions;
-use mongodb::{Collection, Database};
+use mongodb::options::{FindOneOptions, IndexOptions};
+use mongodb::{Collection, Database, IndexModel};
 use serde::{Deserialize, Serialize};
 
 pub use mongodb::Client;
@@ -43,14 +43,29 @@ impl MongoDbMessageStore {
         let message_collection = db.collection(collection_name);
 
         let current_sequence = Self::get_or_default_sequence(&meta_collection).await;
-
-        // TODO: initialise indexes
+        Self::ensure_indexes(&meta_collection).await;
 
         Self {
             meta_collection,
             message_collection,
             current_sequence,
         }
+    }
+
+    async fn ensure_indexes(meta_collection: &Collection<SequenceMeta>) {
+        let meta_index = IndexModel::builder()
+            .keys(doc! { "meta": 1, "_id": -1 })
+            .build();
+        let message_index_options = IndexOptions::builder().unique(true).sparse(true).build();
+        let message_index = IndexModel::builder()
+            .keys(doc! { "sequence_id": 1, "msg_seq_number": 1})
+            .options(Some(message_index_options))
+            .build();
+
+        meta_collection
+            .create_indexes(vec![meta_index, message_index], None)
+            .await
+            .expect("be able to create indexes");
     }
 
     async fn get_or_default_sequence(meta_collection: &Collection<SequenceMeta>) -> SequenceMeta {
