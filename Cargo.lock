@@ -916,6 +916,7 @@ dependencies = [
 name = "hotfix-message"
 version = "0.0.16"
 dependencies = [
+ "anyhow",
  "chrono",
  "fnv",
  "heck",

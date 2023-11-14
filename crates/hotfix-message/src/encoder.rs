@@ -61,7 +61,7 @@ mod tests {
     use hotfix_dictionary::{Dictionary, IsFieldDefinition};
 
     #[test]
-    fn encode_simple_message() {
+    fn encode_simple_message() -> anyhow::Result<()> {
         let mut msg = Message::new("FIX.4.4", "D");
         msg.set(fix44::MSG_SEQ_NUM, 1);
         msg.set(fix44::SENDER_COMP_ID, "CLIENT_A");
@@ -76,10 +76,10 @@ mod tests {
         msg.set(fix44::ORDER_QTY, 60);
 
         let config = Config { separator: b'|' };
-        let raw_message = msg.encode(&config).unwrap();
+        let raw_message = msg.encode(&config)?;
 
         let dict = Dictionary::fix44();
-        let parsed_message = Message::from_bytes(&config, &dict, &raw_message).unwrap();
+        let parsed_message = Message::from_bytes(&config, &dict, &raw_message)?;
 
         let symbol: &str = parsed_message.get(fix44::SYMBOL).unwrap();
         assert_eq!(symbol, "AAPL");
@@ -89,10 +89,12 @@ mod tests {
 
         let body_length: usize = parsed_message.header().get(fix44::BODY_LENGTH).unwrap();
         assert_eq!(body_length, 129);
+
+        Ok(())
     }
 
     #[test]
-    fn encode_message_with_repeating_group() {
+    fn encode_message_with_repeating_group() -> anyhow::Result<()> {
         let sending_time = Timestamp::new(
             Date::new(2023, 11, 7).unwrap(),
             Time::from_hmsm(11, 0, 0, 0).unwrap(),
@@ -145,29 +147,35 @@ mod tests {
 
         msg.body.set_groups(vec![party_1, party_2]);
         let config = Config { separator: b'|' };
-        let raw_message = msg.encode(&config).unwrap();
+        let raw_message = msg.encode(&config)?;
 
         let dict = Dictionary::fix44();
-        let parsed_message = Message::from_bytes(&config, &dict, &raw_message).unwrap();
+        let parsed_message = Message::from_bytes(&config, &dict, &raw_message)?;
 
-        let party_a = parsed_message.get_group(fix44::NO_PARTY_I_DS, 0).unwrap();
+        let party_a = parsed_message
+            .get_group(fix44::NO_PARTY_I_DS, 0)
+            .expect("group to be found");
         let party_a_0 = party_a
             .get_group(fix44::NO_PARTY_SUB_I_DS.tag(), 0)
-            .unwrap();
-        let sub_id_0: &str = party_a_0.get(fix44::PARTY_SUB_ID).unwrap();
+            .expect("group to be found");
+        let sub_id_0: &str = party_a_0.get(fix44::PARTY_SUB_ID)?;
         assert_eq!(sub_id_0, "SUBPARTY_A_1");
 
-        let party_b = parsed_message.get_group(fix44::NO_PARTY_I_DS, 1).unwrap();
-        let party_b_id: &str = party_b.get(fix44::PARTY_ID).unwrap();
+        let party_b = parsed_message
+            .get_group(fix44::NO_PARTY_I_DS, 1)
+            .expect("group to be found");
+        let party_b_id: &str = party_b.get(fix44::PARTY_ID)?;
         assert_eq!(party_b_id, "PARTY_B");
 
-        let party_b_role: &str = party_b.get(fix44::PARTY_ROLE).unwrap();
+        let party_b_role: &str = party_b.get(fix44::PARTY_ROLE)?;
         assert_eq!(party_b_role, "2");
 
-        let checksum: &str = parsed_message.trailer().get(fix44::CHECK_SUM).unwrap();
+        let checksum: &str = parsed_message.trailer().get(fix44::CHECK_SUM)?;
         assert_eq!(checksum, "036");
 
         let qty: usize = parsed_message.header().get(fix44::BODY_LENGTH).unwrap();
         assert_eq!(qty, 253);
+
+        Ok(())
     }
 }
