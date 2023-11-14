@@ -1,5 +1,4 @@
 use anyhow::Result;
-use redb::TableError::TableDoesNotExist;
 use redb::{Database, ReadableTable, TableDefinition};
 use std::path::Path;
 
@@ -10,13 +9,19 @@ const SEQ_NUMBER_TABLE: TableDefinition<&str, u64> = TableDefinition::new("seq_n
 
 pub struct RedbMessageStore {
     db: Database,
+    sender_seq_number: u64,
+    target_seq_number: u64,
 }
 
 impl RedbMessageStore {
     pub fn new(path: impl AsRef<Path>) -> Result<Self> {
         let db = Database::create(path)?;
 
-        Ok(Self { db })
+        Ok(Self {
+            db,
+            sender_seq_number: 0,
+            target_seq_number: 0,
+        })
     }
 }
 
@@ -36,75 +41,46 @@ impl MessageStore for RedbMessageStore {
         let read_txn = self.db.begin_read()?;
         {
             let table = read_txn.open_table(MESSAGES_TABLE)?;
-            let messages = table
+            let messages: std::result::Result<Vec<Vec<u8>>, redb::StorageError> = table
                 .range(begin as u64..=end as u64)?
-                .map(|m| m.unwrap().1.value().to_vec())
+                .map(|m| m.map(|v| v.1.value().to_vec()))
                 .collect();
-            Ok(messages)
+            Ok(messages?)
         }
     }
 
     async fn next_sender_seq_number(&self) -> u64 {
-        let read_txn = self.db.begin_read().unwrap();
-        let opened_table = read_txn.open_table(SEQ_NUMBER_TABLE);
-        match opened_table {
-            Ok(table) => {
-                let value = table.get("sender").unwrap();
-                match value {
-                    None => 1,
-                    Some(v) => v.value() + 1,
-                }
-            }
-            Err(TableDoesNotExist(_)) => 1,
-            Err(err) => panic!("{}", err.to_string()),
-        }
+        self.sender_seq_number + 1
     }
 
     async fn next_target_seq_number(&self) -> u64 {
-        let read_txn = self.db.begin_read().unwrap();
-        let opened_table = read_txn.open_table(SEQ_NUMBER_TABLE);
-        match opened_table {
-            Ok(table) => {
-                let value = table.get("target").unwrap();
-                match value {
-                    None => 1,
-                    Some(v) => v.value() + 1,
-                }
-            }
-            Err(TableDoesNotExist(_)) => 1,
-            Err(err) => panic!("{}", err.to_string()),
-        }
+        self.target_seq_number + 1
     }
 
     async fn increment_sender_seq_number(&mut self) -> Result<()> {
+        self.sender_seq_number += 1;
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(SEQ_NUMBER_TABLE)?;
-            let current = match table.get("sender")? {
-                None => 0,
-                Some(v) => v.value(),
-            };
-            table.insert("sender", current + 1)?;
+            table.insert("sender", self.sender_seq_number)?;
         }
         write_txn.commit()?;
         Ok(())
     }
 
     async fn increment_target_seq_number(&mut self) -> Result<()> {
+        self.target_seq_number += 1;
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(SEQ_NUMBER_TABLE)?;
-            let current = match table.get("target")? {
-                None => 0,
-                Some(v) => v.value(),
-            };
-            table.insert("target", current + 1)?;
+            table.insert("target", self.target_seq_number)?;
         }
         write_txn.commit()?;
         Ok(())
     }
 
     async fn set_target_seq_number(&mut self, seq_number: u64) -> Result<()> {
+        self.target_seq_number = seq_number;
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(SEQ_NUMBER_TABLE)?;
@@ -115,11 +91,13 @@ impl MessageStore for RedbMessageStore {
     }
 
     async fn reset(&mut self) -> Result<()> {
+        self.sender_seq_number = 0;
+        self.target_seq_number = 0;
         let write_txn = self.db.begin_write()?;
         {
             let mut seq_no_table = write_txn.open_table(SEQ_NUMBER_TABLE)?;
-            seq_no_table.insert("sender", 0)?;
-            seq_no_table.insert("target", 0)?;
+            seq_no_table.insert("sender", self.sender_seq_number)?;
+            seq_no_table.insert("target", self.target_seq_number)?;
             let mut messages_table = write_txn.open_table(MESSAGES_TABLE)?;
             messages_table.drain::<u64>(..)?;
         }
