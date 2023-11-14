@@ -150,6 +150,18 @@ impl MessageStore for MongoDbMessageStore {
             .unwrap();
     }
 
+    async fn set_target_seq_number(&mut self, seq_number: u64) {
+        self.current_sequence.target_seq_number = seq_number;
+        self.meta_collection
+            .update_one(
+                doc! { "_id": self.current_sequence.object_id },
+                doc! { "$set": { "target_seq_number": seq_number as u32 } },
+                None,
+            )
+            .await
+            .unwrap();
+    }
+
     async fn reset(&mut self) {
         self.current_sequence = Self::new_sequence(&self.meta_collection).await;
     }

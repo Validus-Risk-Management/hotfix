@@ -100,6 +100,15 @@ impl MessageStore for RedbMessageStore {
         write_txn.commit().unwrap();
     }
 
+    async fn set_target_seq_number(&mut self, seq_number: u64) {
+        let write_txn = self.db.begin_write().unwrap();
+        {
+            let mut table = write_txn.open_table(SEQ_NUMBER_TABLE).unwrap();
+            table.insert("target", seq_number).unwrap();
+        }
+        write_txn.commit().unwrap();
+    }
+
     async fn reset(&mut self) {
         let write_txn = self.db.begin_write().unwrap();
         {

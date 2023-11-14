@@ -34,6 +34,10 @@ impl MessageStore for InMemoryMessageStore {
         self.target_seq_number += 1;
     }
 
+    async fn set_target_seq_number(&mut self, seq_number: u64) {
+        self.target_seq_number = seq_number;
+    }
+
     async fn reset(&mut self) {
         self.sender_seq_number = 0;
         self.target_seq_number = 0;
