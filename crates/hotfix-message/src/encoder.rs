@@ -1,38 +1,42 @@
+use crate::error::Result;
 use crate::field_map::{Field, FieldMap};
 use crate::message::Config;
 use hotfix_dictionary::TagU32;
 use std::io::Write;
 
 pub trait Encode {
-    fn write(&self, config: &Config, buffer: &mut Vec<u8>, pre_fields: &[TagU32]);
+    fn write(&self, config: &Config, buffer: &mut Vec<u8>, pre_fields: &[TagU32]) -> Result<()>;
 }
 
 impl Encode for FieldMap {
-    fn write(&self, config: &Config, buffer: &mut Vec<u8>, pre_fields: &[TagU32]) {
+    fn write(&self, config: &Config, buffer: &mut Vec<u8>, pre_fields: &[TagU32]) -> Result<()> {
         let mut write_field = |field: &Field| {
             let formatted_tag = format!("{}=", field.tag.get());
-            buffer.write_all(formatted_tag.as_bytes()).unwrap();
-            buffer.write_all(&field.data).unwrap();
+            buffer.write_all(formatted_tag.as_bytes())?;
+            buffer.write_all(&field.data)?;
             buffer.push(config.separator);
 
             if let Some(groups) = self.groups.get(&field.tag) {
                 for group in groups {
-                    group.get_fields().write(config, buffer, &[]);
+                    group.get_fields().write(config, buffer, &[])?;
                 }
             }
+            Ok::<(), crate::error::Error>(())
         };
 
         for pre_field_tag in pre_fields {
             if let Some(field) = self.fields.get(pre_field_tag) {
-                write_field(field);
+                write_field(field)?;
             }
         }
 
         for (tag, field) in &self.fields {
             if !pre_fields.contains(tag) {
-                write_field(field);
+                write_field(field)?;
             }
         }
+
+        Ok(())
     }
 }
 
@@ -62,7 +66,7 @@ mod tests {
         msg.set(fix44::ORDER_QTY, 60);
 
         let config = Config { separator: b'|' };
-        let raw_message = msg.encode(&config);
+        let raw_message = msg.encode(&config).unwrap();
 
         let dict = Dictionary::fix44();
         let parsed_message = Message::from_bytes(&config, &dict, &raw_message);
@@ -131,7 +135,7 @@ mod tests {
 
         msg.body.set_groups(vec![party_1, party_2]);
         let config = Config { separator: b'|' };
-        let raw_message = msg.encode(&config);
+        let raw_message = msg.encode(&config).unwrap();
 
         let dict = Dictionary::fix44();
         let parsed_message = Message::from_bytes(&config, &dict, &raw_message);

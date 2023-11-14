@@ -1,4 +1,5 @@
 // re-exposing these as applications need this to define their own messages
+use hotfix_message::error::Error as EncodeError;
 pub use hotfix_message::field_types::Timestamp;
 pub use hotfix_message::fix44;
 pub use hotfix_message::message::{Config, Message};
@@ -23,7 +24,7 @@ pub(crate) fn generate_message(
     target_comp_id: &str,
     msg_seq_num: usize,
     message: impl FixMessage,
-) -> Vec<u8> {
+) -> Result<Vec<u8>, EncodeError> {
     let mut msg = Message::new("FIX.4.4", message.message_type());
     msg.set(fix44::SENDER_COMP_ID, sender_comp_id);
     msg.set(fix44::TARGET_COMP_ID, target_comp_id.as_bytes());

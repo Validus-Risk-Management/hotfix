@@ -1,5 +1,6 @@
 mod encoder;
 mod encoding;
+pub mod error;
 mod field_map;
 pub mod message;
 mod parser;

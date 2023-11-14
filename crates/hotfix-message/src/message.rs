@@ -1,6 +1,7 @@
 use std::io::Write;
 
 use crate::encoder::Encode;
+use crate::error::Result;
 use crate::field_map::{Field, FieldMap};
 use crate::parser::{MessageParser, SOH};
 use crate::parts::{Body, Header, Part, RepeatingGroup, Trailer};
@@ -33,7 +34,7 @@ impl Message {
         builder.build()
     }
 
-    pub fn encode(&mut self, config: &Config) -> Vec<u8> {
+    pub fn encode(&mut self, config: &Config) -> Result<Vec<u8>> {
         let mut buffer = Vec::new();
 
         self.trailer.pop(fix44::CHECK_SUM);
@@ -50,9 +51,9 @@ impl Message {
         ];
         self.header
             .fields
-            .write(config, &mut buffer, &starting_fields);
-        self.body.fields.write(config, &mut buffer, &[]);
-        self.trailer.fields.write(config, &mut buffer, &[]);
+            .write(config, &mut buffer, &starting_fields)?;
+        self.body.fields.write(config, &mut buffer, &[])?;
+        self.trailer.fields.write(config, &mut buffer, &[])?;
 
         let checksum = buffer.as_slice()[check_sum_start..]
             .iter()
@@ -63,7 +64,7 @@ impl Message {
         buffer.write_all(checksum_value.as_bytes()).unwrap();
         buffer.push(config.separator);
 
-        buffer
+        Ok(buffer)
     }
 
     pub fn header(&self) -> &Header {

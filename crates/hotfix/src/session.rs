@@ -389,7 +389,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             Self::prepare_message_for_resend(&mut message);
             self.send_raw(
                 message_type.as_bytes(),
-                message.encode(&self.message_config),
+                message.encode(&self.message_config).unwrap(),
             )
             .await;
             debug!(sequence_number, "resent message");
@@ -426,7 +426,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             &self.config.target_comp_id,
             seq_num as usize,
             message,
-        );
+        )
+        .unwrap();
         self.store.add(seq_num, &msg).await.unwrap();
         self.send_raw(&msg_type, msg).await;
     }
@@ -448,7 +449,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             &self.config.target_comp_id,
             begin as usize,
             sequence_reset,
-        );
+        )
+        .unwrap();
 
         self.send_raw(b"4", raw_message).await;
         debug!(begin, end, "sent reset sequence");
