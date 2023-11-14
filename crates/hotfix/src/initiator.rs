@@ -1,3 +1,11 @@
+//! FIX initiator implementation.
+//!
+//! The fIX session that initiates the connection with its peer,
+//! the acceptor. Currently, `HotFIX` only supports initiators.
+//!
+//! The initiator establishes the transport layer connection with
+//! the peer, and sends the initial Logon (35=A) message. For transport,
+//! `HotFIX` supports plain TCP and encrypted TLS over TCP connections.
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{debug, warn};

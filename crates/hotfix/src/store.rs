@@ -1,7 +1,17 @@
+//! Implementations of in-memory and persistent message stores holding session state.
+//!
+//! By default, only the [in_memory] store is included. Further message store implementations,
+//! such as `mongodb` and `redb` can be enabled through feature flags.
+
+/// An in-memory message store that loses its state on restart. Only use this for testing.
 pub mod in_memory;
+
 #[cfg(feature = "mongodb")]
+/// A message store using MongoDB for persistence.
 pub mod mongodb;
+
 #[cfg(feature = "redb")]
+/// A message store using [redb](https://www.redb.org/) for persistence.
 pub mod redb;
 
 use anyhow::Result;

@@ -3,6 +3,7 @@ use crate::parts::Part;
 use crate::HardCodedFixFieldDefinition;
 use hotfix_dictionary::{IsFieldDefinition, TagU32};
 
+/// Represents a FIX repeating group, such as a party in the list of parties.
 #[allow(dead_code)]
 pub struct RepeatingGroup {
     pub(crate) start_tag: TagU32,
@@ -11,6 +12,7 @@ pub struct RepeatingGroup {
 }
 
 impl RepeatingGroup {
+    /// Creates a new empty repeating group.
     pub fn new(
         start_tag: &HardCodedFixFieldDefinition,
         delimiter_tag: &HardCodedFixFieldDefinition,

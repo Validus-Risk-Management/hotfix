@@ -1,8 +1,8 @@
-// re-exposing these as applications need this to define their own messages
+//! FIX message abstractions to help with encoding and parsing of messages.
 use hotfix_message::error::EncodingError as EncodeError;
 pub use hotfix_message::field_types::Timestamp;
 pub use hotfix_message::fix44;
-pub use hotfix_message::message::{Config, Message};
+pub(crate) use hotfix_message::message::{Config, Message};
 pub use hotfix_message::{Part, RepeatingGroup};
 
 pub(crate) mod heartbeat;

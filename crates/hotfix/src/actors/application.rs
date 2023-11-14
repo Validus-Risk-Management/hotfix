@@ -3,6 +3,7 @@ use tokio::sync::mpsc;
 use crate::message::FixMessage;
 
 #[async_trait::async_trait]
+/// The application users of HotFIX can implement to hook into the engine.
 pub trait Application<M>: Send + Sync + 'static {
     async fn on_message_from_app(&self, msg: M);
     async fn on_message_to_app(&self, msg: M);

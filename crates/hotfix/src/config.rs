@@ -1,21 +1,32 @@
+//! Configuration for FIX sessions.
+//!
+//! Refer to [Config] for the supported configuration options.
+//! [Config] objects can be constructed manually or by creating a `toml`
+//! config file. See the
+//! [example project's config file](https://github.com/Validus-Risk-Management/hotfix/blob/main/examples/simple-new-order/config/test-config.toml)
+//! for more detail.
 use serde::Deserialize;
 use std::fs;
 use std::path::Path;
 
+/// The configuration for multiple sessions.
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     pub sessions: Vec<SessionConfig>,
 }
 
 impl Config {
+    /// Load a [Config] from a `toml` file.
     pub fn load_from_path<P: AsRef<Path>>(path: P) -> Self {
         let config_str = fs::read_to_string(path).expect("to be able to load config");
         toml::from_str::<Self>(&config_str).expect("to be able to parse config")
     }
 }
 
+/// TLS encryption details.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct TlsConfig {
+    /// The path to the CA certificate.
     pub ca_certificate_path: String,
 }
 
@@ -23,19 +34,33 @@ fn default_reconnect_interval() -> u64 {
     30
 }
 
+/// The configuration of a single FIX session.
 #[derive(Clone, Debug, Deserialize)]
 pub struct SessionConfig {
+    /// The begin string specifying the FIX version.
     pub begin_string: String,
+    /// The sender's comp ID.
     pub sender_comp_id: String,
+    /// The target's comp ID.
     pub target_comp_id: String,
+    /// The path to the data dictionary to use (currently unused).
     pub data_dictionary_path: String,
+    /// The host to connect to.
+    ///
+    /// This can be any representation of a host that can be interpreted
+    /// as a host object.
     pub connection_host: String,
+    /// The port to use to connect.
     pub connection_port: u16,
+    /// The TLS configuration for the session, if TLS is used.
     #[serde(flatten)]
     pub tls_config: Option<TlsConfig>,
-    pub heartbeat_interval: u64, // in seconds
+    /// The heartbeat interval to agree on with the peer in seconds.
+    pub heartbeat_interval: u64,
     #[serde(default = "default_reconnect_interval")]
-    pub reconnect_interval: u64, // in seconds
+    /// The interval we should attempt to reconnect at in seconds.
+    pub reconnect_interval: u64,
+    /// Specifies whether we should reset the state of the message store on logon.
     pub reset_on_logon: bool,
 }
 

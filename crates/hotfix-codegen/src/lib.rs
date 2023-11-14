@@ -115,7 +115,7 @@ pub struct Settings {
     /// ```
     ///
     /// Contains [`Debug`], [`Copy`], [`PartialEq`], [`Eq`], [`Hash`],
-    /// [`FieldType`](crate::FieldType) by default.
+    /// `FieldType` by default.
     pub derives_for_allowed_values: Vec<String>,
     /// A list of attribute macros for generated `enum`s variants. E.g.:
     ///
@@ -181,16 +181,13 @@ pub fn codegen_field_definition_struct(
     gen_field_definition_with_hashsets(fix_dictionary, &header, &trailer, field)
 }
 
-/// Generates `const` implementors of
-/// [`IsFieldDefinition`](super::dict::IsFieldDefinition).
+/// Generates `const` implementors of `IsFieldDefinition`.
 ///
 /// The generated module will contain:
 ///
 /// - A generated code notice ([generated_code_notice]).
 /// - `enum` definitions for FIX field types.
-/// - A constant implementor of
-///   [`IsFieldDefinition`](super::dict::IsFieldDefinition)
-///   for each FIX field.
+/// - A constant implementor of `IsFieldDefinition` for each FIX field.
 ///
 /// The Rust code will be free of any leading and trailing whitespace.
 /// An effort is made to provide good formatting, but users shouldn't rely on it
