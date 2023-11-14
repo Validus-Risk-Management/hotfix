@@ -2,12 +2,12 @@ use std::io;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum Error {
+pub enum EncodingError {
     #[error("IO error")]
     IOError(#[from] io::Error),
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type EncodingResult<T> = Result<T, EncodingError>;
 
 #[derive(Error, Debug)]
 pub enum ParserError {
@@ -23,4 +23,4 @@ pub enum ParserError {
     Malformed(String),
 }
 
-pub type ParserResult<T> = std::result::Result<T, ParserError>;
+pub type ParserResult<T> = Result<T, ParserError>;

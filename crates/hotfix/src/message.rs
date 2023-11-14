@@ -1,5 +1,5 @@
 // re-exposing these as applications need this to define their own messages
-use hotfix_message::error::Error as EncodeError;
+use hotfix_message::error::EncodingError as EncodeError;
 pub use hotfix_message::field_types::Timestamp;
 pub use hotfix_message::fix44;
 pub use hotfix_message::message::{Config, Message};

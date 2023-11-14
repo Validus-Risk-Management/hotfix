@@ -1,15 +1,25 @@
-use crate::error::Result;
+use crate::error::EncodingResult;
 use crate::field_map::{Field, FieldMap};
 use crate::message::Config;
 use hotfix_dictionary::TagU32;
 use std::io::Write;
 
 pub trait Encode {
-    fn write(&self, config: &Config, buffer: &mut Vec<u8>, pre_fields: &[TagU32]) -> Result<()>;
+    fn write(
+        &self,
+        config: &Config,
+        buffer: &mut Vec<u8>,
+        pre_fields: &[TagU32],
+    ) -> EncodingResult<()>;
 }
 
 impl Encode for FieldMap {
-    fn write(&self, config: &Config, buffer: &mut Vec<u8>, pre_fields: &[TagU32]) -> Result<()> {
+    fn write(
+        &self,
+        config: &Config,
+        buffer: &mut Vec<u8>,
+        pre_fields: &[TagU32],
+    ) -> EncodingResult<()> {
         let mut write_field = |field: &Field| {
             let formatted_tag = format!("{}=", field.tag.get());
             buffer.write_all(formatted_tag.as_bytes())?;
@@ -21,7 +31,7 @@ impl Encode for FieldMap {
                     group.get_fields().write(config, buffer, &[])?;
                 }
             }
-            Ok::<(), crate::error::Error>(())
+            Ok::<(), crate::error::EncodingError>(())
         };
 
         for pre_field_tag in pre_fields {

@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use crate::encoder::Encode;
-use crate::error::{ParserResult, Result};
+use crate::error::{EncodingResult, ParserResult};
 use crate::field_map::{Field, FieldMap};
 use crate::parser::{MessageParser, SOH};
 use crate::parts::{Body, Header, Part, RepeatingGroup, Trailer};
@@ -34,7 +34,7 @@ impl Message {
         builder.build()
     }
 
-    pub fn encode(&mut self, config: &Config) -> Result<Vec<u8>> {
+    pub fn encode(&mut self, config: &Config) -> EncodingResult<Vec<u8>> {
         let mut buffer = Vec::new();
 
         self.trailer.pop(fix44::CHECK_SUM);
