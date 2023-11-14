@@ -168,7 +168,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             }
             _ => self.process_app_message(&message).await,
         }
-        self.store.increment_target_seq_number().await;
+        self.store.increment_target_seq_number().await.unwrap();
     }
 
     async fn process_app_message(&self, message: &Message) {
@@ -347,12 +347,12 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         }
 
         let end: u64 = message.get(fix44::NEW_SEQ_NO).unwrap();
-        self.store.set_target_seq_number(end).await;
+        self.store.set_target_seq_number(end).await.unwrap();
     }
 
     async fn resend_messages(&mut self, begin: usize, end: usize, _message: &Message) {
         debug!(begin, end, "resending messages as requested");
-        let messages = self.store.get_slice(begin, end).await;
+        let messages = self.store.get_slice(begin, end).await.unwrap();
 
         let no = messages.len();
         debug!(no, "number of messages");
@@ -418,7 +418,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     async fn send_message(&mut self, message: impl FixMessage) {
         let seq_num = self.store.next_sender_seq_number().await;
-        self.store.increment_sender_seq_number().await;
+        self.store.increment_sender_seq_number().await.unwrap();
 
         let msg_type = message.message_type().as_bytes().to_vec();
         let msg = generate_message(
@@ -427,7 +427,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             seq_num as usize,
             message,
         );
-        self.store.add(seq_num, &msg).await;
+        self.store.add(seq_num, &msg).await.unwrap();
         self.send_raw(&msg_type, msg).await;
     }
 
@@ -461,7 +461,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     async fn send_logon(&mut self) {
         let reset_config = if self.config.reset_on_logon {
-            self.store.reset().await;
+            self.store.reset().await.unwrap();
             ResetSeqNumConfig::Reset
         } else {
             ResetSeqNumConfig::NoReset(Some(self.store.next_target_seq_number().await))

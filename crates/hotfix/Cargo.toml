@@ -16,6 +16,7 @@ redb = ["dep:redb"]
 mongodb = ["dep:mongodb"]
 
 [dependencies]
+anyhow = "^1.0.75"
 async-trait = "^0.1.73"
 futures = "^0.3.28"
 hotfix-message = { version = "0.0.16", path = "../hotfix-message" }
