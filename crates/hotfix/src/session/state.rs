@@ -64,7 +64,7 @@ impl SessionState {
 /// Session state we're in while processing messages we requested to be resent.
 pub struct AwaitingResendState {
     /// The reference to the writer loop.
-    writer: WriterRef,
+    pub(crate) writer: WriterRef,
     /// The end of the gap we're waiting for the target to resend.
     pub(crate) end_seq_number: u64,
     /// Inbound messages we receive while processing the resend.

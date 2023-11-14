@@ -128,6 +128,11 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             raw_message.as_bytes(),
         );
 
+        self.process_message(message).await;
+        self.check_end_of_resend().await;
+    }
+
+    async fn process_message(&mut self, message: Message) {
         if let SessionState::AwaitingResend(state) = &mut self.state {
             let seq_number: u64 = message.header().get(fix44::MSG_SEQ_NUM).unwrap();
             if seq_number > state.end_seq_number {
@@ -161,13 +166,42 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             "A" => {
                 self.on_logon(&message).await;
             }
-            _ => {
-                let parsed_message = M::parse(&message);
-                let app_message = ApplicationMessage::ReceivedMessage(parsed_message);
-                self.application.send_message(app_message).await;
-            }
+            _ => self.process_app_message(&message).await,
         }
         self.store.increment_target_seq_number().await;
+    }
+
+    async fn process_app_message(&self, message: &Message) {
+        let parsed_message = M::parse(message);
+        let app_message = ApplicationMessage::ReceivedMessage(parsed_message);
+        self.application.send_message(app_message).await;
+    }
+
+    async fn check_end_of_resend(&mut self) {
+        let ended_state = if let SessionState::AwaitingResend(state) = &mut self.state {
+            if self.store.next_target_seq_number().await > state.end_seq_number {
+                let new_state = SessionState::Active {
+                    writer: state.writer.clone(),
+                };
+                Some(std::mem::replace(&mut self.state, new_state))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if let Some(SessionState::AwaitingResend(mut state)) = ended_state {
+            // we have reached the end of the resend,
+            // process queued messages and resume normal operation
+            debug!("resend is done, processing backlog");
+            while let Some(msg) = state.inbound_queue.pop_front() {
+                let seq_number: u64 = msg.get(fix44::MSG_SEQ_NUM).unwrap();
+                debug!(seq_number, "processing queued message");
+                self.process_message(msg).await;
+            }
+            debug!("resend backlog is cleared, resuming normal operation");
+        }
     }
 
     async fn verify_message(&self, message: &Message) -> Result<(), MessageVerificationError> {
