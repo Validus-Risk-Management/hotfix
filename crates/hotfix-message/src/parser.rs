@@ -19,16 +19,18 @@ pub struct MessageParser<'a> {
 }
 
 impl<'a> MessageParser<'a> {
-    pub fn new(dict: &'a Dictionary, config: &'a Config, data: &'a [u8]) -> Self {
-        Self {
+    pub fn new(dict: &'a Dictionary, config: &'a Config, data: &'a [u8]) -> ParserResult<Self> {
+        let parser = Self {
             dict,
             position: 0,
-            header_tags: Self::get_tags_for_component(dict, "StandardHeader"),
-            trailer_tags: Self::get_tags_for_component(dict, "StandardTrailer"),
+            header_tags: Self::get_tags_for_component(dict, "StandardHeader")?,
+            trailer_tags: Self::get_tags_for_component(dict, "StandardTrailer")?,
             group_tags: Self::get_group_tags(dict),
             raw_data: data,
             config,
-        }
+        };
+
+        Ok(parser)
     }
 
     pub(crate) fn build(&mut self) -> ParserResult<Message> {
@@ -73,7 +75,7 @@ impl<'a> MessageParser<'a> {
             // check if it's the start of a group and parse the group as needed
             let field_def = self.get_dict_field_by_tag(tag)?;
             if field_def.is_num_in_group() {
-                let (groups, next) = self.parse_groups(field_def.tag());
+                let (groups, next) = self.parse_groups(field_def.tag())?;
                 body.set_groups(groups);
                 field = next;
             } else {
@@ -98,8 +100,10 @@ impl<'a> MessageParser<'a> {
         trailer
     }
 
-    fn parse_groups(&mut self, start_tag: TagU32) -> (Vec<RepeatingGroup>, Field) {
-        let first_field = self.next_field().unwrap();
+    fn parse_groups(&mut self, start_tag: TagU32) -> ParserResult<(Vec<RepeatingGroup>, Field)> {
+        let first_field = self
+            .next_field()
+            .ok_or(ParserError::Malformed("missing begin field".to_string()))?;
         let delimiter = first_field.tag;
         let mut groups = vec![];
 
@@ -109,13 +113,15 @@ impl<'a> MessageParser<'a> {
 
             // we store the first field, which is the delimiter
             group.store_field(field);
-            field = self.next_field().unwrap();
+            field = self
+                .next_field()
+                .ok_or(ParserError::Malformed("empty group".to_string()))?;
 
             loop {
                 if self
                     .group_tags
                     .get(&start_tag)
-                    .unwrap()
+                    .ok_or(ParserError::InvalidGroup(start_tag.get()))?
                     .contains(&field.tag)
                 {
                     // the next tag is still part of this group
@@ -125,9 +131,9 @@ impl<'a> MessageParser<'a> {
                     } else {
                         let tag = field.tag;
                         group.store_field(field);
-                        let field_def = self.dict.field_by_tag(tag.get()).unwrap();
+                        let field_def = self.get_dict_field_by_tag(tag.get())?;
                         if field_def.is_num_in_group() {
-                            let (groups, next) = self.parse_groups(tag);
+                            let (groups, next) = self.parse_groups(tag)?;
                             group.set_groups(groups);
                             field = next;
                             continue;
@@ -136,9 +142,11 @@ impl<'a> MessageParser<'a> {
                 } else {
                     // otherwise we have finished parsing the groups
                     groups.push(group);
-                    return (groups, field);
+                    return Ok((groups, field));
                 }
-                field = self.next_field().unwrap();
+                field = self
+                    .next_field()
+                    .ok_or(ParserError::Malformed("incomplete group".to_string()))?;
             }
 
             groups.push(group)
@@ -151,7 +159,7 @@ impl<'a> MessageParser<'a> {
         let bytes_until_separator = iter.position(|c| *c == self.config.separator)?;
         let separator_position = equal_sign_position + bytes_until_separator + 1;
 
-        let tag = tag_from_bytes(&self.raw_data[self.position..equal_sign_position]).unwrap();
+        let tag = tag_from_bytes(&self.raw_data[self.position..equal_sign_position])?;
         let data = self.raw_data[equal_sign_position + 1..separator_position].to_vec();
         let field = Field::new(tag, data);
 
@@ -166,16 +174,21 @@ impl<'a> MessageParser<'a> {
             .ok_or(ParserError::InvalidField(tag))
     }
 
-    fn get_tags_for_component(dict: &Dictionary, component_name: &str) -> HashSet<TagU32> {
+    fn get_tags_for_component(
+        dict: &Dictionary,
+        component_name: &str,
+    ) -> ParserResult<HashSet<TagU32>> {
         let mut tags = HashSet::new();
-        let component = dict.component_by_name(component_name).unwrap();
+        let component = dict
+            .component_by_name(component_name)
+            .ok_or(ParserError::InvalidComponent(component_name.to_string()))?;
         for item in component.items() {
             if let LayoutItemKind::Field(field) = item.kind() {
                 tags.insert(field.tag());
             }
         }
 
-        tags
+        Ok(tags)
     }
 
     fn get_group_tags(dict: &Dictionary) -> HashMap<TagU32, HashSet<TagU32>> {

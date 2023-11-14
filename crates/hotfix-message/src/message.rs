@@ -29,7 +29,7 @@ impl Message {
     }
 
     pub fn from_bytes(config: &Config, dict: &Dictionary, data: &[u8]) -> ParserResult<Self> {
-        let mut builder = MessageParser::new(dict, config, data);
+        let mut builder = MessageParser::new(dict, config, data)?;
 
         builder.build()
     }
