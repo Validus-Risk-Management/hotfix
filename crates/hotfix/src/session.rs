@@ -1,4 +1,4 @@
-mod message;
+mod event;
 mod state;
 
 use hotfix_message::dict::Dictionary;
@@ -27,12 +27,12 @@ use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
 use crate::message_utils::is_admin;
 use crate::session::state::AwaitingResendState;
-use message::SessionMessage;
+use event::SessionEvent;
 use state::SessionState;
 
 #[derive(Clone)]
 pub struct SessionRef<M> {
-    sender: mpsc::Sender<SessionMessage<M>>,
+    sender: mpsc::Sender<SessionEvent<M>>,
 }
 
 impl<M: FixMessage> SessionRef<M> {
@@ -41,7 +41,7 @@ impl<M: FixMessage> SessionRef<M> {
         application: ApplicationRef<M>,
         store: impl MessageStore + Send + Sync + 'static,
     ) -> Self {
-        let (sender, mailbox) = mpsc::channel::<SessionMessage<M>>(10);
+        let (sender, mailbox) = mpsc::channel::<SessionEvent<M>>(10);
         let actor = Session::new(mailbox, config, application, store);
         tokio::spawn(run_session(actor));
 
@@ -50,28 +50,28 @@ impl<M: FixMessage> SessionRef<M> {
 
     pub async fn register_writer(&self, writer: WriterRef) {
         self.sender
-            .send(SessionMessage::Connected(writer))
+            .send(SessionEvent::Connected(writer))
             .await
             .expect("be able to register writer");
     }
 
     pub async fn new_fix_message_received(&self, msg: RawFixMessage) {
         self.sender
-            .send(SessionMessage::FixMessageReceived(msg))
+            .send(SessionEvent::FixMessageReceived(msg))
             .await
             .expect("be able to receive message");
     }
 
     pub async fn disconnect(&self, reason: String) {
         self.sender
-            .send(SessionMessage::Disconnected(reason))
+            .send(SessionEvent::Disconnected(reason))
             .await
             .expect("be able to send disconnect");
     }
 
     pub async fn send_message(&self, msg: M) {
         self.sender
-            .send(SessionMessage::SendMessage(msg))
+            .send(SessionEvent::SendMessage(msg))
             .await
             .expect("message to send successfully");
     }
@@ -79,7 +79,7 @@ impl<M: FixMessage> SessionRef<M> {
     pub async fn should_reconnect(&self) -> bool {
         let (sender, receiver) = oneshot::channel();
         self.sender
-            .send(SessionMessage::ShouldReconnect(sender))
+            .send(SessionEvent::ShouldReconnect(sender))
             .await
             .unwrap();
         receiver.await.expect("to receive a response")
@@ -87,7 +87,7 @@ impl<M: FixMessage> SessionRef<M> {
 }
 
 struct Session<M, S> {
-    mailbox: mpsc::Receiver<SessionMessage<M>>,
+    mailbox: mpsc::Receiver<SessionEvent<M>>,
     message_config: MessageConfig,
     config: SessionConfig,
     dictionary: Dictionary,
@@ -99,7 +99,7 @@ struct Session<M, S> {
 
 impl<M: FixMessage, S: MessageStore> Session<M, S> {
     fn new(
-        mailbox: mpsc::Receiver<SessionMessage<M>>,
+        mailbox: mpsc::Receiver<SessionEvent<M>>,
         config: SessionConfig,
         application: ApplicationRef<M>,
         store: S,
@@ -475,25 +475,25 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         self.send_message(logon).await;
     }
 
-    async fn handle(&mut self, message: SessionMessage<M>) {
-        match message {
-            SessionMessage::FixMessageReceived(fix_message) => {
+    async fn handle(&mut self, event: SessionEvent<M>) {
+        match event {
+            SessionEvent::FixMessageReceived(fix_message) => {
                 self.on_incoming(fix_message).await;
             }
-            SessionMessage::SendHeartbeat => {
+            SessionEvent::SendHeartbeat => {
                 self.send_message(Heartbeat {}).await;
             }
-            SessionMessage::SendMessage(message) => {
+            SessionEvent::SendMessage(message) => {
                 self.send_message(message).await;
             }
-            SessionMessage::Disconnected(reason) => {
+            SessionEvent::Disconnected(reason) => {
                 warn!(reason, "disconnected from peer");
                 self.on_disconnect(reason).await;
             }
-            SessionMessage::Connected(w) => {
+            SessionEvent::Connected(w) => {
                 self.on_connect(w).await;
             }
-            SessionMessage::ShouldReconnect(responder) => {
+            SessionEvent::ShouldReconnect(responder) => {
                 responder
                     .send(self.state.should_reconnect())
                     .expect("be able to respond");
@@ -520,7 +520,7 @@ where
                 }
             }
             () = &mut actor.heartbeat_timer.as_mut() => {
-                actor.handle(SessionMessage::SendHeartbeat).await
+                actor.handle(SessionEvent::SendHeartbeat).await
             }
         }
     }

@@ -4,7 +4,7 @@ use crate::message::parser::RawFixMessage;
 use crate::transport::socket_writer::WriterRef;
 
 #[derive(Debug)]
-pub enum SessionMessage<M> {
+pub enum SessionEvent<M> {
     /// Tell the session we have received a new FIX message from the reader.
     FixMessageReceived(RawFixMessage),
     /// Ask the session to send a new heartbeat.
