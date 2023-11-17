@@ -39,6 +39,8 @@ experimental code rather than good code at this stage.
 - [x] Basic logic for sending messages
 - [x] Basic logic for receiving messages
 - [x] Resend flows
+- [ ] Test Request - work in progress :wrench:
+- [ ] Better error handling - coming soon :wrench:
 
 Check out the [examples](https://github.com/Validus-Risk-Management/hotfix/tree/main/examples)
 to get started.
