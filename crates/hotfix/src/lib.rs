@@ -23,7 +23,7 @@
 //!
 //! Check out the [examples](https://github.com/Validus-Risk-Management/hotfix/tree/main/examples)
 //! to get started.
-mod actors;
+pub mod application;
 pub mod config;
 pub(crate) mod error;
 pub mod initiator;
@@ -33,6 +33,6 @@ pub(crate) mod session;
 pub mod store;
 pub(crate) mod transport;
 
-pub use actors::application::Application;
+pub use application::Application;
 pub use hotfix_message::field_types;
 pub use hotfix_message::message::Message;

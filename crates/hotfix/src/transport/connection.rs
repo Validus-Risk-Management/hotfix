@@ -1,11 +1,11 @@
 use std::io;
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::actors::socket_reader::ReaderRef;
-use crate::actors::socket_writer::WriterRef;
 use crate::config::SessionConfig;
 use crate::message::FixMessage;
 use crate::session::SessionRef;
+use crate::transport::socket_reader::ReaderRef;
+use crate::transport::socket_writer::WriterRef;
 use crate::transport::tcp::create_tcp_connection;
 use crate::transport::tls::create_tcp_over_tls_connection;
 

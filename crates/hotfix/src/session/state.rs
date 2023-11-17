@@ -2,8 +2,8 @@ use hotfix_message::message::Message;
 use std::collections::VecDeque;
 use tracing::{debug, error};
 
-use crate::actors::socket_writer::WriterRef;
 use crate::message::parser::RawFixMessage;
+use crate::transport::socket_writer::WriterRef;
 
 pub enum SessionState {
     /// We have established a connection, sent a logon message and await a response.

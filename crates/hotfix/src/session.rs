@@ -12,8 +12,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::time::{sleep, Duration, Instant, Sleep};
 use tracing::{debug, error, warn};
 
-use crate::actors::application::{ApplicationMessage, ApplicationRef};
-use crate::actors::socket_writer::WriterRef;
+use crate::application::{ApplicationMessage, ApplicationRef};
 use crate::config::SessionConfig;
 use crate::message::generate_message;
 use crate::message::heartbeat::Heartbeat;
@@ -21,6 +20,7 @@ use crate::message::logon::{Logon, ResetSeqNumConfig};
 use crate::message::parser::RawFixMessage;
 use crate::message::FixMessage;
 use crate::store::MessageStore;
+use crate::transport::socket_writer::WriterRef;
 
 use crate::error::MessageVerificationError;
 use crate::message::resend_request::ResendRequest;

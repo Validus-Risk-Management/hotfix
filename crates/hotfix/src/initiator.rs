@@ -10,7 +10,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{debug, warn};
 
-use crate::actors::application::{Application, ApplicationRef};
+use crate::application::{Application, ApplicationRef};
 use crate::config::SessionConfig;
 use crate::message::FixMessage;
 use crate::session::SessionRef;

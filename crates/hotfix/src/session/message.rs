@@ -1,7 +1,7 @@
 use tokio::sync::oneshot;
 
-use crate::actors::socket_writer::WriterRef;
 use crate::message::parser::RawFixMessage;
+use crate::transport::socket_writer::WriterRef;
 
 #[derive(Debug)]
 pub enum SessionMessage<M> {
