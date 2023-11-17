@@ -7,8 +7,6 @@ use crate::transport::socket_writer::WriterRef;
 pub enum SessionEvent<M> {
     /// Tell the session we have received a new FIX message from the reader.
     FixMessageReceived(RawFixMessage),
-    /// Ask the session to send a new heartbeat.
-    SendHeartbeat,
     /// Ask the session to send a message from the application.
     SendMessage(M),
     /// Let the session know we've been disconnected.

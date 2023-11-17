@@ -35,6 +35,8 @@ pub struct SessionRef<M> {
     sender: mpsc::Sender<SessionEvent<M>>,
 }
 
+const TEST_REQUEST_THRESHOLD: f64 = 1.2;
+
 impl<M: FixMessage> SessionRef<M> {
     pub fn new(
         config: SessionConfig,
@@ -95,6 +97,7 @@ struct Session<M, S> {
     application: ApplicationRef<M>,
     store: S,
     heartbeat_timer: Pin<Box<Sleep>>,
+    peer_timer: Pin<Box<Sleep>>,
 }
 
 impl<M: FixMessage, S: MessageStore> Session<M, S> {
@@ -105,6 +108,9 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         store: S,
     ) -> Session<M, S> {
         let heartbeat_timer = sleep(Duration::from_secs(config.heartbeat_interval));
+        let peer_timer = sleep(Duration::from_secs(
+            (config.heartbeat_interval as f64 * TEST_REQUEST_THRESHOLD).round() as u64,
+        ));
         Self {
             mailbox,
             config,
@@ -117,11 +123,14 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             application,
             store,
             heartbeat_timer: Box::pin(heartbeat_timer),
+            peer_timer: Box::pin(peer_timer),
         }
     }
 
     async fn on_incoming(&mut self, raw_message: RawFixMessage) {
         debug!("received message: {}", raw_message);
+        self.reset_peer_timer();
+
         let message = Message::from_bytes(
             &self.message_config,
             &self.dictionary,
@@ -426,9 +435,16 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         header.set(fix44::POSS_DUP_FLAG, true);
     }
 
-    fn reset_timer(&mut self) {
+    fn reset_heartbeat_timer(&mut self) {
         let deadline = Instant::now() + Duration::from_secs(self.config.heartbeat_interval);
         self.heartbeat_timer.as_mut().reset(deadline);
+    }
+
+    fn reset_peer_timer(&mut self) {
+        let seconds =
+            (self.config.heartbeat_interval as f64 * TEST_REQUEST_THRESHOLD).round() as u64;
+        let deadline = Instant::now() + Duration::from_secs(seconds);
+        self.peer_timer.as_mut().reset(deadline);
     }
 
     async fn send_message(&mut self, message: impl FixMessage) {
@@ -451,7 +467,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         self.state
             .send_message(message_type, RawFixMessage::new(data))
             .await;
-        self.reset_timer();
+        self.reset_heartbeat_timer();
     }
 
     async fn send_sequence_reset(&mut self, begin: u64, end: u64) {
@@ -493,9 +509,6 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             SessionEvent::FixMessageReceived(fix_message) => {
                 self.on_incoming(fix_message).await;
             }
-            SessionEvent::SendHeartbeat => {
-                self.send_message(Heartbeat::default()).await;
-            }
             SessionEvent::SendMessage(message) => {
                 self.send_message(message).await;
             }
@@ -513,27 +526,38 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             }
         }
     }
+
+    async fn handle_heartbeat_timeout(&mut self) {
+        self.send_message(Heartbeat::default()).await;
+    }
+
+    async fn handle_peer_timeout(&mut self) {
+        // TODO: send TestRequest or send logout and terminate connection if request has been sent
+    }
 }
 
-async fn run_session<M, S>(mut actor: Session<M, S>)
+async fn run_session<M, S>(mut session: Session<M, S>)
 where
     M: FixMessage,
     S: MessageStore + Send + 'static,
 {
     loop {
-        let next_message = actor.mailbox.recv();
+        let next_message = session.mailbox.recv();
 
         select! {
             next = next_message => {
                 match next {
                     Some(msg) => {
-                        actor.handle(msg).await
+                        session.handle(msg).await
                     }
                     None => break,
                 }
             }
-            () = &mut actor.heartbeat_timer.as_mut() => {
-                actor.handle(SessionEvent::SendHeartbeat).await
+            () = &mut session.heartbeat_timer.as_mut() => {
+                session.handle_heartbeat_timeout().await;
+            }
+            () = &mut session.peer_timer.as_mut() => {
+                session.handle_peer_timeout().await;
             }
         }
     }
