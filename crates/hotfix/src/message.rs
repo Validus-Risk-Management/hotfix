@@ -10,6 +10,7 @@ pub(crate) mod logon;
 pub(crate) mod parser;
 pub(crate) mod resend_request;
 pub(crate) mod sequence_reset;
+pub(crate) mod test_request;
 
 pub trait FixMessage: Clone + Send + 'static {
     fn write(&self, msg: &mut Message);

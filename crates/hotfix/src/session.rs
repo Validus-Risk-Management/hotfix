@@ -25,6 +25,7 @@ use crate::transport::socket_writer::WriterRef;
 use crate::error::MessageVerificationError;
 use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
+use crate::message::test_request::TestRequest;
 use crate::message_utils::is_admin;
 use crate::session::state::AwaitingResendState;
 use event::SessionEvent;
@@ -36,6 +37,7 @@ pub struct SessionRef<M> {
 }
 
 const TEST_REQUEST_THRESHOLD: f64 = 1.2;
+type TestRequestId = String;
 
 impl<M: FixMessage> SessionRef<M> {
     pub fn new(
@@ -98,6 +100,7 @@ struct Session<M, S> {
     store: S,
     heartbeat_timer: Pin<Box<Sleep>>,
     peer_timer: Pin<Box<Sleep>>,
+    awaiting_test_response: Option<TestRequestId>,
 }
 
 impl<M: FixMessage, S: MessageStore> Session<M, S> {
@@ -124,6 +127,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             store,
             heartbeat_timer: Box::pin(heartbeat_timer),
             peer_timer: Box::pin(peer_timer),
+            awaiting_test_response: None,
         }
     }
 
@@ -504,6 +508,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         self.send_message(logon).await;
     }
 
+    async fn logout_and_terminate(&mut self) {
+        todo!()
+    }
+
     async fn handle(&mut self, event: SessionEvent<M>) {
         match event {
             SessionEvent::FixMessageReceived(fix_message) => {
@@ -532,7 +540,15 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     async fn handle_peer_timeout(&mut self) {
-        // TODO: send TestRequest or send logout and terminate connection if request has been sent
+        if self.awaiting_test_response.is_some() {
+            self.logout_and_terminate().await;
+        } else {
+            let req_id = format!("TEST_{}", self.store.next_target_seq_number().await);
+            let request = TestRequest::new(req_id.clone());
+            self.send_message(request).await;
+            self.awaiting_test_response = Some(req_id);
+            self.reset_peer_timer();
+        }
     }
 }
 
