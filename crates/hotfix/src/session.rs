@@ -23,6 +23,7 @@ use crate::store::MessageStore;
 use crate::transport::socket_writer::WriterRef;
 
 use crate::error::MessageVerificationError;
+use crate::message::logout::Logout;
 use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
@@ -508,8 +509,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         self.send_message(logon).await;
     }
 
-    async fn logout_and_terminate(&mut self) {
-        todo!()
+    async fn logout_and_terminate(&mut self, reason: String) {
+        let logout = Logout::with_reason(reason);
+        self.send_message(logout).await;
+        self.state.disconnect().await;
     }
 
     async fn handle(&mut self, event: SessionEvent<M>) {
@@ -541,7 +544,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     async fn handle_peer_timeout(&mut self) {
         if self.awaiting_test_response.is_some() {
-            self.logout_and_terminate().await;
+            self.logout_and_terminate("peer timeout".to_string()).await;
         } else {
             let req_id = format!("TEST_{}", self.store.next_target_seq_number().await);
             let request = TestRequest::new(req_id.clone());

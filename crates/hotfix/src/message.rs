@@ -7,6 +7,7 @@ pub use hotfix_message::{Part, RepeatingGroup};
 
 pub(crate) mod heartbeat;
 pub(crate) mod logon;
+pub(crate) mod logout;
 pub(crate) mod parser;
 pub(crate) mod resend_request;
 pub(crate) mod sequence_reset;
