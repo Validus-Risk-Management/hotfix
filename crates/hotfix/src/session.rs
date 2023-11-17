@@ -134,7 +134,11 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     async fn on_incoming(&mut self, raw_message: RawFixMessage) {
         debug!("received message: {}", raw_message);
-        self.reset_peer_timer();
+        if self.awaiting_test_response.is_none() {
+            // if we are not awaiting a specific test response, any message can reset the timer
+            // otherwise, only a heartbeat with the corresponding TestReqID can
+            self.reset_peer_timer(None);
+        }
 
         let message = Message::from_bytes(
             &self.message_config,
@@ -160,7 +164,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         let message_type = message.header().get(fix44::MSG_TYPE).unwrap();
         match message_type {
             "0" => {
-                // TODO: handle heartbeat
+                self.on_heartbeat(&message).await;
             }
             "1" => {
                 self.on_test_request(&message).await;
@@ -324,6 +328,18 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             .await;
     }
 
+    async fn on_heartbeat(&mut self, message: &Message) {
+        if let (Some(expected_req_id), Ok(message_req_id)) = (
+            &self.awaiting_test_response,
+            message.get::<&str>(fix44::TEST_REQ_ID),
+        ) {
+            if expected_req_id.as_str() == message_req_id {
+                debug!("received response for TestRequest, resetting timer");
+                self.reset_peer_timer(None);
+            }
+        }
+    }
+
     async fn on_test_request(&mut self, message: &Message) {
         let req_id: &str = match message.get(fix44::TEST_REQ_ID) {
             Ok(val) => val,
@@ -445,11 +461,12 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         self.heartbeat_timer.as_mut().reset(deadline);
     }
 
-    fn reset_peer_timer(&mut self) {
+    fn reset_peer_timer(&mut self, awaiting_req_id: Option<TestRequestId>) {
         let seconds =
             (self.config.heartbeat_interval as f64 * TEST_REQUEST_THRESHOLD).round() as u64;
         let deadline = Instant::now() + Duration::from_secs(seconds);
         self.peer_timer.as_mut().reset(deadline);
+        self.awaiting_test_response = awaiting_req_id;
     }
 
     async fn send_message(&mut self, message: impl FixMessage) {
@@ -549,8 +566,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             let req_id = format!("TEST_{}", self.store.next_target_seq_number().await);
             let request = TestRequest::new(req_id.clone());
             self.send_message(request).await;
-            self.awaiting_test_response = Some(req_id);
-            self.reset_peer_timer();
+            self.reset_peer_timer(Some(req_id));
         }
     }
 }
