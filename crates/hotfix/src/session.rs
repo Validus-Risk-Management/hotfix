@@ -10,7 +10,7 @@ use std::pin::Pin;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{sleep, Duration, Instant, Sleep};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::application::{ApplicationMessage, ApplicationRef};
 use crate::config::SessionConfig;
@@ -561,9 +561,11 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     async fn handle_peer_timeout(&mut self) {
         if self.awaiting_test_response.is_some() {
+            warn!("peer didn't respond, terminating..");
             self.logout_and_terminate("peer timeout".to_string()).await;
         } else {
             let req_id = format!("TEST_{}", self.store.next_target_seq_number().await);
+            info!("sending TestRequest due to peer timer expiring");
             let request = TestRequest::new(req_id.clone());
             self.send_message(request).await;
             self.reset_peer_timer(Some(req_id));

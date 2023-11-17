@@ -19,7 +19,7 @@ mongodb = ["dep:mongodb"]
 anyhow = "^1.0.75"
 async-trait = "^0.1.73"
 futures = "^0.3.28"
-hotfix-message = { version = "0.0.17", path = "../hotfix-message" }
+hotfix-message = { version = "0.0.18", path = "../hotfix-message" }
 mongodb = { version = "^2.7", optional = true }
 pki-types = { package = "rustls-pki-types", version = "^0.2" }
 redb = { version = "^1.1.0", optional = true }
@@ -30,6 +30,6 @@ thiserror = "1"
 tokio = { version = "^1", features = ["full"] }
 tokio-rustls = "^0.24.1"
 tokio-stream = "^0.1.14"
-toml = "^0.7.6"
+toml = "^0.8.8"
 tracing = "^0.1.37"
 log = "0.4.20"
