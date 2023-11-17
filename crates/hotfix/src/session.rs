@@ -149,7 +149,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 // TODO: handle heartbeat
             }
             "1" => {
-                // TODO: handle test request
+                self.on_test_request(&message).await;
             }
             "2" => {
                 self.on_resend_request(&message).await;
@@ -310,13 +310,26 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             .await;
     }
 
+    async fn on_test_request(&mut self, message: &Message) {
+        let req_id: &str = match message.get(fix44::TEST_REQ_ID) {
+            Ok(val) => val,
+            Err(_) => {
+                // TODO: send reject?
+                todo!()
+            }
+        };
+
+        self.send_message(Heartbeat::for_request(req_id.to_string()))
+            .await;
+    }
+
     async fn on_resend_request(&mut self, message: &Message) {
         // TODO: verify message and send reject as necessary
 
         let begin_seq_number: usize = match message.get(fix44::BEGIN_SEQ_NO) {
             Ok(seq_number) => seq_number,
             Err(_) => {
-                // send reject if there is no valid begin number
+                // TODO: send reject if there is no valid begin number
                 todo!()
             }
         };
@@ -481,7 +494,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 self.on_incoming(fix_message).await;
             }
             SessionEvent::SendHeartbeat => {
-                self.send_message(Heartbeat {}).await;
+                self.send_message(Heartbeat::default()).await;
             }
             SessionEvent::SendMessage(message) => {
                 self.send_message(message).await;
