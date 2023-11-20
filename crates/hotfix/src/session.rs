@@ -140,15 +140,23 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             self.reset_peer_timer(None);
         }
 
-        let message = Message::from_bytes(
+        match Message::from_bytes(
             &self.message_config,
             &self.dictionary,
             raw_message.as_bytes(),
-        )
-        .unwrap();
-
-        self.process_message(message).await;
-        self.check_end_of_resend().await;
+        ) {
+            Ok(message) => {
+                self.process_message(message).await;
+                self.check_end_of_resend().await;
+            }
+            Err(err) => {
+                // garbled messages should be skipped and we should assume it was a transmission error
+                let message = raw_message.to_string();
+                let error = err.to_string();
+                error!(message, error, "received garbled message");
+                // TODO: not all parsing errors indicate garbled messages
+            }
+        }
     }
 
     async fn process_message(&mut self, message: Message) {
