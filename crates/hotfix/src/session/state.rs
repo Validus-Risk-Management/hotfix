@@ -39,15 +39,21 @@ impl SessionState {
                 writer,
                 ref mut logon_sent,
             } => {
-                if message_type == b"A" {
-                    if *logon_sent {
-                        error!("trying to send logon twice");
-                    } else {
-                        writer.send_raw_message(message).await;
-                        *logon_sent = true;
+                match message_type {
+                    b"A" => {
+                        // Logon message
+                        if *logon_sent {
+                            error!("trying to send logon twice");
+                        } else {
+                            writer.send_raw_message(message).await;
+                            *logon_sent = true;
+                        }
                     }
-                } else {
-                    debug!("received message while in logon state - won't send")
+                    b"5" => {
+                        // Logout message
+                        writer.send_raw_message(message).await;
+                    }
+                    _ => error!("invalid outgoing message for AwaitingLogon state"),
                 }
             }
             _ => error!("trying to write without an established connection"),
@@ -56,7 +62,9 @@ impl SessionState {
 
     pub async fn disconnect(&self) {
         match self {
-            Self::Active { writer } => writer.disconnect().await,
+            Self::Active { writer } | Self::AwaitingLogon { writer, .. } => {
+                writer.disconnect().await
+            }
             _ => debug!("disconnecting an already disconnected session"),
         }
     }

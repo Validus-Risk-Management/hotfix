@@ -258,6 +258,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             writer,
             logon_sent: false,
         };
+        self.reset_peer_timer(None);
         self.send_logon().await;
     }
 
@@ -296,7 +297,11 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 Err(err) => match err {
                     MessageVerificationError::SeqNumberTooLow { actual, expected } => {
                         error!("we expected {expected} sequence number, but target sent lower ({actual}), terminating...");
-                        panic!("sequence number too low (actual {actual}, expected {expected})")
+                        let reason = format!(
+                            "sequence number too low (actual {actual}, expected {expected})"
+                        );
+                        self.logout_and_terminate(reason).await;
+                        self.state = SessionState::LoggedOut { reconnect: false };
                     }
                     MessageVerificationError::SeqNumberTooHigh { actual, expected } => {
                         debug!("we are ahead behind target (ours: {expected}, theirs: {actual}), requesting resend.");
@@ -530,6 +535,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         let logout = Logout::with_reason(reason);
         self.send_message(logout).await;
         self.state.disconnect().await;
+        self.disable_peer_timer().await;
     }
 
     async fn handle(&mut self, event: SessionEvent<M>) {
@@ -570,6 +576,13 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             self.send_message(request).await;
             self.reset_peer_timer(Some(req_id));
         }
+    }
+
+    async fn disable_peer_timer(&mut self) {
+        // push the timer out by about a month - there is no way to disable it entirely afaik
+        self.peer_timer
+            .as_mut()
+            .reset(Instant::now() + Duration::from_secs(2592000));
     }
 }
 
