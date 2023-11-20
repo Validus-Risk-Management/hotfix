@@ -1,6 +1,7 @@
 mod event;
 mod state;
 
+use anyhow::{anyhow, Result};
 use hotfix_message::dict::Dictionary;
 use hotfix_message::field_types::Timestamp;
 use hotfix_message::message::{Config as MessageConfig, Message};
@@ -132,7 +133,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         }
     }
 
-    async fn on_incoming(&mut self, raw_message: RawFixMessage) {
+    async fn on_incoming(&mut self, raw_message: RawFixMessage) -> Result<()> {
         debug!("received message: {}", raw_message);
         if self.awaiting_test_response.is_none() {
             // if we are not awaiting a specific test response, any message can reset the timer
@@ -146,8 +147,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             raw_message.as_bytes(),
         ) {
             Ok(message) => {
-                self.process_message(message).await;
-                self.check_end_of_resend().await;
+                self.process_message(message).await?;
+                self.check_end_of_resend().await?;
             }
             Err(err) => {
                 // garbled messages should be skipped and we should assume it was a transmission error
@@ -157,19 +158,24 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 // TODO: not all parsing errors indicate garbled messages
             }
         }
+
+        Ok(())
     }
 
-    async fn process_message(&mut self, message: Message) {
+    async fn process_message(&mut self, message: Message) -> Result<()> {
         if let SessionState::AwaitingResend(state) = &mut self.state {
-            let seq_number: u64 = message.header().get(fix44::MSG_SEQ_NUM).unwrap();
+            let seq_number: u64 = message
+                .header()
+                .get(fix44::MSG_SEQ_NUM)
+                .map_err(|e| anyhow!("failed to get seq number: {:?}", e))?;
             if seq_number > state.end_seq_number {
                 state.inbound_queue.push_back(message);
-                return;
+                return Ok(());
             }
         }
         // TODO: should we verify messages here?
 
-        let message_type = message.header().get(fix44::MSG_TYPE).unwrap();
+        let message_type = message.header().get(fix44::MSG_TYPE)?;
         match message_type {
             "0" => {
                 self.on_heartbeat(&message).await;
@@ -185,7 +191,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             }
             "4" => {
                 self.on_sequence_reset(&message).await;
-                return; // early return as we don't need to increment target seq number
+                return Ok(()); // early return as we don't need to increment target seq number
             }
             "5" => {
                 self.on_logout().await;
@@ -195,7 +201,9 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             }
             _ => self.process_app_message(&message).await,
         }
-        self.store.increment_target_seq_number().await.unwrap();
+
+        self.store.increment_target_seq_number().await?;
+        Ok(())
     }
 
     async fn process_app_message(&self, message: &Message) {
@@ -204,7 +212,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         self.application.send_message(app_message).await;
     }
 
-    async fn check_end_of_resend(&mut self) {
+    async fn check_end_of_resend(&mut self) -> Result<()> {
         let ended_state = if let SessionState::AwaitingResend(state) = &mut self.state {
             if self.store.next_target_seq_number().await > state.end_seq_number {
                 let new_state = SessionState::Active {
@@ -223,15 +231,22 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             // process queued messages and resume normal operation
             debug!("resend is done, processing backlog");
             while let Some(msg) = state.inbound_queue.pop_front() {
-                let seq_number: u64 = msg.get(fix44::MSG_SEQ_NUM).unwrap();
+                let seq_number: u64 = msg
+                    .get(fix44::MSG_SEQ_NUM)
+                    .map_err(|e| anyhow!("failed to get seq number: {:?}", e))?;
                 debug!(seq_number, "processing queued message");
-                self.process_message(msg).await;
+                self.process_message(msg).await?;
             }
             debug!("resend backlog is cleared, resuming normal operation");
         }
+
+        Ok(())
     }
 
-    async fn verify_message(&self, message: &Message) -> Result<(), MessageVerificationError> {
+    async fn verify_message(
+        &self,
+        message: &Message,
+    ) -> std::result::Result<(), MessageVerificationError> {
         let begin_string: &str = message.header().get(fix44::BEGIN_STRING).unwrap();
         if begin_string != "FIX.4.4" {
             return Err(MessageVerificationError::IncorrectBeginString(
@@ -549,7 +564,12 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     async fn handle(&mut self, event: SessionEvent<M>) {
         match event {
             SessionEvent::FixMessageReceived(fix_message) => {
-                self.on_incoming(fix_message).await;
+                if let Err(err) = self.on_incoming(fix_message).await {
+                    let reason = err.to_string();
+                    error!(reason, "fatal error in message processing");
+                    self.logout_and_terminate("internal error".to_string())
+                        .await;
+                }
             }
             SessionEvent::SendMessage(message) => {
                 self.send_message(message).await;
