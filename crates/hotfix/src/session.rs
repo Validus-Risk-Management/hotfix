@@ -187,7 +187,9 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 self.on_resend_request(&message).await;
             }
             "3" => {
-                // TODO: handle reject
+                if !self.on_reject(&message).await {
+                    return Ok(());
+                }
             }
             "4" => {
                 self.on_sequence_reset(&message).await;
@@ -409,6 +411,18 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
         self.resend_messages(begin_seq_number, end_seq_number, message)
             .await;
+    }
+
+    /// Handle Reject messages.
+    ///
+    /// Returns whether the message should be processed as usual
+    /// and whether the target sequence number should be incremented.
+    async fn on_reject(&self, message: &Message) -> bool {
+        if let Ok(seq_num) = message.get::<u64>(fix44::MSG_SEQ_NUM) {
+            seq_num == self.store.next_target_seq_number().await
+        } else {
+            false
+        }
     }
 
     async fn on_sequence_reset(&mut self, message: &Message) {
