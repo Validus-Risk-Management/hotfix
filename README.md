@@ -40,8 +40,7 @@ experimental code rather than good code at this stage.
 - [x] Basic logic for receiving messages
 - [x] Resend flows
 - [x] Test Requests and handling peer timeouts
-- [ ] Gracefully handling severe session errors - coming soon :wrench:
-- [ ] Message code generation - coming next :wrench:
+- [ ] Message code generation - coming next
 
 Check out the [examples](https://github.com/Validus-Risk-Management/hotfix/tree/main/examples)
 to get started.
