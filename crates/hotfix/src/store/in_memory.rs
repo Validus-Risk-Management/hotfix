@@ -21,11 +21,11 @@ impl MessageStore for InMemoryMessageStore {
         Ok(self.messages.as_slice()[begin..=end].to_vec())
     }
 
-    async fn next_sender_seq_number(&self) -> u64 {
+    fn next_sender_seq_number(&self) -> u64 {
         self.sender_seq_number + 1
     }
 
-    async fn next_target_seq_number(&self) -> u64 {
+    fn next_target_seq_number(&self) -> u64 {
         self.target_seq_number + 1
     }
 

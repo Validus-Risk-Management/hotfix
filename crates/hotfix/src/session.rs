@@ -216,7 +216,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     async fn check_end_of_resend(&mut self) -> Result<()> {
         let ended_state = if let SessionState::AwaitingResend(state) = &mut self.state {
-            if self.store.next_target_seq_number().await > state.end_seq_number {
+            if self.store.next_target_seq_number() > state.end_seq_number {
                 let new_state = SessionState::Active {
                     writer: state.writer.clone(),
                 };
@@ -256,7 +256,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             ));
         }
 
-        let expected_seq_number = self.store.next_target_seq_number().await;
+        let expected_seq_number = self.store.next_target_seq_number();
         let actual_seq_number: u64 = message.header().get(fix44::MSG_SEQ_NUM).unwrap();
 
         match actual_seq_number.cmp(&expected_seq_number) {
@@ -396,7 +396,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
         let end_seq_number: usize = match message.get(fix44::END_SEQ_NO) {
             Ok(seq_number) => {
-                let last_seq_number = self.store.next_sender_seq_number().await as usize - 1;
+                let last_seq_number = self.store.next_sender_seq_number() as usize - 1;
                 if seq_number == 0 {
                     last_seq_number
                 } else {
@@ -419,7 +419,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     /// and whether the target sequence number should be incremented.
     async fn on_reject(&self, message: &Message) -> bool {
         if let Ok(seq_num) = message.get::<u64>(fix44::MSG_SEQ_NUM) {
-            seq_num == self.store.next_target_seq_number().await
+            seq_num == self.store.next_target_seq_number()
         } else {
             false
         }
@@ -512,7 +512,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     async fn send_message(&mut self, message: impl FixMessage) {
-        let seq_num = self.store.next_sender_seq_number().await;
+        let seq_num = self.store.next_sender_seq_number();
         self.store.increment_sender_seq_number().await.unwrap();
 
         let msg_type = message.message_type().as_bytes().to_vec();
@@ -561,7 +561,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             self.store.reset().await.unwrap();
             ResetSeqNumConfig::Reset
         } else {
-            ResetSeqNumConfig::NoReset(Some(self.store.next_target_seq_number().await))
+            ResetSeqNumConfig::NoReset(Some(self.store.next_target_seq_number()))
         };
         let logon = Logon::new(self.config.heartbeat_interval, reset_config);
 
@@ -612,7 +612,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             warn!("peer didn't respond, terminating..");
             self.logout_and_terminate("peer timeout".to_string()).await;
         } else {
-            let req_id = format!("TEST_{}", self.store.next_target_seq_number().await);
+            let req_id = format!("TEST_{}", self.store.next_target_seq_number());
             info!("sending TestRequest due to peer timer expiring");
             let request = TestRequest::new(req_id.clone());
             self.send_message(request).await;

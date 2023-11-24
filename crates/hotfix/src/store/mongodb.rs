@@ -133,11 +133,11 @@ impl MessageStore for MongoDbMessageStore {
         Ok(messages)
     }
 
-    async fn next_sender_seq_number(&self) -> u64 {
+    fn next_sender_seq_number(&self) -> u64 {
         self.current_sequence.sender_seq_number
     }
 
-    async fn next_target_seq_number(&self) -> u64 {
+    fn next_target_seq_number(&self) -> u64 {
         self.current_sequence.target_seq_number
     }
 
