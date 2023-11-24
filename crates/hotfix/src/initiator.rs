@@ -69,11 +69,11 @@ async fn establish_connection<M: FixMessage>(config: SessionConfig, session_ref:
             Err(err) => {
                 let error_message = err.to_string();
                 warn!("failed to connect: {error_message}");
-
-                let reconnect_interval = config.reconnect_interval;
-                debug!("waiting for {reconnect_interval} seconds before attempting to reconnect");
-                sleep(Duration::from_secs(reconnect_interval)).await;
             }
         };
+
+        let reconnect_interval = config.reconnect_interval;
+        debug!("waiting for {reconnect_interval} seconds before attempting to reconnect");
+        sleep(Duration::from_secs(reconnect_interval)).await;
     }
 }
