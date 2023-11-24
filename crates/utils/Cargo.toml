@@ -1,0 +1,21 @@
+[package]
+name = "utils"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish = false
+
+[[bin]]
+name = "update-version"
+path = "src/update_version.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { version = "4.4.8", features = ["derive"] }
+toml_edit = "0.21.0"

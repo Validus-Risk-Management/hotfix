@@ -17,6 +17,8 @@ keywords = ["fix", "fix-protocol", "finance", "trading", "fx"]
 categories = ["finance", "encoding", "parsing"]
 
 [workspace.dependencies]
+anyhow = "^1.0.75"
 serde = "^1.0.177"
-thiserror = "1.0.50"
+thiserror = "1"
+toml = "^0.8.8"
 tracing = "^0.1.37"
