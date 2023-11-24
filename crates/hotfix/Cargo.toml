@@ -14,9 +14,12 @@ categories.workspace = true
 [features]
 redb = ["dep:redb"]
 mongodb = ["dep:mongodb"]
+dynamodb = ["dep:aws-config", "dep:aws-sdk-dynamodb"]
 
 [dependencies]
 anyhow = { workspace = true }
+aws-config = { version = "1", optional = true }
+aws-sdk-dynamodb = { version = "^0.39", optional = true }
 async-trait = "^0.1.73"
 futures = "^0.3.28"
 hotfix-message = { version = "0.0.20", path = "../hotfix-message" }

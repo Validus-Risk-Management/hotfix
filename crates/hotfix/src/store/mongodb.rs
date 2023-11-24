@@ -29,7 +29,6 @@ struct Message {
     data: Binary,
 }
 
-#[allow(dead_code)]
 pub struct MongoDbMessageStore {
     meta_collection: Collection<SequenceMeta>,
     message_collection: Collection<Message>,
@@ -37,7 +36,6 @@ pub struct MongoDbMessageStore {
 }
 
 impl MongoDbMessageStore {
-    #[allow(dead_code)]
     pub async fn new(db: Database, collection_name: Option<&str>) -> Result<Self> {
         let collection_name = collection_name.unwrap_or("messages");
         let meta_collection = db.collection(collection_name);

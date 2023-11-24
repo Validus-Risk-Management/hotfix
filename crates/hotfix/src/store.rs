@@ -6,6 +6,9 @@
 /// An in-memory message store that loses its state on restart. Only use this for testing.
 pub mod in_memory;
 
+#[cfg(feature = "dynamodb")]
+pub mod dynamodb;
+
 #[cfg(feature = "mongodb")]
 /// A message store using MongoDB for persistence.
 pub mod mongodb;
