@@ -164,6 +164,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     async fn process_message(&mut self, message: Message) -> Result<()> {
         if let SessionState::AwaitingResend(state) = &mut self.state {
+            // TODO: consider what messages won't have a sequence number?
+            // e.g. SequenceReset?
             let seq_number: u64 = message
                 .header()
                 .get(fix44::MSG_SEQ_NUM)
@@ -233,9 +235,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             // process queued messages and resume normal operation
             debug!("resend is done, processing backlog");
             while let Some(msg) = state.inbound_queue.pop_front() {
-                let seq_number: u64 = msg
-                    .get(fix44::MSG_SEQ_NUM)
-                    .map_err(|e| anyhow!("failed to get seq number: {:?}", e))?;
+                let seq_number: u64 = msg.get(fix44::MSG_SEQ_NUM).unwrap_or_else(|e| {
+                    error!("failed to get seq number: {:?}", e);
+                    0
+                });
                 debug!(seq_number, "processing queued message");
                 self.process_message(msg).await?;
             }
@@ -329,7 +332,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                         self.state = SessionState::LoggedOut { reconnect: false };
                     }
                     MessageVerificationError::SeqNumberTooHigh { actual, expected } => {
-                        debug!("we are ahead behind target (ours: {expected}, theirs: {actual}), requesting resend.");
+                        debug!("we are behind target (ours: {expected}, theirs: {actual}), requesting resend.");
                         let awaiting_resend = AwaitingResendState::new(writer.to_owned(), actual);
                         self.state = SessionState::AwaitingResend(awaiting_resend);
                         self.send_resend_request(expected, actual).await;

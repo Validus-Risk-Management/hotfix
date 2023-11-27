@@ -8,7 +8,7 @@ use aws_sdk_dynamodb::types::{
 };
 use aws_sdk_dynamodb::Client;
 use serde::{Deserialize, Serialize};
-use serde_dynamo::{from_item, to_item};
+use serde_dynamo::{from_item, from_items, to_item};
 use tracing::{error, info};
 
 pub use aws_config as config;
@@ -218,8 +218,29 @@ impl MessageStore for DynamoMessageStore {
         Ok(())
     }
 
-    async fn get_slice(&self, _begin: usize, _end: usize) -> Result<Vec<Vec<u8>>> {
-        todo!()
+    async fn get_slice(&self, begin: usize, end: usize) -> Result<Vec<Vec<u8>>> {
+        let key_condition_expression = "pk = :sequence AND sk BETWEEN :begin AND :end";
+        let output = self
+            .client
+            .query()
+            .table_name(&self.table_name)
+            .key_condition_expression(key_condition_expression)
+            .expression_attribute_values(
+                ":sequence",
+                AttributeValue::S(self.current_sequence.sequence.clone()),
+            )
+            .expression_attribute_values(":begin", AttributeValue::N(begin.to_string()))
+            .expression_attribute_values(":end", AttributeValue::N(end.to_string()))
+            .send()
+            .await?;
+
+        let messages: Vec<StoredMessage> = if let Some(items) = output.items {
+            from_items(items)?
+        } else {
+            vec![]
+        };
+
+        Ok(messages.into_iter().map(|m| m.message).collect())
     }
 
     fn next_sender_seq_number(&self) -> u64 {
