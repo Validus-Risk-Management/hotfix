@@ -10,3 +10,13 @@ services:
       test: test $$(mongosh --port 30001 --quiet --eval "try {rs.initiate({_id:'my-replica-set',members:[{_id:0,host:\"localhost:30001\"}]})} catch(e) {rs.status().ok}") -eq 1
       interval: 10s
       start_period: 30s
+
+  dynamo:
+    image: "amazon/dynamodb-local:latest"
+    user: root
+    container_name: dynamodb-local
+    ports:
+      - "8000:8000"
+    volumes:
+      - "./docker-data/dynamodb:/home/dynamodblocal/data"
+    working_dir: /home/dynamodblocal

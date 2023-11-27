@@ -3,11 +3,14 @@ use async_trait::async_trait;
 use aws_sdk_dynamodb::error::ProvideErrorMetadata;
 use aws_sdk_dynamodb::operation::create_table::CreateTableError;
 use aws_sdk_dynamodb::types::{
-    AttributeDefinition, KeySchemaElement, KeyType, ScalarAttributeType,
+    AttributeDefinition, BillingMode, KeySchemaElement, KeyType, ScalarAttributeType,
 };
 use aws_sdk_dynamodb::Client;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
+
+pub use aws_config as config;
+pub use aws_sdk_dynamodb as sdk;
 
 use crate::store::MessageStore;
 
@@ -34,6 +37,7 @@ impl DynamoMessageStore {
     async fn ensure_table(client: &Client, table_name: &String) -> Result<()> {
         if let Some(table_names) = client.list_tables().send().await?.table_names {
             if table_names.contains(table_name) {
+                info!("table {table_name} already exists, not creating it");
                 return Ok(());
             }
         };
@@ -58,6 +62,7 @@ impl DynamoMessageStore {
 
         if let Err(err) = client
             .create_table()
+            .billing_mode(BillingMode::PayPerRequest)
             .table_name(table_name)
             .key_schema(pk_schema)
             .attribute_definitions(pk)
@@ -77,6 +82,7 @@ impl DynamoMessageStore {
                 }
             }
         }
+        info!("created DynamoDB table {table_name}");
 
         Ok(())
     }
