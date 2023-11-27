@@ -53,10 +53,19 @@ impl CurrentSequence {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct StoredMessage {
+    #[serde(rename = "pk")]
+    sequence: String,
+    #[serde(rename = "sk")]
+    sequence_number: u64,
+    message: Vec<u8>,
+}
+
 pub struct DynamoMessageStore {
     client: Client,
     table_name: String,
-    sequence_meta: SequenceMeta,
+    current_sequence: SequenceMeta,
 }
 
 impl DynamoMessageStore {
@@ -66,7 +75,7 @@ impl DynamoMessageStore {
         let store = Self {
             client,
             table_name,
-            sequence_meta,
+            current_sequence: sequence_meta,
         };
         Ok(store)
     }
@@ -176,12 +185,37 @@ impl DynamoMessageStore {
 
         Ok(sequence_meta)
     }
+
+    async fn persist_sequence(&self) -> Result<()> {
+        let item = to_item(&self.current_sequence)?;
+        self.client
+            .put_item()
+            .table_name(&self.table_name)
+            .set_item(Some(item))
+            .send()
+            .await?;
+
+        Ok(())
+    }
 }
 
 #[async_trait]
 impl MessageStore for DynamoMessageStore {
-    async fn add(&mut self, _sequence_number: u64, _message: &[u8]) -> Result<()> {
-        todo!()
+    async fn add(&mut self, sequence_number: u64, message: &[u8]) -> Result<()> {
+        let stored_message = StoredMessage {
+            sequence: self.current_sequence.sequence.clone(),
+            sequence_number,
+            message: message.to_vec(),
+        };
+        let item = to_item(stored_message)?;
+        self.client
+            .put_item()
+            .table_name(&self.table_name)
+            .set_item(Some(item))
+            .send()
+            .await?;
+
+        Ok(())
     }
 
     async fn get_slice(&self, _begin: usize, _end: usize) -> Result<Vec<Vec<u8>>> {
@@ -189,27 +223,31 @@ impl MessageStore for DynamoMessageStore {
     }
 
     fn next_sender_seq_number(&self) -> u64 {
-        todo!()
+        self.current_sequence.sender_seq_number
     }
 
     fn next_target_seq_number(&self) -> u64 {
-        todo!()
+        self.current_sequence.target_seq_number
     }
 
     async fn increment_sender_seq_number(&mut self) -> Result<()> {
-        todo!()
+        // TODO: these increments could use an UpdateExpression
+        self.current_sequence.sender_seq_number += 1;
+        self.persist_sequence().await
     }
 
     async fn increment_target_seq_number(&mut self) -> Result<()> {
-        todo!()
+        self.current_sequence.target_seq_number += 1;
+        self.persist_sequence().await
     }
 
-    async fn set_target_seq_number(&mut self, _seq_number: u64) -> Result<()> {
-        todo!()
+    async fn set_target_seq_number(&mut self, seq_number: u64) -> Result<()> {
+        self.current_sequence.target_seq_number = seq_number;
+        self.persist_sequence().await
     }
 
     async fn reset(&mut self) -> Result<()> {
-        self.sequence_meta = Self::new_sequence(&self.client, &self.table_name).await?;
+        self.current_sequence = Self::new_sequence(&self.client, &self.table_name).await?;
 
         Ok(())
     }
