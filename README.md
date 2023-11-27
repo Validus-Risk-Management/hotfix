@@ -33,6 +33,7 @@ experimental code rather than good code at this stage.
 - [x] TLS support using `rustls`
 - [x] Basic message encoding and decoding (FIX 4.4)
 - [x] Persistent message stores
+  - [x] [dynamodb](https://aws.amazon.com/dynamodb/)
   - [x] [mongodb](https://www.mongodb.com/docs/drivers/rust/current/)
   - [x] [redb](https://www.redb.org/)
 - [x] Heartbeats, logon, reconnecting sessions

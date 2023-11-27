@@ -8,4 +8,4 @@ connection_port = 9880
 connection_host = "127.0.0.1"
 
 heartbeat_interval = 30
-reset_on_logon = false
+reset_on_logon = true
