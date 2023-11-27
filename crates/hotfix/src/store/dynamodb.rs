@@ -75,7 +75,7 @@ impl DynamoMessageStore {
         let is_new = Self::create_table(client, table_name).await?;
 
         let sequence = if is_new {
-            Self::initiate_sequence(client, table_name).await?
+            Self::new_sequence(client, table_name).await?
         } else {
             Self::get_current_meta(client, table_name).await?
         };
@@ -157,7 +157,7 @@ impl DynamoMessageStore {
         Ok(true)
     }
 
-    async fn initiate_sequence(client: &Client, table_name: &str) -> Result<SequenceMeta> {
+    async fn new_sequence(client: &Client, table_name: &str) -> Result<SequenceMeta> {
         let sequence_meta = SequenceMeta::new();
         let new_sequence = to_item(sequence_meta.clone())?;
         client
@@ -209,6 +209,8 @@ impl MessageStore for DynamoMessageStore {
     }
 
     async fn reset(&mut self) -> Result<()> {
-        todo!()
+        self.sequence_meta = Self::new_sequence(&self.client, &self.table_name).await?;
+
+        Ok(())
     }
 }
