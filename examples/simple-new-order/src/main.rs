@@ -122,7 +122,7 @@ async fn start_session(
 
     match db_config {
         Database::Dynamodb => {
-            std::env::set_var("AWS_REGION", "us-east-1");
+            std::env::set_var("AWS_REGION", "eu-west-1");
             std::env::set_var("AWS_ACCESS_KEY_ID", "AKIDLOCALSTACK");
             std::env::set_var("AWS_SECRET_ACCESS_KEY", "localstacksecret");
             let config =
