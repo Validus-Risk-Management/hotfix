@@ -168,7 +168,7 @@ impl<'a> FieldType<'a> for &'a str {
         B: Buffer,
     {
         buffer.extend_from_slice(self.as_bytes());
-        self.as_bytes().len()
+        self.len()
     }
 
     #[inline]

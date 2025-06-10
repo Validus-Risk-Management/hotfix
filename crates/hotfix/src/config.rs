@@ -87,7 +87,7 @@ reset_on_logon = false
         let config: Config = toml::from_str(config_contents).unwrap();
         assert_eq!(config.sessions.len(), 1);
 
-        let session_config = config.sessions.get(0).unwrap();
+        let session_config = config.sessions.first().unwrap();
         assert_eq!(session_config.begin_string, "FIX.4.4");
         assert_eq!(session_config.sender_comp_id, "send-comp-id");
         assert_eq!(session_config.target_comp_id, "target-comp-id");

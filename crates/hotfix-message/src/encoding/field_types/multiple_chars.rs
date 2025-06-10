@@ -39,14 +39,14 @@ impl<'a> Iterator for MultipleChars<'a> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let num_elements = (self.data.len() + 1) / 2;
+        let num_elements = self.data.len().div_ceil(2);
         (num_elements, Some(num_elements))
     }
 }
 
 impl<'a> ExactSizeIterator for MultipleChars<'a> {
     fn len(&self) -> usize {
-        (self.data.len() + 1) / 2
+        self.data.len().div_ceil(2)
     }
 }
 

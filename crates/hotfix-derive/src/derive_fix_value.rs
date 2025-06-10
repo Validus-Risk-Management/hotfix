@@ -12,7 +12,7 @@ pub fn derive_fix_value(input: TokenStream) -> TokenStream {
         .clone()
         .map_enum_variants(|enum_variant| {
             let enum_discriminant = enum_variant.variant.as_str();
-            let enum_discriminant_len = enum_variant.variant.as_bytes().len();
+            let enum_discriminant_len = enum_variant.variant.len();
             let enum_variant = enum_variant.ident;
             quote! {
                 Self::#enum_variant => {
