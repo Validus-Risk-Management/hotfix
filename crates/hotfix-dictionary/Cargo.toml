@@ -22,6 +22,9 @@ fix50sp1 = []
 fix50sp2 = []
 fixt11 = []
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(doc_cfg)'] }
+
 [dependencies]
 fnv = "1"
 quick-xml = "0.29"

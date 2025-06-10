@@ -246,7 +246,6 @@ impl Dictionary {
             Self::fix42(),
             #[cfg(feature = "fix43")]
             Self::fix43(),
-            #[cfg(feature = "fix44")]
             Self::fix44(),
             #[cfg(feature = "fix50")]
             Self::fix50(),
