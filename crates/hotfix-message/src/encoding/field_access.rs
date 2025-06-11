@@ -101,10 +101,10 @@ where
 /// [`FieldMap`] provides two kinds of methods:
 ///
 /// 1. Group getters: [`FieldMap::group`] and
-/// [`FieldMap::group_opt`].
+///    [`FieldMap::group_opt`].
 ///
 /// 2. Field getters: [`FieldMap::get_raw`], [`FieldMap::get`],
-/// etc..
+///    etc..
 ///
 /// The most basic form of field access is done via
 /// [`FieldMap::get_raw`], which performs no deserialization at all: it
@@ -115,14 +115,14 @@ where
 /// methods all have the `get_` prefix, with the following considerations:
 ///
 /// - `get_lossy` methods perform "lossy" deserialization via
-/// [`FieldType::deserialize_lossy`]. Unlike lossless deserialization, these
-/// methods may skip some error checking logic and thus prove to be faster.
-/// Memory-safety is still guaranteed, but malformed FIX fields won't be
-/// detected 100% of the time.
+///   [`FieldType::deserialize_lossy`]. Unlike lossless deserialization, these
+///   methods may skip some error checking logic and thus prove to be faster.
+///   Memory-safety is still guaranteed, but malformed FIX fields won't be
+///   detected 100% of the time.
 /// - `get_opt` methods work exactly like their non-`_opt` counterparties, but they
-/// have a different return type: instead of returning [`Err(None)`] for missing
-/// fields, these methods return [`None`] for missing fields and
-/// [`Some(Ok(field))`] for existing fields.
+///   have a different return type: instead of returning [`Err(None)`] for missing
+///   fields, these methods return [`None`] for missing fields and
+///   [`Some(Ok(field))`] for existing fields.
 ///
 /// # Type parameters
 ///

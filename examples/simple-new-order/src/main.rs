@@ -45,6 +45,7 @@ async fn main() {
         let logfile = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(p)
             .expect("log file to open successfully");
         let subscriber = tracing_subscriber::fmt::Subscriber::builder()
@@ -126,7 +127,7 @@ async fn start_session(
             std::env::set_var("AWS_ACCESS_KEY_ID", "AKIDLOCALSTACK");
             std::env::set_var("AWS_SECRET_ACCESS_KEY", "localstacksecret");
             let config =
-                dynamodb::config::load_defaults(dynamodb::config::BehaviorVersion::v2023_11_09())
+                dynamodb::config::load_defaults(dynamodb::config::BehaviorVersion::v2025_01_17())
                     .await;
             let local_config = dynamodb::sdk::config::Builder::from(&config)
                 .endpoint_url("http://localhost:8000")

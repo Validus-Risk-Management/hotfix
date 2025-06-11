@@ -7,6 +7,7 @@ use crate::message::FixMessage;
 use crate::session::SessionRef;
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct ReaderMessage;
 
 pub struct ReaderRef {

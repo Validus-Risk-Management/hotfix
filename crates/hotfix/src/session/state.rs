@@ -15,6 +15,7 @@ pub enum SessionState {
     /// The peer has logged us out.
     LoggedOut { reconnect: bool },
     /// The TCP connection has been dropped.
+    #[allow(dead_code)]
     Disconnected { reconnect: bool, reason: String },
 }
 
