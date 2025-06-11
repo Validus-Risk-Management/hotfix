@@ -128,6 +128,7 @@ where
 ///
 /// This trait is generic over a type `F`, which must univocally identify FIX
 /// fields (besides FIX repeating groups, which allow repetitions).
+#[allow(dead_code)]
 pub trait FieldMap<F> {
     /// The type returned by [`FieldMap::group`] and
     /// [`FieldMap::group_opt`].
@@ -203,14 +204,13 @@ pub trait RepeatingGroup: Sized {
     /// Returns the number of FIX group entries in `self`.
     fn len(&self) -> usize;
 
-    fn is_empty(&self) -> bool;
-
     /// Returns the `i` -th entry in `self`, if present.
     fn get(&self, i: usize) -> Option<Self::Entry>;
 
     /// Creates and returns an [`Iterator`] over the entries in `self`.
     /// Iteration MUST be done in sequential order, i.e. in which they appear in
     /// the original FIX message.
+    #[allow(dead_code)]
     fn entries(&self) -> GroupEntries<Self> {
         GroupEntries {
             group: self,
