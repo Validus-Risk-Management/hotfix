@@ -8,11 +8,11 @@ pub(crate) mod parts;
 
 pub use encoding::field_access::FieldType;
 pub use encoding::field_types;
-pub use encoding::fix44;
 #[cfg(feature = "fix42")]
 pub use encoding::fix42;
-use encoding::{Buffer, BufferWriter};
+pub use encoding::fix44;
 pub use encoding::HardCodedFixFieldDefinition;
+use encoding::{Buffer, BufferWriter};
 pub use hotfix_derive::FieldType;
 pub use hotfix_dictionary::{self as dict, TagU32};
 pub use parts::{Part, RepeatingGroup};

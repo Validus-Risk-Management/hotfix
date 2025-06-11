@@ -159,6 +159,9 @@ impl<'a> FieldType<'a> for chrono::DateTime<chrono::FixedOffset> {
         }
         let utc_naive_datetime = NaiveDateTime::deserialize(&data[..17])?;
         let tz = chrono::FixedOffset::deserialize(&data[17..])?;
-        Ok(DateTime::<chrono::Utc>::from_naive_utc_and_offset(utc_naive_datetime, chrono::Utc).with_timezone(&tz))
+        Ok(
+            DateTime::<chrono::Utc>::from_naive_utc_and_offset(utc_naive_datetime, chrono::Utc)
+                .with_timezone(&tz),
+        )
     }
 }
