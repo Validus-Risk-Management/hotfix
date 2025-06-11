@@ -15,6 +15,9 @@ categories.workspace = true
 name = "hotfix_derive"
 proc-macro = true
 
+[lints]
+workspace = true
+
 [dependencies]
 darling = "0.12"
 proc-macro-crate = "1"

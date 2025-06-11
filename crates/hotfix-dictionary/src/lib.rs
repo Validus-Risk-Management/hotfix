@@ -451,6 +451,7 @@ struct AbbreviationData {
 /// pattern, or name. Abbreviation data is mostly meant for documentation
 /// purposes, but in general it can have other uses as well, e.g. FIXML field
 /// naming.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Abbreviation<'a>(&'a Dictionary, &'a AbbreviationData);
 
@@ -470,6 +471,7 @@ struct CategoryData {
 /// A [`Category`] is a collection of loosely related FIX messages or components
 /// all belonging to the same [`Section`].
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct Category<'a>(&'a Dictionary, &'a CategoryData);
 
 #[derive(Clone, Debug)]
@@ -569,6 +571,7 @@ struct DatatypeData {
 
 /// A FIX data type defined as part of a [`Dictionary`].
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Datatype<'a>(&'a Dictionary, &'a DatatypeData);
 
 impl<'a> Datatype<'a> {
@@ -1007,6 +1010,7 @@ struct FieldEnumData {
 /// A limitation imposed on the value of a specific FIX [`Field`].  Also known as
 /// "code set".
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct FieldEnum<'a>(&'a Dictionary, &'a FieldEnumData);
 
 impl<'a> FieldEnum<'a> {

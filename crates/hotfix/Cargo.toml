@@ -16,6 +16,9 @@ redb = ["dep:redb"]
 mongodb = ["dep:mongodb"]
 dynamodb = ["dep:aws-config", "dep:aws-sdk-dynamodb", "dep:serde_dynamo"]
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
 aws-config = { version = "1", optional = true }

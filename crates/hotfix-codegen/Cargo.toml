@@ -11,6 +11,9 @@ repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 chrono = "0.4"
 hotfix-dictionary = { version = "0.0.21", path = "../hotfix-dictionary" }

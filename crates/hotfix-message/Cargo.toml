@@ -13,6 +13,10 @@ categories.workspace = true
 
 [features]
 fix42 = ["hotfix-dictionary/fix42"]
+utils-chrono = []
+
+[lints]
+workspace = true
 
 [dependencies]
 chrono = "0.4"

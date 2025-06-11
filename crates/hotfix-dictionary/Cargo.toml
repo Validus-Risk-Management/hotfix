@@ -22,8 +22,8 @@ fix50sp1 = []
 fix50sp2 = []
 fixt11 = []
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(doc_cfg)'] }
+[lints]
+workspace = true
 
 [dependencies]
 fnv = "1"

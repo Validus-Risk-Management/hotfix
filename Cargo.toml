@@ -22,3 +22,6 @@ serde = "^1.0.177"
 thiserror = "1"
 toml = "^0.8.8"
 tracing = "^0.1.37"
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(doc_cfg)'] }
