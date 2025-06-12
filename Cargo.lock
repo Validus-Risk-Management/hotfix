@@ -1439,7 +1439,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix"
-version = "0.0.21"
+version = "0.0.22"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1466,7 +1466,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-codegen"
-version = "0.0.21"
+version = "0.0.22"
 dependencies = [
  "arbitrary",
  "chrono",
@@ -1487,7 +1487,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-derive"
-version = "0.0.21"
+version = "0.0.22"
 dependencies = [
  "darling 0.12.4",
  "proc-macro-crate",
@@ -1498,7 +1498,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-dictionary"
-version = "0.0.21"
+version = "0.0.22"
 dependencies = [
  "arbitrary",
  "criterion",
@@ -1518,7 +1518,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-message"
-version = "0.0.21"
+version = "0.0.22"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2986,7 +2986,7 @@ dependencies = [
 
 [[package]]
 name = "simple-new-order"
-version = "0.0.21"
+version = "0.0.22"
 dependencies = [
  "async-trait",
  "clap",
@@ -3620,7 +3620,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utils"
-version = "0.0.21"
+version = "0.0.22"
 dependencies = [
  "anyhow",
  "clap",
