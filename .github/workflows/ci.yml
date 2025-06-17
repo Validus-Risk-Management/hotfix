@@ -1,18 +1,30 @@
-name: coverage.yml
+name: CI
+
 on:
-  push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
+  code-quality-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build
+        run: cargo build --verbose
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -Dclippy::all -D warnings
+      - name: Run tests
+        run: cargo test --verbose
+
   coverage:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
       - name: Install Tarpaulin
         run: cargo install cargo-tarpaulin
       - name: Generate code coverage
