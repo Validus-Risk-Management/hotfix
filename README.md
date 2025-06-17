@@ -4,7 +4,7 @@
 
 **An experimental FIX engine written in Rust.**
 
-[![CI](https://github.com/Validus-Risk-Management/hotfix/actions/workflows/test.yml/badge.svg)](https://github.com/Validus-Risk-Management/hotfix/actions/workflows/test.yml)
+[![CI](https://github.com/Validus-Risk-Management/hotfix/actions/workflows/ci.yml/badge.svg)](https://github.com/Validus-Risk-Management/hotfix/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/Validus-Risk-Management/hotfix/graph/badge.svg?token=OE58PBL0N6)](https://codecov.io/gh/Validus-Risk-Management/hotfix)
 [![crates-badge]](https://crates.io/crates/hotfix)
 [![docs-badge]](https://docs.rs/hotfix)
