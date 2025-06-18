@@ -116,11 +116,12 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         let peer_timer = sleep(Duration::from_secs(
             (config.heartbeat_interval as f64 * TEST_REQUEST_THRESHOLD).round() as u64,
         ));
+        let dictionary = Self::get_data_dictionary(&config);
         Self {
             mailbox,
             config,
             message_config: MessageConfig::default(),
-            dictionary: Dictionary::fix44(),
+            dictionary,
             state: SessionState::Disconnected {
                 reconnect: true,
                 reason: "initialising".to_string(),
@@ -130,6 +131,20 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             heartbeat_timer: Box::pin(heartbeat_timer),
             peer_timer: Box::pin(peer_timer),
             awaiting_test_response: None,
+        }
+    }
+
+    fn get_data_dictionary(config: &SessionConfig) -> Dictionary {
+        match &config.data_dictionary_path {
+            None => {
+                match config.begin_string.as_str() {
+                    "FIX.4.4" => Dictionary::fix44(),
+                    _ => panic!("unsupported begin string: {}", config.begin_string),
+                }
+            }
+            Some(dictionary_path) => {
+                Dictionary::load_from_file(&dictionary_path).unwrap()
+            }
         }
     }
 

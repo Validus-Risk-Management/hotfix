@@ -1500,20 +1500,11 @@ dependencies = [
 name = "hotfix-dictionary"
 version = "0.0.22"
 dependencies = [
- "arbitrary",
- "criterion",
- "enum-as-inner 0.6.1",
  "fnv",
- "quick-xml",
- "quickcheck",
- "quickcheck_derive",
- "quickcheck_macros",
  "roxmltree",
  "smartstring",
  "strum 0.25.0",
  "strum_macros",
- "syn 1.0.109",
- "tokio",
 ]
 
 [[package]]

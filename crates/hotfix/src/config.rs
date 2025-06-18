@@ -43,8 +43,8 @@ pub struct SessionConfig {
     pub sender_comp_id: String,
     /// The target's comp ID.
     pub target_comp_id: String,
-    /// The path to the data dictionary to use (currently unused).
-    pub data_dictionary_path: String,
+    /// The path to the data dictionary to use.
+    pub data_dictionary_path: Option<String>,
     /// The host to connect to.
     ///
     /// This can be any representation of a host that can be interpreted
@@ -66,6 +66,7 @@ pub struct SessionConfig {
 
 #[cfg(test)]
 mod tests {
+    use hotfix_message::FieldType;
     use crate::config::{Config, TlsConfig};
 
     #[test]
@@ -91,7 +92,7 @@ reset_on_logon = false
         assert_eq!(session_config.begin_string, "FIX.4.4");
         assert_eq!(session_config.sender_comp_id, "send-comp-id");
         assert_eq!(session_config.target_comp_id, "target-comp-id");
-        assert_eq!(session_config.data_dictionary_path, "./spec/FIX44.xml");
+        assert_eq!(session_config.data_dictionary_path, Some("./spec/FIX44.xml".to_string()));
         assert_eq!(session_config.connection_port, 443);
         assert_eq!(session_config.connection_host, "127.0.0.1");
         assert_eq!(session_config.heartbeat_interval, 30);
