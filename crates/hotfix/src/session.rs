@@ -136,15 +136,11 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     fn get_data_dictionary(config: &SessionConfig) -> Dictionary {
         match &config.data_dictionary_path {
-            None => {
-                match config.begin_string.as_str() {
-                    "FIX.4.4" => Dictionary::fix44(),
-                    _ => panic!("unsupported begin string: {}", config.begin_string),
-                }
-            }
-            Some(dictionary_path) => {
-                Dictionary::load_from_file(&dictionary_path).unwrap()
-            }
+            None => match config.begin_string.as_str() {
+                "FIX.4.4" => Dictionary::fix44(),
+                _ => panic!("unsupported begin string: {}", config.begin_string),
+            },
+            Some(dictionary_path) => Dictionary::load_from_file(dictionary_path).unwrap(),
         }
     }
 

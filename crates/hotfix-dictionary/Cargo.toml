@@ -27,7 +27,7 @@ workspace = true
 
 [dependencies]
 fnv = "1"
-roxmltree = "0.14"
+roxmltree = "0.20"
 smartstring = "1"
-strum = "0.25"
-strum_macros = "0.25"
+strum = "0.27"
+strum_macros = "0.27"

@@ -1,5 +1,5 @@
 use super::{Tz, ERR_TIME, ERR_UTF8};
-use crate::{Buffer, BufferWriter, FieldType};
+use crate::encoding::{Buffer, BufferWriter, FieldType};
 use chrono::{DateTime, NaiveDateTime, Timelike};
 use std::fmt::Write;
 

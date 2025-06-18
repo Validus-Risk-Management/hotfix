@@ -1480,7 +1480,7 @@ dependencies = [
  "quickcheck_derive",
  "quickcheck_macros",
  "strum 0.25.0",
- "strum_macros",
+ "strum_macros 0.25.3",
  "syn 1.0.109",
  "tokio",
 ]
@@ -1501,10 +1501,10 @@ name = "hotfix-dictionary"
 version = "0.0.22"
 dependencies = [
  "fnv",
- "roxmltree",
+ "roxmltree 0.20.0",
  "smartstring",
- "strum 0.25.0",
- "strum_macros",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
 ]
 
 [[package]]
@@ -1526,10 +1526,10 @@ dependencies = [
  "quickcheck_derive",
  "quickcheck_macros",
  "rayon",
- "roxmltree",
+ "roxmltree 0.14.1",
  "serde",
  "strum 0.24.1",
- "strum_macros",
+ "strum_macros 0.25.3",
  "thiserror",
  "tracing",
 ]
@@ -2584,6 +2584,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "roxmltree"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3082,12 +3088,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "290d54ea6f91c969195bdbcd7442c8c2a2ba87da8bf60a7ee86a235d4bc1e125"
 
 [[package]]
+name = "strum"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f64def088c51c9510a8579e3c5d67c65349dcf755e5479ad3d010aa6454e2c32"
+
+[[package]]
 name = "strum_macros"
 version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23dc1fa9ac9c169a78ba62f0b841814b7abae11bdd047b9c58f893439e309ea0"
 dependencies = [
  "heck 0.4.1",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.102",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c77a8c5abcaf0f9ce05d62342b7d298c346515365c36b673df4ebe3ced01fde8"
+dependencies = [
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "rustversion",

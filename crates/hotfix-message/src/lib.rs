@@ -11,8 +11,8 @@ pub use encoding::field_types;
 #[cfg(feature = "fix42")]
 pub use encoding::fix42;
 pub use encoding::fix44;
+use encoding::Buffer;
 pub use encoding::HardCodedFixFieldDefinition;
-use encoding::{Buffer, BufferWriter};
 pub use hotfix_derive::FieldType;
 pub use hotfix_dictionary::{self as dict, TagU32};
 pub use parts::{Part, RepeatingGroup};
