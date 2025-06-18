@@ -162,7 +162,7 @@ impl Dictionary {
     pub fn version(&self) -> &str {
         self.version.as_str()
     }
-    
+
     pub fn load_from_file(path: &str) -> Result<Self, ParseDictionaryError> {
         let spec = std::fs::read_to_string(path).unwrap();
         Dictionary::from_quickfix_spec(&spec)
