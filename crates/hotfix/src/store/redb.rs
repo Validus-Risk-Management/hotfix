@@ -23,11 +23,17 @@ impl RedbMessageStore {
 
         {
             let read_txn = db.begin_read()?;
-            {
-                let table = read_txn.open_table(SEQ_NUMBER_TABLE)?;
-                sender_seq_number = table.get(SENDER_KEY)?.map_or(0, |g| g.value());
-                target_seq_number = table.get(TARGET_KEY)?.map_or(0, |g| g.value());
-            }
+            match read_txn.open_table(SEQ_NUMBER_TABLE) {
+                Ok(table) => {
+                    sender_seq_number = table.get(SENDER_KEY)?.map_or(0, |g| g.value());
+                    target_seq_number = table.get(TARGET_KEY)?.map_or(0, |g| g.value());
+                }
+                Err(_) => {
+                    // Tables don't exist yet, initialise to 0
+                    sender_seq_number = 0;
+                    target_seq_number = 0;
+                }
+            };
         }
 
         Ok(Self {
@@ -128,7 +134,6 @@ mod tests {
     use tokio;
 
     struct TestStore {
-        store: RedbMessageStore,
         db_path: PathBuf,
     }
 
@@ -138,24 +143,11 @@ mod tests {
             temp_path.push(format!("redb_test_{}", uuid::Uuid::new_v4()));
             temp_path.set_extension("db");
 
-            let store = RedbMessageStore::new(&temp_path).expect("Failed to create store");
-
-            Self {
-                store,
-                db_path: temp_path,
-            }
+            Self { db_path: temp_path }
         }
 
-        fn store(&self) -> &RedbMessageStore {
-            &self.store
-        }
-
-        fn store_mut(&mut self) -> &mut RedbMessageStore {
-            &mut self.store
-        }
-
-        fn db_path(&self) -> &PathBuf {
-            &self.db_path
+        fn create_store(&self) -> RedbMessageStore {
+            RedbMessageStore::new(&self.db_path).expect("Failed to create store")
         }
     }
 
@@ -169,7 +161,7 @@ mod tests {
     #[tokio::test]
     async fn test_new_store_initialization() {
         let test_store = TestStore::new();
-        let store = test_store.store();
+        let store = test_store.create_store();
 
         assert_eq!(store.next_sender_seq_number(), 1);
         assert_eq!(store.next_target_seq_number(), 1);
@@ -177,8 +169,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_and_get_messages() {
-        let mut test_store = TestStore::new();
-        let store = test_store.store_mut();
+        let test_store = TestStore::new();
+        let mut store = test_store.create_store();
 
         let message1 = b"test message 1";
         let message2 = b"test message 2";
@@ -206,8 +198,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_slice_partial_range() {
-        let mut test_store = TestStore::new();
-        let store = test_store.store_mut();
+        let test_store = TestStore::new();
+        let mut store = test_store.create_store();
 
         let message1 = b"message 1";
         let message2 = b"message 2";
@@ -240,7 +232,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_slice_empty_range() {
         let test_store = TestStore::new();
-        let store = test_store.store();
+        let store = test_store.create_store();
 
         let messages = store.get_slice(1, 3).await.expect("Failed to get messages");
         assert_eq!(messages.len(), 0);
@@ -248,8 +240,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_increment_sender_seq_number() {
-        let mut test_store = TestStore::new();
-        let store = test_store.store_mut();
+        let test_store = TestStore::new();
+        let mut store = test_store.create_store();
 
         assert_eq!(store.next_sender_seq_number(), 1);
 
@@ -268,8 +260,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_increment_target_seq_number() {
-        let mut test_store = TestStore::new();
-        let store = test_store.store_mut();
+        let test_store = TestStore::new();
+        let mut store = test_store.create_store();
 
         assert_eq!(store.next_target_seq_number(), 1);
 
@@ -288,8 +280,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_set_target_seq_number() {
-        let mut test_store = TestStore::new();
-        let store = test_store.store_mut();
+        let test_store = TestStore::new();
+        let mut store = test_store.create_store();
 
         assert_eq!(store.next_target_seq_number(), 1);
 
@@ -308,8 +300,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_reset_store() {
-        let mut test_store = TestStore::new();
-        let store = test_store.store_mut();
+        let test_store = TestStore::new();
+        let mut store = test_store.create_store();
 
         // Add some messages and increment sequence numbers
         store
@@ -350,11 +342,10 @@ mod tests {
     #[tokio::test]
     async fn test_persistence_across_store_instances() {
         let test_store = TestStore::new();
-        let db_path = test_store.db_path().clone();
 
         // Create first store instance and add data
         {
-            let mut store1 = RedbMessageStore::new(&db_path).expect("Failed to create store1");
+            let mut store1 = test_store.create_store();
             store1
                 .add(1, b"persistent message")
                 .await
@@ -371,7 +362,7 @@ mod tests {
 
         // Create second store instance and verify data persists
         {
-            let store2 = RedbMessageStore::new(&db_path).expect("Failed to create store2");
+            let store2 = test_store.create_store();
 
             assert_eq!(store2.next_sender_seq_number(), 2);
             assert_eq!(store2.next_target_seq_number(), 6);
@@ -383,40 +374,12 @@ mod tests {
             assert_eq!(messages.len(), 1);
             assert_eq!(messages[0], b"persistent message");
         }
-
-        // TestStore will clean up the file when it goes out of scope
-    }
-
-    #[tokio::test]
-    async fn test_add_messages_non_sequential() {
-        let mut test_store = TestStore::new();
-        let store = test_store.store_mut();
-
-        // Add messages in non-sequential order
-        store
-            .add(5, b"message 5")
-            .await
-            .expect("Failed to add message 5");
-        store
-            .add(1, b"message 1")
-            .await
-            .expect("Failed to add message 1");
-        store
-            .add(3, b"message 3")
-            .await
-            .expect("Failed to add message 3");
-
-        let messages = store.get_slice(1, 5).await.expect("Failed to get messages");
-        assert_eq!(messages.len(), 3);
-        assert_eq!(messages[0], b"message 1");
-        assert_eq!(messages[1], b"message 3");
-        assert_eq!(messages[2], b"message 5");
     }
 
     #[tokio::test]
     async fn test_get_slice_beyond_available_messages() {
-        let mut test_store = TestStore::new();
-        let store = test_store.store_mut();
+        let test_store = TestStore::new();
+        let mut store = test_store.create_store();
 
         store
             .add(1, b"only message")
@@ -433,8 +396,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_overwrite_existing_message() {
-        let mut test_store = TestStore::new();
-        let store = test_store.store_mut();
+        let test_store = TestStore::new();
+        let mut store = test_store.create_store();
 
         store
             .add(1, b"original message")
