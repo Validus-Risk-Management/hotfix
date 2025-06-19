@@ -6,6 +6,8 @@ use crate::store::MessageStore;
 
 const MESSAGES_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("messages");
 const SEQ_NUMBER_TABLE: TableDefinition<&str, u64> = TableDefinition::new("seq_numbers");
+const SENDER_KEY: &str = "sender";
+const TARGET_KEY: &str = "target";
 
 pub struct RedbMessageStore {
     db: Database,
@@ -16,11 +18,22 @@ pub struct RedbMessageStore {
 impl RedbMessageStore {
     pub fn new(path: impl AsRef<Path>) -> Result<Self> {
         let db = Database::create(path)?;
+        let sender_seq_number;
+        let target_seq_number;
+
+        {
+            let read_txn = db.begin_read()?;
+            {
+                let table = read_txn.open_table(SEQ_NUMBER_TABLE)?;
+                sender_seq_number = table.get(SENDER_KEY)?.map_or(0, |g| g.value());
+                target_seq_number = table.get(TARGET_KEY)?.map_or(0, |g| g.value());
+            }
+        }
 
         Ok(Self {
             db,
-            sender_seq_number: 0,
-            target_seq_number: 0,
+            sender_seq_number,
+            target_seq_number,
         })
     }
 }
@@ -62,7 +75,7 @@ impl MessageStore for RedbMessageStore {
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(SEQ_NUMBER_TABLE)?;
-            table.insert("sender", self.sender_seq_number)?;
+            table.insert(SENDER_KEY, self.sender_seq_number)?;
         }
         write_txn.commit()?;
         Ok(())
@@ -73,7 +86,7 @@ impl MessageStore for RedbMessageStore {
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(SEQ_NUMBER_TABLE)?;
-            table.insert("target", self.target_seq_number)?;
+            table.insert(TARGET_KEY, self.target_seq_number)?;
         }
         write_txn.commit()?;
         Ok(())
@@ -84,7 +97,7 @@ impl MessageStore for RedbMessageStore {
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(SEQ_NUMBER_TABLE)?;
-            table.insert("target", seq_number)?;
+            table.insert(TARGET_KEY, seq_number)?;
         }
         write_txn.commit()?;
         Ok(())
@@ -96,8 +109,8 @@ impl MessageStore for RedbMessageStore {
         let write_txn = self.db.begin_write()?;
         {
             let mut seq_no_table = write_txn.open_table(SEQ_NUMBER_TABLE)?;
-            seq_no_table.insert("sender", self.sender_seq_number)?;
-            seq_no_table.insert("target", self.target_seq_number)?;
+            seq_no_table.insert(SENDER_KEY, self.sender_seq_number)?;
+            seq_no_table.insert(TARGET_KEY, self.target_seq_number)?;
             let mut messages_table = write_txn.open_table(MESSAGES_TABLE)?;
             messages_table.drain::<u64>(..)?;
         }
