@@ -1,5 +1,5 @@
 use anyhow::Result;
-use redb::{Database, ReadableTable, TableDefinition};
+use redb::{Database, ReadableTable, TableDefinition, TableError};
 use std::path::Path;
 
 use crate::store::MessageStore;
@@ -28,10 +28,13 @@ impl RedbMessageStore {
                     sender_seq_number = table.get(SENDER_KEY)?.map_or(0, |g| g.value());
                     target_seq_number = table.get(TARGET_KEY)?.map_or(0, |g| g.value());
                 }
-                Err(_) => {
+                Err(TableError::TableDoesNotExist(_)) => {
                     // Tables don't exist yet, initialise to 0
                     sender_seq_number = 0;
                     target_seq_number = 0;
+                }
+                Err(err) => {
+                    return Err(err.into());
                 }
             };
         }
@@ -59,12 +62,18 @@ impl MessageStore for RedbMessageStore {
     async fn get_slice(&self, begin: usize, end: usize) -> Result<Vec<Vec<u8>>> {
         let read_txn = self.db.begin_read()?;
         {
-            let table = read_txn.open_table(MESSAGES_TABLE)?;
-            let messages: std::result::Result<Vec<Vec<u8>>, redb::StorageError> = table
-                .range(begin as u64..=end as u64)?
-                .map(|m| m.map(|v| v.1.value().to_vec()))
-                .collect();
-            Ok(messages?)
+            let res = match read_txn.open_table(MESSAGES_TABLE) {
+                Ok(table) => {
+                    let messages: std::result::Result<Vec<Vec<u8>>, redb::StorageError> = table
+                        .range(begin as u64..=end as u64)?
+                        .map(|m| m.map(|v| v.1.value().to_vec()))
+                        .collect();
+                    Ok(messages?)
+                }
+                Err(TableError::TableDoesNotExist(_)) => Ok(vec![]),
+                Err(err) => Err(err.into()),
+            };
+            res
         }
     }
 
