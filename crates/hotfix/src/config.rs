@@ -5,6 +5,7 @@
 //! config file. See the
 //! [example project's config file](https://github.com/Validus-Risk-Management/hotfix/blob/main/examples/simple-new-order/config/test-config.toml)
 //! for more detail.
+use chrono::{NaiveTime, Weekday};
 use serde::Deserialize;
 use std::fs;
 use std::path::Path;
@@ -28,6 +29,17 @@ impl Config {
 pub struct TlsConfig {
     /// The path to the CA certificate.
     pub ca_certificate_path: String,
+}
+
+/// Session schedule configuration
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct ScheduleConfig {
+    pub start_time: Option<NaiveTime>,
+    pub end_time: Option<NaiveTime>,
+    pub start_day: Option<Weekday>,
+    pub end_day: Option<Weekday>,
+    #[serde(default)]
+    pub weekdays: Vec<Weekday>,
 }
 
 fn default_reconnect_interval() -> u64 {
@@ -61,12 +73,16 @@ pub struct SessionConfig {
     /// The interval we should attempt to reconnect at in seconds.
     pub reconnect_interval: u64,
     /// Specifies whether we should reset the state of the message store on logon.
+    #[serde(default)]
     pub reset_on_logon: bool,
+    /// The schedule configuration for the session
+    pub schedule: Option<ScheduleConfig>,
 }
 
 #[cfg(test)]
 mod tests {
     use crate::config::{Config, TlsConfig};
+    use chrono::{NaiveTime, Weekday};
 
     #[test]
     fn test_simple_config() {
@@ -103,5 +119,78 @@ reset_on_logon = false
         };
         assert_eq!(session_config.tls_config, Some(expected_tls_config));
         assert_eq!(session_config.reconnect_interval, 30);
+    }
+
+    #[test]
+    fn test_schedule_config_weekdays() {
+        let config_contents = r#"
+[[sessions]]
+begin_string = "FIX.4.4"
+sender_comp_id = "send-comp-id"
+target_comp_id = "target-comp-id"
+heartbeat_interval = 30
+
+connection_port = 443
+connection_host = "127.0.0.1"
+
+[sessions.schedule]
+start_time = "00:00:00"
+end_time = "23:55:00"
+weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+        "#;
+
+        let config: Config = toml::from_str(config_contents).unwrap();
+        assert_eq!(config.sessions.len(), 1);
+        let session = config.sessions.first().unwrap();
+
+        assert_eq!(session.schedule.is_some(), true);
+        let schedule = session.schedule.as_ref().unwrap();
+
+        assert_eq!(schedule.start_time, NaiveTime::from_hms_opt(0, 0, 0));
+        assert_eq!(schedule.end_time, NaiveTime::from_hms_opt(23, 55, 0));
+        assert_eq!(
+            schedule.weekdays,
+            vec![
+                Weekday::Mon,
+                Weekday::Tue,
+                Weekday::Wed,
+                Weekday::Thu,
+                Weekday::Fri
+            ]
+        );
+        assert_eq!(schedule.start_day, None);
+        assert_eq!(schedule.end_day, None);
+    }
+
+    #[test]
+    fn test_schedule_config_weeklong_session() {
+        let config_contents = r#"
+[[sessions]]
+begin_string = "FIX.4.4"
+sender_comp_id = "send-comp-id"
+target_comp_id = "target-comp-id"
+heartbeat_interval = 30
+
+connection_port = 443
+connection_host = "127.0.0.1"
+
+[sessions.schedule]
+start_time = "00:00:00"
+end_time = "23:55:00"
+start_day = "Monday"
+end_day = "Friday"
+        "#;
+
+        let config: Config = toml::from_str(config_contents).unwrap();
+        assert_eq!(config.sessions.len(), 1);
+        let session = config.sessions.first().unwrap();
+
+        assert_eq!(session.schedule.is_some(), true);
+        let schedule = session.schedule.as_ref().unwrap();
+
+        assert_eq!(schedule.start_time, NaiveTime::from_hms_opt(0, 0, 0));
+        assert_eq!(schedule.end_time, NaiveTime::from_hms_opt(23, 55, 0));
+        assert_eq!(schedule.start_day, Some(Weekday::Mon));
+        assert_eq!(schedule.end_day, Some(Weekday::Fri));
     }
 }
