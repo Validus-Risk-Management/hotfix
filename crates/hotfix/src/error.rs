@@ -19,3 +19,9 @@ pub enum MessageVerificationError {
     #[error("incorrect comp id {0}")]
     IncorrectCompId(String),
 }
+
+#[derive(Debug, Error)]
+pub enum SessionError {
+    #[error("Schedule configuration is invalid: {0}")]
+    InvalidSchedule(String),
+}

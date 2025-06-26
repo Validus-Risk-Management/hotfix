@@ -143,7 +143,7 @@ weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
         assert_eq!(config.sessions.len(), 1);
         let session = config.sessions.first().unwrap();
 
-        assert_eq!(session.schedule.is_some(), true);
+        assert!(session.schedule.is_some());
         let schedule = session.schedule.as_ref().unwrap();
 
         assert_eq!(schedule.start_time, NaiveTime::from_hms_opt(0, 0, 0));
@@ -185,7 +185,7 @@ end_day = "Friday"
         assert_eq!(config.sessions.len(), 1);
         let session = config.sessions.first().unwrap();
 
-        assert_eq!(session.schedule.is_some(), true);
+        assert!(session.schedule.is_some());
         let schedule = session.schedule.as_ref().unwrap();
 
         assert_eq!(schedule.start_time, NaiveTime::from_hms_opt(0, 0, 0));
