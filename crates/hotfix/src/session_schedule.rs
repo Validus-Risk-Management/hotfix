@@ -35,8 +35,11 @@ impl SessionSchedule {
             SessionSchedule::Daily {
                 start_time,
                 end_time,
-                timezone: _,
-            } => Self::check_daily_schedule(datetime, start_time, end_time),
+                timezone,
+            } => {
+                let adjusted_datetime = datetime.with_timezone(timezone);
+                Self::check_daily_schedule(&adjusted_datetime, start_time, end_time)
+            }
             SessionSchedule::Weekdays {
                 weekdays,
                 start_time,
@@ -48,14 +51,14 @@ impl SessionSchedule {
     }
 
     fn check_daily_schedule(
-        datetime: &DateTime<Utc>,
+        datetime: &DateTime<Tz>,
         start_time: &NaiveTime,
         end_time: &NaiveTime,
     ) -> bool {
         if start_time < end_time {
-            &datetime.time() >= start_time && &datetime.time() <= end_time
+            &datetime.time() >= start_time && &datetime.time() < end_time
         } else {
-            &datetime.time() >= start_time || &datetime.time() <= end_time
+            &datetime.time() >= start_time || &datetime.time() < end_time
         }
     }
 
@@ -183,6 +186,216 @@ impl TryFrom<ScheduleConfig> for SessionSchedule {
 mod tests {
     use super::*;
     use chrono::{NaiveTime, Weekday};
+
+    #[test]
+    fn test_active_at_non_stop_schedule() {
+        // non-stop schedules are always active
+        let schedule = SessionSchedule::NonStop;
+        assert!(schedule.is_active_at(&Utc::now()))
+    }
+
+    #[test]
+    fn test_active_at_daily_schedule_utc() {
+        let schedule = SessionSchedule::Daily {
+            start_time: NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+            end_time: NaiveTime::from_hms_opt(17, 0, 0).unwrap(),
+            timezone: Tz::UTC,
+        };
+
+        // just before start time (8:59:59)
+        let before_start = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+                .unwrap()
+                .and_hms_opt(8, 59, 59)
+                .unwrap(),
+            Utc,
+        );
+        assert!(!schedule.is_active_at(&before_start));
+
+        // just after start time (9:00:01)
+        let after_start = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+                .unwrap()
+                .and_hms_opt(9, 0, 1)
+                .unwrap(),
+            Utc,
+        );
+        assert!(schedule.is_active_at(&after_start));
+
+        // in the middle (13:00:00)
+        let middle = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+                .unwrap()
+                .and_hms_opt(13, 0, 0)
+                .unwrap(),
+            Utc,
+        );
+        assert!(schedule.is_active_at(&middle));
+
+        // just before end time (16:59:59)
+        let before_end = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+                .unwrap()
+                .and_hms_opt(16, 59, 59)
+                .unwrap(),
+            Utc,
+        );
+        assert!(schedule.is_active_at(&before_end));
+
+        // at end time (17:00:00) - we expect false at exactly the end time (non-inclusive)
+        let at_end = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+                .unwrap()
+                .and_hms_opt(17, 0, 0)
+                .unwrap(),
+            Utc,
+        );
+        assert!(!schedule.is_active_at(&at_end));
+
+        // after end time (17:00:01)
+        let after_end = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+                .unwrap()
+                .and_hms_opt(17, 0, 1)
+                .unwrap(),
+            Utc,
+        );
+        assert!(!schedule.is_active_at(&after_end));
+    }
+
+    #[test]
+    fn test_active_at_daily_schedule_london() {
+        // we'll use 27/06/2025 as the date
+        // London is an hour ahead of UTC
+        let schedule = SessionSchedule::Daily {
+            start_time: NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+            end_time: NaiveTime::from_hms_opt(17, 0, 0).unwrap(),
+            timezone: Tz::Europe__London,
+        };
+
+        let before_start = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+                .unwrap()
+                .and_hms_opt(7, 59, 59)
+                .unwrap(),
+            Utc,
+        );
+        assert!(!schedule.is_active_at(&before_start));
+
+        // 8AM UTC is 9AM London time, so already in session
+        let at_start = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+                .unwrap()
+                .and_hms_opt(8, 0, 0)
+                .unwrap(),
+            Utc,
+        );
+        assert!(schedule.is_active_at(&at_start));
+
+        // 4PM UTC is 5PM London time, so already out of session
+        let at_end = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+                .unwrap()
+                .and_hms_opt(16, 0, 0)
+                .unwrap(),
+            Utc,
+        );
+        assert!(!schedule.is_active_at(&at_end));
+    }
+
+    #[test]
+    fn test_active_at_daily_schedule_london_end_before_start() {
+        // we'll use 27/06/2025 as the date
+        // London is an hour ahead of UTC
+        let schedule_1 = SessionSchedule::Daily {
+            start_time: NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+            end_time: NaiveTime::from_hms_opt(2, 0, 0).unwrap(),
+            timezone: Tz::Europe__London,
+        };
+
+        let before_start = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+                .unwrap()
+                .and_hms_opt(7, 59, 59)
+                .unwrap(),
+            Utc,
+        );
+        assert!(!schedule_1.is_active_at(&before_start));
+
+        let at_start = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+                .unwrap()
+                .and_hms_opt(8, 0, 0)
+                .unwrap(),
+            Utc,
+        );
+        assert!(schedule_1.is_active_at(&at_start));
+
+        let before_end = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+                .unwrap()
+                .and_hms_opt(0, 59, 59)
+                .unwrap(),
+            Utc,
+        );
+        assert!(schedule_1.is_active_at(&before_end));
+
+        let at_end = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+                .unwrap()
+                .and_hms_opt(1, 0, 0)
+                .unwrap(),
+            Utc,
+        );
+        assert!(!schedule_1.is_active_at(&at_end));
+    }
+
+    #[test]
+    fn test_active_at_daily_schedule_london_end_before_start_tz_crossing_midnight() {
+        // we'll use 27/06/2025 as the date
+        // London is an hour ahead of UTC
+        let schedule_1 = SessionSchedule::Daily {
+            start_time: NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+            end_time: NaiveTime::from_hms_opt(0, 30, 0).unwrap(),
+            timezone: Tz::Europe__London,
+        };
+
+        let before_start = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+                .unwrap()
+                .and_hms_opt(7, 59, 59)
+                .unwrap(),
+            Utc,
+        );
+        assert!(!schedule_1.is_active_at(&before_start));
+
+        let at_start = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+                .unwrap()
+                .and_hms_opt(8, 0, 0)
+                .unwrap(),
+            Utc,
+        );
+        assert!(schedule_1.is_active_at(&at_start));
+
+        let before_end = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+                .unwrap()
+                .and_hms_opt(23, 29, 59)
+                .unwrap(),
+            Utc,
+        );
+        assert!(schedule_1.is_active_at(&before_end));
+
+        let at_end = DateTime::from_naive_utc_and_offset(
+            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+                .unwrap()
+                .and_hms_opt(23, 30, 0)
+                .unwrap(),
+            Utc,
+        );
+        assert!(!schedule_1.is_active_at(&at_end));
+    }
 
     #[test]
     fn test_into_non_stop_no_config() {
