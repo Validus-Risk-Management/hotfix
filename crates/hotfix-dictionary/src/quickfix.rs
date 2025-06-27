@@ -49,9 +49,7 @@ impl<'a> QuickFixReader<'a> {
         let find_tagged_child = |tag: &str| {
             root.children()
                 .find(|n| n.has_tag_name(tag))
-                .ok_or_else(|| {
-                    ParseDictionaryError::InvalidData(format!("<{}> tag not found", tag))
-                })
+                .ok_or_else(|| ParseDictionaryError::InvalidData(format!("<{tag}> tag not found")))
         };
         let version_type = root
             .attribute("type")
@@ -76,7 +74,7 @@ impl<'a> QuickFixReader<'a> {
             version_minor,
             // Omit Service Pack ID if set to zero.
             if version_sp != "0" {
-                format!("-SP{}", version_sp)
+                format!("-SP{version_sp}")
             } else {
                 String::new()
             }
@@ -247,10 +245,7 @@ fn import_layout_item(dict: &mut Dictionary, node: roxmltree::Node) -> ParseResu
             let field_tag = dict
                 .field_by_name(name)
                 .unwrap_or_else(||
-                    panic!(
-                        "failed to find a field named \"{}\" in the XML file, check exact spelling and casing",
-                        name
-                    )
+                    panic!("failed to find a field named \"{name}\" in the XML file, check exact spelling and casing")
                 )
                 .tag()
                 .get();
@@ -265,10 +260,7 @@ fn import_layout_item(dict: &mut Dictionary, node: roxmltree::Node) -> ParseResu
             let len_field_tag = dict
                 .field_by_name(name)
                 .unwrap_or_else(||
-                    panic!(
-                        "failed to find a group named \"{}\" in the XML file, check exact spelling and casing",
-                        name
-                    )
+                    panic!("failed to find a group named \"{name}\" in the XML file, check exact spelling and casing")
                 )
                 .tag()
                 .get();

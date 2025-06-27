@@ -14,7 +14,7 @@ impl<'a> FieldType<'a> for TagU32 {
         B: Buffer,
     {
         let initial_len = buffer.len();
-        write!(BufferWriter(buffer), "{}", self).unwrap();
+        write!(BufferWriter(buffer), "{self}").unwrap();
         buffer.len() - initial_len
     }
 

@@ -71,7 +71,7 @@ fn codegen_field_type_enum_variant(allowed_value: dict::FieldEnum, settings: &Se
         .unwrap_or('_')
         .is_ascii_alphabetic();
     if identifier_needs_prefix {
-        identifier = format!("_{}", identifier);
+        identifier = format!("_{identifier}");
     }
     let value_literal = allowed_value.value();
     indent_string(
@@ -289,12 +289,9 @@ fn gen_field_definition_with_hashsets(
     };
     let doc_link = onixs_link_to_field(fix_dictionary.version(), field);
     let doc = if let Some(doc_link) = doc_link {
-        format!(
-            "/// Field attributes for [`{} <{}>`]({}).",
-            name, tag, doc_link
-        )
+        format!("/// Field attributes for [`{name} <{tag}>`]({doc_link}).")
     } else {
-        format!("/// Field attributes for `{} <{}>`.", name, tag)
+        format!("/// Field attributes for `{name} <{tag}>`.")
     };
 
     format!(

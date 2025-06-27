@@ -27,7 +27,7 @@ impl Display for RawFixMessage {
             .collect();
         let s = std::str::from_utf8(&pretty_bytes).unwrap_or("invalid characters");
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

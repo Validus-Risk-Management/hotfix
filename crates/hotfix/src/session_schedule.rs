@@ -1,7 +1,7 @@
-use chrono::{NaiveTime, Weekday};
-
 use crate::config::ScheduleConfig;
 use crate::error::SessionError;
+use chrono::{DateTime, Datelike, NaiveTime, Utc, Weekday};
+use chrono_tz::Tz;
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
@@ -10,18 +10,92 @@ pub enum SessionSchedule {
     Daily {
         start_time: NaiveTime,
         end_time: NaiveTime,
+        timezone: Tz,
     },
     Weekdays {
         start_time: NaiveTime,
         end_time: NaiveTime,
         weekdays: Vec<Weekday>,
+        timezone: Tz,
     },
     Weekly {
         start_day: Weekday,
         start_time: NaiveTime,
         end_day: Weekday,
         end_time: NaiveTime,
+        timezone: Tz,
     },
+}
+
+#[allow(dead_code)]
+impl SessionSchedule {
+    pub fn is_active_at(&self, datetime: &DateTime<Utc>) -> bool {
+        match self {
+            SessionSchedule::NonStop => true,
+            SessionSchedule::Daily {
+                start_time,
+                end_time,
+                timezone: _,
+            } => Self::check_daily_schedule(datetime, start_time, end_time),
+            SessionSchedule::Weekdays {
+                weekdays,
+                start_time,
+                end_time,
+                timezone: _,
+            } => Self::check_weekdays_schedule(datetime, weekdays, start_time, end_time),
+            SessionSchedule::Weekly { .. } => false,
+        }
+    }
+
+    fn check_daily_schedule(
+        datetime: &DateTime<Utc>,
+        start_time: &NaiveTime,
+        end_time: &NaiveTime,
+    ) -> bool {
+        if start_time < end_time {
+            &datetime.time() >= start_time && &datetime.time() <= end_time
+        } else {
+            &datetime.time() >= start_time || &datetime.time() <= end_time
+        }
+    }
+
+    fn check_weekdays_schedule(
+        datetime: &DateTime<Utc>,
+        weekdays: &[Weekday],
+        start_time: &NaiveTime,
+        end_time: &NaiveTime,
+    ) -> bool {
+        let time_of_day = &datetime.time();
+
+        if start_time < end_time {
+            // schedule doesn't span midnight
+            weekdays.contains(&datetime.weekday())
+                && time_of_day >= start_time
+                && time_of_day < end_time
+        } else {
+            // schedule spans midnight
+            if time_of_day >= end_time && time_of_day < start_time {
+                return false;
+            }
+
+            let target_day = if time_of_day >= start_time {
+                datetime.weekday()
+            } else {
+                datetime.weekday().pred()
+            };
+            weekdays.contains(&target_day)
+        }
+    }
+
+    #[allow(unused_variables)]
+    fn check_weekly_schedule(
+        datetime: &DateTime<Utc>,
+        start_day: Weekday,
+        end_day: Weekday,
+    ) -> bool {
+        // TODO: implement this
+        false
+    }
 }
 
 impl TryFrom<ScheduleConfig> for SessionSchedule {
@@ -36,17 +110,17 @@ impl TryFrom<ScheduleConfig> for SessionSchedule {
                 start_day: None,
                 end_day: None,
                 weekdays,
-                timezone: _,
+                timezone: None,
             } if weekdays.is_empty() => Ok(SessionSchedule::NonStop),
 
-            // Daily/Weekdays sessions
+            // Daily/weekdays sessions
             ScheduleConfig {
                 start_time: Some(start),
                 end_time: Some(end),
                 start_day: None,
                 end_day: None,
                 weekdays,
-                timezone: _,
+                timezone,
             } => {
                 if weekdays.is_empty() {
                     if start == end {
@@ -55,6 +129,7 @@ impl TryFrom<ScheduleConfig> for SessionSchedule {
                         Ok(SessionSchedule::Daily {
                             start_time: start,
                             end_time: end,
+                            timezone: timezone.unwrap_or(Tz::UTC),
                         })
                     }
                 } else if start == end {
@@ -66,18 +141,19 @@ impl TryFrom<ScheduleConfig> for SessionSchedule {
                         start_time: start,
                         end_time: end,
                         weekdays,
+                        timezone: timezone.unwrap_or(Tz::UTC),
                     })
                 }
             }
 
             // Weekly sessions
             ScheduleConfig {
-                start_time: Some(start),
-                end_time: Some(end),
                 start_day: Some(start_day),
+                start_time: Some(start),
                 end_day: Some(end_day),
+                end_time: Some(end),
                 weekdays,
-                timezone: _,
+                timezone,
             } => {
                 // Weekdays should be empty for weekly sessions
                 if !weekdays.is_empty() {
@@ -91,6 +167,7 @@ impl TryFrom<ScheduleConfig> for SessionSchedule {
                     start_time: start,
                     end_day,
                     end_time: end,
+                    timezone: timezone.unwrap_or(Tz::UTC),
                 })
             }
 
@@ -154,9 +231,11 @@ mod tests {
             SessionSchedule::Daily {
                 start_time,
                 end_time,
+                timezone,
             } => {
                 assert_eq!(start_time, NaiveTime::from_hms_opt(9, 0, 0).unwrap());
                 assert_eq!(end_time, NaiveTime::from_hms_opt(17, 0, 0).unwrap());
+                assert_eq!(timezone, Tz::UTC);
             }
             _ => panic!("Expected Daily schedule"),
         }
@@ -176,7 +255,7 @@ mod tests {
                 Weekday::Thu,
                 Weekday::Fri,
             ],
-            timezone: None,
+            timezone: Some(Tz::Europe__London),
         };
 
         let schedule = SessionSchedule::try_from(config).unwrap();
@@ -185,6 +264,7 @@ mod tests {
                 start_time,
                 end_time,
                 weekdays,
+                timezone,
             } => {
                 assert_eq!(start_time, NaiveTime::from_hms_opt(9, 0, 0).unwrap());
                 assert_eq!(end_time, NaiveTime::from_hms_opt(17, 0, 0).unwrap());
@@ -198,6 +278,7 @@ mod tests {
                         Weekday::Fri
                     ]
                 );
+                assert_eq!(timezone, Tz::Europe__London);
             }
             _ => panic!("Expected Weekdays schedule"),
         }
@@ -221,11 +302,13 @@ mod tests {
                 start_time,
                 end_day,
                 end_time,
+                timezone,
             } => {
                 assert_eq!(start_day, Weekday::Sun);
                 assert_eq!(start_time, NaiveTime::from_hms_opt(18, 0, 0).unwrap());
                 assert_eq!(end_day, Weekday::Fri);
                 assert_eq!(end_time, NaiveTime::from_hms_opt(17, 0, 0).unwrap());
+                assert_eq!(timezone, Tz::UTC);
             }
             _ => panic!("Expected Weekly schedule"),
         }

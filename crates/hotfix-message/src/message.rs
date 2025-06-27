@@ -41,7 +41,7 @@ impl Message {
         let body_length = self.header.calculate_length()
             + self.body.calculate_length()
             + self.trailer.calculate_length();
-        self.set(fix44::BODY_LENGTH, format!("{}", body_length).as_str());
+        self.set(fix44::BODY_LENGTH, format!("{body_length}").as_str());
         let check_sum_start = buffer.len();
 
         let starting_fields = vec![
@@ -58,7 +58,7 @@ impl Message {
         let checksum = buffer.as_slice()[check_sum_start..]
             .iter()
             .fold(0u8, |acc, &x| acc.wrapping_add(x));
-        let checksum_value = format!("{:03}", checksum);
+        let checksum_value = format!("{checksum:03}");
         self.set(fix44::CHECK_SUM, checksum_value.as_str());
         buffer.write_all(b"10=")?;
         buffer.write_all(checksum_value.as_bytes())?;

@@ -233,7 +233,7 @@ mod test {
             } else {
                 format!("w{}", (u32::arbitrary(g) % 5) + 1)
             };
-            let s = format!("{:04}{:02}{}", year, month, day_or_week);
+            let s = format!("{year:04}{month:02}{day_or_week}");
             MonthYear::deserialize(s.as_bytes()).unwrap()
         }
     }

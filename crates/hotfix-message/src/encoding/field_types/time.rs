@@ -209,7 +209,7 @@ mod test {
             } else {
                 String::new()
             };
-            let s = format!("{:02}:{:02}:{:02}{}", hour, minute, second, millisecond);
+            let s = format!("{hour:02}:{minute:02}:{second:02}{millisecond}");
             Self::deserialize(s.as_bytes()).unwrap()
         }
     }
