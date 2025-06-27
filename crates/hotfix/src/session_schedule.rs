@@ -185,7 +185,7 @@ mod tests {
     use chrono::{NaiveTime, Weekday};
 
     #[test]
-    fn test_non_stop_no_config() {
+    fn test_into_non_stop_no_config() {
         let config = ScheduleConfig {
             start_time: None,
             end_time: None,
@@ -200,7 +200,7 @@ mod tests {
     }
 
     #[test]
-    fn test_non_stop_equal_times() {
+    fn test_into_non_stop_equal_times() {
         let time = NaiveTime::from_hms_opt(9, 0, 0).unwrap();
         let config = ScheduleConfig {
             start_time: Some(time),
@@ -216,7 +216,7 @@ mod tests {
     }
 
     #[test]
-    fn test_daily_session() {
+    fn test_into_daily_session() {
         let config = ScheduleConfig {
             start_time: Some(NaiveTime::from_hms_opt(9, 0, 0).unwrap()),
             end_time: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
@@ -242,7 +242,7 @@ mod tests {
     }
 
     #[test]
-    fn test_weekdays_session() {
+    fn test_into_weekdays_session() {
         let config = ScheduleConfig {
             start_time: Some(NaiveTime::from_hms_opt(9, 0, 0).unwrap()),
             end_time: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
@@ -285,7 +285,7 @@ mod tests {
     }
 
     #[test]
-    fn test_weekly_session() {
+    fn test_into_weekly_session() {
         let config = ScheduleConfig {
             start_time: Some(NaiveTime::from_hms_opt(18, 0, 0).unwrap()),
             end_time: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
@@ -315,7 +315,7 @@ mod tests {
     }
 
     #[test]
-    fn test_weekly_session_with_equal_times_is_still_weekly() {
+    fn test_into_weekly_session_with_equal_times_is_still_weekly() {
         let time = NaiveTime::from_hms_opt(12, 0, 0).unwrap();
         let config = ScheduleConfig {
             start_time: Some(time),
@@ -331,7 +331,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_weekly_with_weekdays() {
+    fn test_into_invalid_weekly_with_weekdays() {
         let config = ScheduleConfig {
             start_time: Some(NaiveTime::from_hms_opt(9, 0, 0).unwrap()),
             end_time: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
@@ -351,7 +351,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_partial_config_start_time_only() {
+    fn test_into_invalid_partial_config_start_time_only() {
         let config = ScheduleConfig {
             start_time: Some(NaiveTime::from_hms_opt(9, 0, 0).unwrap()),
             end_time: None,
@@ -366,7 +366,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_partial_config_end_time_only() {
+    fn test_into_invalid_partial_config_end_time_only() {
         let config = ScheduleConfig {
             start_time: None,
             end_time: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
@@ -381,7 +381,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_partial_config_start_day_only() {
+    fn test_into_invalid_partial_config_start_day_only() {
         let config = ScheduleConfig {
             start_time: None,
             end_time: None,
@@ -396,7 +396,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_mixed_config() {
+    fn test_into_invalid_mixed_config() {
         let config = ScheduleConfig {
             start_time: Some(NaiveTime::from_hms_opt(9, 0, 0).unwrap()),
             end_time: None,
@@ -411,7 +411,7 @@ mod tests {
     }
 
     #[test]
-    fn test_weekdays_with_single_day() {
+    fn test_into_weekdays_with_single_day() {
         let config = ScheduleConfig {
             start_time: Some(NaiveTime::from_hms_opt(9, 0, 0).unwrap()),
             end_time: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
@@ -431,7 +431,7 @@ mod tests {
     }
 
     #[test]
-    fn test_weekdays_with_equal_times_is_invalid() {
+    fn test_into_weekdays_with_equal_times_is_invalid() {
         let time = NaiveTime::from_hms_opt(10, 30, 0).unwrap();
         let config = ScheduleConfig {
             start_time: Some(time),
