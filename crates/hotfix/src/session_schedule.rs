@@ -36,6 +36,7 @@ impl TryFrom<ScheduleConfig> for SessionSchedule {
                 start_day: None,
                 end_day: None,
                 weekdays,
+                timezone: _,
             } if weekdays.is_empty() => Ok(SessionSchedule::NonStop),
 
             // Daily/Weekdays sessions
@@ -45,6 +46,7 @@ impl TryFrom<ScheduleConfig> for SessionSchedule {
                 start_day: None,
                 end_day: None,
                 weekdays,
+                timezone: _,
             } => {
                 if weekdays.is_empty() {
                     if start == end {
@@ -75,6 +77,7 @@ impl TryFrom<ScheduleConfig> for SessionSchedule {
                 start_day: Some(start_day),
                 end_day: Some(end_day),
                 weekdays,
+                timezone: _,
             } => {
                 // Weekdays should be empty for weekly sessions
                 if !weekdays.is_empty() {
@@ -112,6 +115,7 @@ mod tests {
             start_day: None,
             end_day: None,
             weekdays: vec![],
+            timezone: None,
         };
 
         let schedule = SessionSchedule::try_from(config).unwrap();
@@ -127,6 +131,7 @@ mod tests {
             start_day: None,
             end_day: None,
             weekdays: vec![],
+            timezone: None,
         };
 
         let schedule = SessionSchedule::try_from(config).unwrap();
@@ -141,6 +146,7 @@ mod tests {
             start_day: None,
             end_day: None,
             weekdays: vec![],
+            timezone: None,
         };
 
         let schedule = SessionSchedule::try_from(config).unwrap();
@@ -170,6 +176,7 @@ mod tests {
                 Weekday::Thu,
                 Weekday::Fri,
             ],
+            timezone: None,
         };
 
         let schedule = SessionSchedule::try_from(config).unwrap();
@@ -204,6 +211,7 @@ mod tests {
             start_day: Some(Weekday::Sun),
             end_day: Some(Weekday::Fri),
             weekdays: vec![],
+            timezone: None,
         };
 
         let schedule = SessionSchedule::try_from(config).unwrap();
@@ -232,6 +240,7 @@ mod tests {
             start_day: Some(Weekday::Mon),
             end_day: Some(Weekday::Fri),
             weekdays: vec![],
+            timezone: None,
         };
 
         let schedule = SessionSchedule::try_from(config).unwrap();
@@ -245,7 +254,8 @@ mod tests {
             end_time: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
             start_day: Some(Weekday::Mon),
             end_day: Some(Weekday::Fri),
-            weekdays: vec![Weekday::Mon], // This should cause an error
+            weekdays: vec![Weekday::Mon],
+            timezone: None,
         };
 
         let result = SessionSchedule::try_from(config);
@@ -265,6 +275,7 @@ mod tests {
             start_day: None,
             end_day: None,
             weekdays: vec![],
+            timezone: None,
         };
 
         let result = SessionSchedule::try_from(config);
@@ -279,6 +290,7 @@ mod tests {
             start_day: None,
             end_day: None,
             weekdays: vec![],
+            timezone: None,
         };
 
         let result = SessionSchedule::try_from(config);
@@ -293,6 +305,7 @@ mod tests {
             start_day: Some(Weekday::Mon),
             end_day: None,
             weekdays: vec![],
+            timezone: None,
         };
 
         let result = SessionSchedule::try_from(config);
@@ -307,6 +320,7 @@ mod tests {
             start_day: Some(Weekday::Mon),
             end_day: None,
             weekdays: vec![],
+            timezone: None,
         };
 
         let result = SessionSchedule::try_from(config);
@@ -321,6 +335,7 @@ mod tests {
             start_day: None,
             end_day: None,
             weekdays: vec![Weekday::Sat],
+            timezone: None,
         };
 
         let schedule = SessionSchedule::try_from(config).unwrap();
@@ -341,6 +356,7 @@ mod tests {
             start_day: None,
             end_day: None,
             weekdays: vec![Weekday::Mon, Weekday::Wed, Weekday::Fri],
+            timezone: None,
         };
 
         let schedule = SessionSchedule::try_from(config);

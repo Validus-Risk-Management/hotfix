@@ -6,6 +6,7 @@
 //! [example project's config file](https://github.com/Validus-Risk-Management/hotfix/blob/main/examples/simple-new-order/config/test-config.toml)
 //! for more detail.
 use chrono::{NaiveTime, Weekday};
+use chrono_tz::Tz;
 use serde::Deserialize;
 use std::fs;
 use std::path::Path;
@@ -40,6 +41,7 @@ pub struct ScheduleConfig {
     pub end_day: Option<Weekday>,
     #[serde(default)]
     pub weekdays: Vec<Weekday>,
+    pub timezone: Option<Tz>,
 }
 
 fn default_reconnect_interval() -> u64 {
@@ -192,5 +194,98 @@ end_day = "Friday"
         assert_eq!(schedule.end_time, NaiveTime::from_hms_opt(23, 55, 0));
         assert_eq!(schedule.start_day, Some(Weekday::Mon));
         assert_eq!(schedule.end_day, Some(Weekday::Fri));
+    }
+
+    #[test]
+    fn test_schedule_config_with_new_york_timezone() {
+        use chrono_tz::Tz;
+
+        let config_contents = r#"
+    [[sessions]]
+    begin_string = "FIX.4.4"
+    sender_comp_id = "send-comp-id"
+    target_comp_id = "target-comp-id"
+    heartbeat_interval = 30
+
+    connection_port = 443
+    connection_host = "127.0.0.1"
+
+    [sessions.schedule]
+    start_time = "08:00:00"
+    end_time = "16:30:00"
+    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    timezone = "America/New_York"
+        "#;
+
+        let config: Config = toml::from_str(config_contents).unwrap();
+        assert_eq!(config.sessions.len(), 1);
+        let session = config.sessions.first().unwrap();
+
+        assert!(session.schedule.is_some());
+        let schedule = session.schedule.as_ref().unwrap();
+
+        assert_eq!(schedule.start_time, NaiveTime::from_hms_opt(8, 0, 0));
+        assert_eq!(schedule.end_time, NaiveTime::from_hms_opt(16, 30, 0));
+        assert_eq!(schedule.timezone, Some(Tz::America__New_York));
+    }
+
+    #[test]
+    fn test_schedule_config_with_utc_timezone() {
+        use chrono_tz::Tz;
+
+        let config_contents = r#"
+    [[sessions]]
+    begin_string = "FIX.4.4"
+    sender_comp_id = "send-comp-id"
+    target_comp_id = "target-comp-id"
+    heartbeat_interval = 30
+
+    connection_port = 443
+    connection_host = "127.0.0.1"
+
+    [sessions.schedule]
+    start_time = "00:00:00"
+    end_time = "23:55:00"
+    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    timezone = "UTC"
+        "#;
+
+        let config: Config = toml::from_str(config_contents).unwrap();
+        let session = config.sessions.first().unwrap();
+        let schedule = session.schedule.as_ref().unwrap();
+
+        assert_eq!(schedule.start_time, NaiveTime::from_hms_opt(0, 0, 0));
+        assert_eq!(schedule.end_time, NaiveTime::from_hms_opt(23, 55, 0));
+        assert_eq!(schedule.timezone, Some(Tz::UTC));
+    }
+
+    #[test]
+    fn test_schedule_config_with_london_timezone() {
+        use chrono_tz::Tz;
+
+        let config_contents = r#"
+    [[sessions]]
+    begin_string = "FIX.4.4"
+    sender_comp_id = "send-comp-id"
+    target_comp_id = "target-comp-id"
+    heartbeat_interval = 30
+
+    connection_port = 443
+    connection_host = "127.0.0.1"
+
+    [sessions.schedule]
+    start_time = "09:30:00"
+    end_time = "17:00:00"
+    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    timezone = "Europe/London"
+        "#;
+
+        let config: Config = toml::from_str(config_contents).unwrap();
+        let session = config.sessions.first().unwrap();
+        let schedule = session.schedule.as_ref().unwrap();
+
+        assert_eq!(schedule.start_time, NaiveTime::from_hms_opt(9, 30, 0));
+        assert_eq!(schedule.end_time, NaiveTime::from_hms_opt(17, 0, 0));
+        assert_eq!(schedule.timezone, Some(Tz::Europe__London));
     }
 }
