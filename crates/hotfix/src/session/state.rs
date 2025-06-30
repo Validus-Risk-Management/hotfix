@@ -11,7 +11,7 @@ pub enum SessionState {
     /// We are awaiting the target to resend the gap we have.
     AwaitingResend(AwaitingResendState),
     /// We are in the process of gracefully logging out
-    AwaitingLogout,
+    AwaitingLogout { writer: WriterRef }, // we need the writer so we can disconnect it on successful logout
     /// The session is active, we have connected and mutually logged on.
     Active { writer: WriterRef },
     /// The peer has logged us out.
@@ -58,6 +58,13 @@ impl SessionState {
                     _ => error!("invalid outgoing message for AwaitingLogon state"),
                 }
             }
+            Self::AwaitingLogout { writer } => {
+                // Logout messages are allowed because we first transition into AwaitingLogout
+                // and only then send the logout message
+                if message_type == b"5" {
+                    writer.send_raw_message(message).await
+                }
+            }
             _ => error!("trying to write without an established connection"),
         }
     }
@@ -66,16 +73,24 @@ impl SessionState {
         match self {
             Self::Active { writer }
             | Self::AwaitingLogon { writer, .. }
+            | Self::AwaitingLogout { writer }
             | Self::AwaitingResend(AwaitingResendState { writer, .. }) => writer.disconnect().await,
             _ => debug!("disconnecting an already disconnected session"),
         }
     }
 
-    pub fn is_logout_valid_action(&self) -> bool {
-        matches!(
-            self,
-            Self::Active { .. } | Self::AwaitingResend(_) | Self::AwaitingLogon { .. }
-        )
+    pub fn try_transition_to_awaiting_logout(&mut self) -> bool {
+        match self {
+            Self::Active { writer }
+            | Self::AwaitingLogon { writer, .. }
+            | Self::AwaitingResend(AwaitingResendState { writer, .. }) => {
+                *self = SessionState::AwaitingLogout {
+                    writer: writer.clone(),
+                };
+                true
+            }
+            _ => false,
+        }
     }
 }
 

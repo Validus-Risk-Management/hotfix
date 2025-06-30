@@ -334,7 +334,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             SessionState::Disconnected { .. } => {
                 warn!("disconnect message was received, but the session is already disconnected")
             }
-            SessionState::AwaitingLogout => {
+            SessionState::AwaitingLogout { .. } => {
                 // this is unexpected because the other side should send a logout before disconnecting,
                 // which would move this session out of the ShuttingDown state
                 // TODO: is this actually true? need to review the spec carefully
@@ -384,6 +384,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     async fn on_logout(&mut self) {
+        if let SessionState::AwaitingLogout { .. } = &self.state {
+            self.state.disconnect().await;
+        }
+
         // TODO: reconnect = false isn't always valid, this should be more sophisticated
         self.state.disconnect().await;
         self.state = SessionState::LoggedOut { reconnect: false };
@@ -614,11 +618,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     async fn initiate_graceful_logout(&mut self, reason: &str) {
-        if self.state.is_logout_valid_action() {
+        if self.state.try_transition_to_awaiting_logout() {
             self.logout(reason).await;
-            self.state = SessionState::AwaitingLogout;
-        } else {
-            warn!("received logout message, but the session is not in a valid state to initiate a graceful logout");
         }
     }
 
