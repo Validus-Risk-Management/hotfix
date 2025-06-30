@@ -1,6 +1,6 @@
 use tokio::io::{AsyncWrite, AsyncWriteExt, WriteHalf};
 use tokio::sync::mpsc;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::message::parser::RawFixMessage;
 
@@ -52,11 +52,12 @@ impl<W: AsyncWrite> WriterActor<W> {
     async fn handle(&mut self, message: WriterMessage) -> bool {
         match message {
             WriterMessage::SendMessage(fix_message) => {
-                self.writer
-                    .write_all(fix_message.as_bytes())
-                    .await
-                    .expect("logon message to send");
-                debug!("sent message: {}", fix_message);
+                match self.writer.write_all(fix_message.as_bytes()).await {
+                    Ok(_) => debug!("sent message: {}", fix_message),
+                    // we don't shut down the writer due to errors, only when explicitly requested
+                    // a broken connection is shut down via the reader -> session -> writer route
+                    Err(_) => warn!("failed to send message: {}", fix_message),
+                }
                 true
             }
             WriterMessage::Disconnect => false,

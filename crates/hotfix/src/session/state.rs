@@ -10,13 +10,14 @@ pub enum SessionState {
     AwaitingLogon { writer: WriterRef, logon_sent: bool },
     /// We are awaiting the target to resend the gap we have.
     AwaitingResend(AwaitingResendState),
+    /// We are in the process of gracefully logging out
+    AwaitingLogout,
     /// The session is active, we have connected and mutually logged on.
     Active { writer: WriterRef },
     /// The peer has logged us out.
     LoggedOut { reconnect: bool },
     /// The TCP connection has been dropped.
-    #[allow(dead_code)]
-    Disconnected { reconnect: bool, reason: String },
+    Disconnected { reconnect: bool, _reason: String },
 }
 
 impl SessionState {
@@ -63,13 +64,21 @@ impl SessionState {
 
     pub async fn disconnect(&self) {
         match self {
-            Self::Active { writer } | Self::AwaitingLogon { writer, .. } => {
-                writer.disconnect().await
-            }
+            Self::Active { writer }
+            | Self::AwaitingLogon { writer, .. }
+            | Self::AwaitingResend(AwaitingResendState { writer, .. }) => writer.disconnect().await,
             _ => debug!("disconnecting an already disconnected session"),
         }
     }
+
+    pub fn is_logout_valid_action(&self) -> bool {
+        matches!(
+            self,
+            Self::Active { .. } | Self::AwaitingResend(_) | Self::AwaitingLogon { .. }
+        )
+    }
 }
+
 /// Session state we're in while processing messages we requested to be resent.
 pub struct AwaitingResendState {
     /// The reference to the writer loop.

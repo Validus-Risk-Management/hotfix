@@ -136,7 +136,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             dictionary,
             state: SessionState::Disconnected {
                 reconnect: true,
-                reason: "initialising".to_string(),
+                _reason: "initialising".to_string(),
             },
             application,
             store,
@@ -319,19 +319,26 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             SessionState::Active { .. }
             | SessionState::AwaitingLogon { .. }
             | SessionState::AwaitingResend(_) => {
+                self.state.disconnect().await;
                 self.state = SessionState::Disconnected {
                     reconnect: true,
-                    reason,
+                    _reason: reason,
                 }
             }
             SessionState::LoggedOut { reconnect } => {
                 self.state = SessionState::Disconnected {
                     reconnect,
-                    reason: "logged out".to_string(),
+                    _reason: "logged out".to_string(),
                 }
             }
             SessionState::Disconnected { .. } => {
                 warn!("disconnect message was received, but the session is already disconnected")
+            }
+            SessionState::AwaitingLogout => {
+                // this is unexpected because the other side should send a logout before disconnecting,
+                // which would move this session out of the ShuttingDown state
+                // TODO: is this actually true? need to review the spec carefully
+                warn!("disconnect message was received, but the session is still shutting down")
             }
         }
     }
@@ -352,7 +359,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                         let reason = format!(
                             "sequence number too low (actual {actual}, expected {expected})"
                         );
-                        self.logout_and_terminate(reason).await;
+                        self.logout_and_terminate(&reason).await;
                         self.state = SessionState::LoggedOut { reconnect: false };
                     }
                     MessageVerificationError::SeqNumberTooHigh { actual, expected } => {
@@ -595,11 +602,24 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         self.send_message(logon).await;
     }
 
-    async fn logout_and_terminate(&mut self, reason: String) {
-        let logout = Logout::with_reason(reason);
+    async fn logout(&mut self, reason: &str) {
+        let logout = Logout::with_reason(reason.to_string());
         self.send_message(logout).await;
+    }
+
+    async fn logout_and_terminate(&mut self, reason: &str) {
+        self.logout(reason).await;
         self.state.disconnect().await;
         self.disable_peer_timer().await;
+    }
+
+    async fn initiate_graceful_logout(&mut self, reason: &str) {
+        if self.state.is_logout_valid_action() {
+            self.logout(reason).await;
+            self.state = SessionState::AwaitingLogout;
+        } else {
+            warn!("received logout message, but the session is not in a valid state to initiate a graceful logout");
+        }
     }
 
     async fn handle(&mut self, event: SessionEvent<M>) {
@@ -608,8 +628,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 if let Err(err) = self.on_incoming(fix_message).await {
                     let reason = err.to_string();
                     error!(reason, "fatal error in message processing");
-                    self.logout_and_terminate("internal error".to_string())
-                        .await;
+                    self.logout_and_terminate("internal error").await;
                 }
             }
             SessionEvent::SendMessage(message) => {
@@ -637,7 +656,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     async fn handle_peer_timeout(&mut self) {
         if self.awaiting_test_response.is_some() {
             warn!("peer didn't respond, terminating..");
-            self.logout_and_terminate("peer timeout".to_string()).await;
+            self.logout_and_terminate("peer timeout").await;
         } else {
             let req_id = format!("TEST_{}", self.store.next_target_seq_number());
             info!("sending TestRequest due to peer timer expiring");
@@ -649,7 +668,11 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     async fn handle_schedule_check(&mut self) {
         let is_active = self.schedule.is_active_at(&Utc::now());
-        debug!(is_active, "schedule check");
+
+        if !is_active {
+            // we are currently outside scheduled session time
+            self.initiate_graceful_logout("End of session time").await;
+        }
 
         let deadline = Instant::now() + Duration::from_secs(SCHEDULE_CHECK_INTERVAL);
         self.schedule_check_timer.as_mut().reset(deadline);
