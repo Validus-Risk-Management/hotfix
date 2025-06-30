@@ -2,6 +2,7 @@ mod event;
 mod state;
 
 use anyhow::{anyhow, Result};
+use chrono::Utc;
 use hotfix_message::dict::Dictionary;
 use hotfix_message::field_types::Timestamp;
 use hotfix_message::message::{Config as MessageConfig, Message};
@@ -30,8 +31,11 @@ use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
 use crate::message_utils::is_admin;
 use crate::session::state::AwaitingResendState;
+use crate::session_schedule::SessionSchedule;
 use event::SessionEvent;
 use state::SessionState;
+
+const SCHEDULE_CHECK_INTERVAL: u64 = 1;
 
 #[derive(Clone)]
 pub struct SessionRef<M> {
@@ -96,13 +100,16 @@ struct Session<M, S> {
     mailbox: mpsc::Receiver<SessionEvent<M>>,
     message_config: MessageConfig,
     config: SessionConfig,
+    schedule: SessionSchedule,
     dictionary: Dictionary,
     state: SessionState,
     application: ApplicationRef<M>,
     store: S,
+    awaiting_test_response: Option<TestRequestId>,
+
     heartbeat_timer: Pin<Box<Sleep>>,
     peer_timer: Pin<Box<Sleep>>,
-    awaiting_test_response: Option<TestRequestId>,
+    schedule_check_timer: Pin<Box<Sleep>>,
 }
 
 impl<M: FixMessage, S: MessageStore> Session<M, S> {
@@ -116,10 +123,15 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         let peer_timer = sleep(Duration::from_secs(
             (config.heartbeat_interval as f64 * TEST_REQUEST_THRESHOLD).round() as u64,
         ));
+        let schedule_check_timer = sleep(Duration::from_secs(SCHEDULE_CHECK_INTERVAL));
+
         let dictionary = Self::get_data_dictionary(&config);
+        let schedule = config.schedule.as_ref().try_into().unwrap();
+
         Self {
             mailbox,
             config,
+            schedule,
             message_config: MessageConfig::default(),
             dictionary,
             state: SessionState::Disconnected {
@@ -128,9 +140,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             },
             application,
             store,
+            awaiting_test_response: None,
             heartbeat_timer: Box::pin(heartbeat_timer),
             peer_timer: Box::pin(peer_timer),
-            awaiting_test_response: None,
+            schedule_check_timer: Box::pin(schedule_check_timer),
         }
     }
 
@@ -634,6 +647,14 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         }
     }
 
+    async fn handle_schedule_check(&mut self) {
+        let is_active = self.schedule.is_active_at(&Utc::now());
+        debug!(is_active, "schedule check");
+
+        let deadline = Instant::now() + Duration::from_secs(SCHEDULE_CHECK_INTERVAL);
+        self.schedule_check_timer.as_mut().reset(deadline);
+    }
+
     async fn disable_peer_timer(&mut self) {
         // push the timer out by about a month - there is no way to disable it entirely afaik
         self.peer_timer
@@ -664,6 +685,9 @@ where
             }
             () = &mut session.peer_timer.as_mut() => {
                 session.handle_peer_timeout().await;
+            }
+            () = &mut session.schedule_check_timer.as_mut() => {
+                session.handle_schedule_check().await;
             }
         }
     }

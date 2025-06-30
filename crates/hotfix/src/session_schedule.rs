@@ -104,10 +104,10 @@ impl SessionSchedule {
     }
 }
 
-impl TryFrom<ScheduleConfig> for SessionSchedule {
+impl TryFrom<&ScheduleConfig> for SessionSchedule {
     type Error = SessionError;
 
-    fn try_from(config: ScheduleConfig) -> Result<Self, Self::Error> {
+    fn try_from(config: &ScheduleConfig) -> Result<Self, Self::Error> {
         match config {
             // NonStop: no configuration provided
             ScheduleConfig {
@@ -133,8 +133,8 @@ impl TryFrom<ScheduleConfig> for SessionSchedule {
                         Ok(SessionSchedule::NonStop)
                     } else {
                         Ok(SessionSchedule::Daily {
-                            start_time: start,
-                            end_time: end,
+                            start_time: *start,
+                            end_time: *end,
                             timezone: timezone.unwrap_or(Tz::UTC),
                         })
                     }
@@ -144,9 +144,9 @@ impl TryFrom<ScheduleConfig> for SessionSchedule {
                     ))
                 } else {
                     Ok(SessionSchedule::Weekdays {
-                        start_time: start,
-                        end_time: end,
-                        weekdays,
+                        start_time: *start,
+                        end_time: *end,
+                        weekdays: weekdays.clone(),
                         timezone: timezone.unwrap_or(Tz::UTC),
                     })
                 }
@@ -169,10 +169,10 @@ impl TryFrom<ScheduleConfig> for SessionSchedule {
                 }
 
                 Ok(SessionSchedule::Weekly {
-                    start_day,
-                    start_time: start,
-                    end_day,
-                    end_time: end,
+                    start_day: *start_day,
+                    start_time: *start,
+                    end_day: *end_day,
+                    end_time: *end,
                     timezone: timezone.unwrap_or(Tz::UTC),
                 })
             }
@@ -181,6 +181,17 @@ impl TryFrom<ScheduleConfig> for SessionSchedule {
             _ => Err(SessionError::InvalidSchedule(
                 "Invalid schedule configuration: incomplete or conflicting parameters".to_string(),
             )),
+        }
+    }
+}
+
+impl TryFrom<Option<&ScheduleConfig>> for SessionSchedule {
+    type Error = SessionError;
+
+    fn try_from(maybe_schedule: Option<&ScheduleConfig>) -> Result<Self, Self::Error> {
+        match maybe_schedule {
+            None => Ok(SessionSchedule::NonStop),
+            Some(session_config) => session_config.try_into(),
         }
     }
 }
@@ -795,7 +806,7 @@ mod tests {
             timezone: None,
         };
 
-        let schedule = SessionSchedule::try_from(config).unwrap();
+        let schedule = SessionSchedule::try_from(&config).unwrap();
         assert!(matches!(schedule, SessionSchedule::NonStop));
     }
 
@@ -811,7 +822,7 @@ mod tests {
             timezone: None,
         };
 
-        let schedule = SessionSchedule::try_from(config).unwrap();
+        let schedule = SessionSchedule::try_from(&config).unwrap();
         assert!(matches!(schedule, SessionSchedule::NonStop));
     }
 
@@ -826,7 +837,7 @@ mod tests {
             timezone: None,
         };
 
-        let schedule = SessionSchedule::try_from(config).unwrap();
+        let schedule = SessionSchedule::try_from(&config).unwrap();
         match schedule {
             SessionSchedule::Daily {
                 start_time,
@@ -858,7 +869,7 @@ mod tests {
             timezone: Some(Tz::Europe__London),
         };
 
-        let schedule = SessionSchedule::try_from(config).unwrap();
+        let schedule = SessionSchedule::try_from(&config).unwrap();
         match schedule {
             SessionSchedule::Weekdays {
                 start_time,
@@ -895,7 +906,7 @@ mod tests {
             timezone: None,
         };
 
-        let schedule = SessionSchedule::try_from(config).unwrap();
+        let schedule = SessionSchedule::try_from(&config).unwrap();
         match schedule {
             SessionSchedule::Weekly {
                 start_day,
@@ -926,7 +937,7 @@ mod tests {
             timezone: None,
         };
 
-        let schedule = SessionSchedule::try_from(config).unwrap();
+        let schedule = SessionSchedule::try_from(&config).unwrap();
         assert!(matches!(schedule, SessionSchedule::Weekly { .. }));
     }
 
@@ -941,7 +952,7 @@ mod tests {
             timezone: None,
         };
 
-        let result = SessionSchedule::try_from(config);
+        let result = SessionSchedule::try_from(&config);
         assert!(result.is_err());
         match result.unwrap_err() {
             SessionError::InvalidSchedule(msg) => {
@@ -961,7 +972,7 @@ mod tests {
             timezone: None,
         };
 
-        let result = SessionSchedule::try_from(config);
+        let result = SessionSchedule::try_from(&config);
         assert!(result.is_err());
     }
 
@@ -976,7 +987,7 @@ mod tests {
             timezone: None,
         };
 
-        let result = SessionSchedule::try_from(config);
+        let result = SessionSchedule::try_from(&config);
         assert!(result.is_err());
     }
 
@@ -991,7 +1002,7 @@ mod tests {
             timezone: None,
         };
 
-        let result = SessionSchedule::try_from(config);
+        let result = SessionSchedule::try_from(&config);
         assert!(result.is_err());
     }
 
@@ -1006,7 +1017,7 @@ mod tests {
             timezone: None,
         };
 
-        let result = SessionSchedule::try_from(config);
+        let result = SessionSchedule::try_from(&config);
         assert!(result.is_err());
     }
 
@@ -1021,7 +1032,7 @@ mod tests {
             timezone: None,
         };
 
-        let schedule = SessionSchedule::try_from(config).unwrap();
+        let schedule = SessionSchedule::try_from(&config).unwrap();
         match schedule {
             SessionSchedule::Weekdays { weekdays, .. } => {
                 assert_eq!(weekdays, vec![Weekday::Sat]);
@@ -1042,7 +1053,7 @@ mod tests {
             timezone: None,
         };
 
-        let schedule = SessionSchedule::try_from(config);
+        let schedule = SessionSchedule::try_from(&config);
         assert!(schedule.is_err());
     }
 }
