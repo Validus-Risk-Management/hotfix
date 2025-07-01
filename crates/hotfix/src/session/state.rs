@@ -103,7 +103,7 @@ impl SessionState {
     }
 
     pub fn register_session_awaiter(
-        &self,
+        &mut self,
         responder: oneshot::Sender<AwaitingActiveSessionResponse>,
     ) {
         match self {
@@ -118,12 +118,25 @@ impl SessionState {
                         error!("failed to send session awaiter response: {err:?}");
                     }
                 } else {
-                    // set the session_awaiter on the current state
+                    *session_awaiter = Some(responder);
                 }
             }
             _ => {
                 error!("session awaiter can only be registered on disconnected sessions");
                 if let Err(err) = responder.send(AwaitingActiveSessionResponse::Shutdown) {
+                    error!("failed to send session awaiter response: {err:?}");
+                }
+            }
+        }
+    }
+
+    pub fn notify_session_awaiter(&mut self) {
+        if let SessionState::Disconnected {
+            session_awaiter, ..
+        } = self
+        {
+            if let Some(awaiter) = session_awaiter.take() {
+                if let Err(err) = awaiter.send(AwaitingActiveSessionResponse::Active) {
                     error!("failed to send session awaiter response: {err:?}");
                 }
             }
