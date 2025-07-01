@@ -429,13 +429,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     async fn on_test_request(&mut self, message: &Message) {
-        let req_id: &str = match message.get(fix44::TEST_REQ_ID) {
-            Ok(val) => val,
-            Err(_) => {
-                // TODO: send reject?
-                todo!()
-            }
-        };
+        let req_id: &str = message.get(fix44::TEST_REQ_ID).unwrap_or_else(|_| {
+            // TODO: send reject?
+            todo!()
+        });
 
         self.send_message(Heartbeat::for_request(req_id.to_string()))
             .await;
@@ -444,13 +441,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     async fn on_resend_request(&mut self, message: &Message) {
         // TODO: verify message and send reject as necessary
 
-        let begin_seq_number: usize = match message.get(fix44::BEGIN_SEQ_NO) {
-            Ok(seq_number) => seq_number,
-            Err(_) => {
-                // TODO: send reject if there is no valid begin number
-                todo!()
-            }
-        };
+        let begin_seq_number: usize = message.get(fix44::BEGIN_SEQ_NO).unwrap_or_else(|_| {
+            // TODO: send reject if there is no valid begin number
+            todo!()
+        });
 
         let end_seq_number: usize = match message.get(fix44::END_SEQ_NO) {
             Ok(seq_number) => {
