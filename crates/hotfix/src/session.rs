@@ -97,12 +97,14 @@ impl<M: FixMessage> SessionRef<M> {
     }
 
     pub async fn await_active_session_time(&self) {
+        debug!("awaiting active session time");
         let (sender, receiver) = oneshot::channel::<AwaitingActiveSessionResponse>();
         self.sender
             .send(SessionEvent::AwaitingActiveSession(sender))
             .await
             .unwrap();
         receiver.await.expect("to receive a response");
+        debug!("resuming connection as session is active");
     }
 }
 
@@ -399,14 +401,19 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     async fn on_logout(&mut self) {
         if let SessionState::AwaitingLogout { .. } = &self.state {
             self.state.disconnect().await;
+            self.state = SessionState::Disconnected {
+                reconnect: true,
+                _reason: "we logged out gracefully".to_string(),
+                session_awaiter: None,
+            };
+        } else {
+            // TODO: reconnect = false isn't always valid, this should be more sophisticated
+            self.state.disconnect().await;
+            self.state = SessionState::LoggedOut { reconnect: false };
+            self.application
+                .send_logout("peer has logged us out".to_string())
+                .await;
         }
-
-        // TODO: reconnect = false isn't always valid, this should be more sophisticated
-        self.state.disconnect().await;
-        self.state = SessionState::LoggedOut { reconnect: false };
-        self.application
-            .send_logout("peer has logged us out".to_string())
-            .await;
     }
 
     async fn on_heartbeat(&mut self, message: &Message) {

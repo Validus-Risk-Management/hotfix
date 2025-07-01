@@ -1,11 +1,10 @@
+use crate::message::parser::RawFixMessage;
+use crate::session::event::AwaitingActiveSessionResponse;
+use crate::transport::socket_writer::WriterRef;
 use hotfix_message::message::Message;
 use std::collections::VecDeque;
 use tokio::sync::oneshot;
 use tracing::{debug, error};
-
-use crate::message::parser::RawFixMessage;
-use crate::session::event::AwaitingActiveSessionResponse;
-use crate::transport::socket_writer::WriterRef;
 
 pub enum SessionState {
     /// We have established a connection, sent a logon message and await a response.
@@ -119,6 +118,7 @@ impl SessionState {
                     }
                 } else {
                     *session_awaiter = Some(responder);
+                    debug!("registered session awaiter");
                 }
             }
             _ => {
@@ -138,6 +138,8 @@ impl SessionState {
             if let Some(awaiter) = session_awaiter.take() {
                 if let Err(err) = awaiter.send(AwaitingActiveSessionResponse::Active) {
                     error!("failed to send session awaiter response: {err:?}");
+                } else {
+                    debug!("notified session awaiter");
                 }
             }
         }
