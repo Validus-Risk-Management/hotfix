@@ -21,17 +21,17 @@ pub enum SessionState {
     ///
     /// This is also the state we're in if we purposefully disconnected due to the current
     /// time being out of session hours.
-    Disconnected {
-        reconnect: bool,
-        session_awaiter: Option<oneshot::Sender<AwaitingActiveSessionResponse>>,
-        _reason: String,
-    },
+    Disconnected(DisconnectedState),
 }
 
 impl SessionState {
+    pub fn new_disconnected(reconnect: bool, reason: &str) -> Self {
+        Self::Disconnected(DisconnectedState::new(reconnect, reason))
+    }
+
     pub fn should_reconnect(&self) -> bool {
         match self {
-            SessionState::Disconnected { reconnect, .. } => *reconnect,
+            SessionState::Disconnected(DisconnectedState { reconnect, .. }) => *reconnect,
             _ => true,
         }
     }
@@ -106,18 +106,17 @@ impl SessionState {
         responder: oneshot::Sender<AwaitingActiveSessionResponse>,
     ) {
         match self {
-            SessionState::Disconnected {
-                reconnect: true,
-                session_awaiter,
-                _reason,
-            } => {
-                if session_awaiter.is_some() {
-                    error!("session awaiter already registered");
+            SessionState::Disconnected(state) => {
+                if state.has_session_awaiter() {
+                    let reason = &state.reason;
+                    error!(
+                        "session awaiter already registered on state disconnected due to: {reason}"
+                    );
                     if let Err(err) = responder.send(AwaitingActiveSessionResponse::Shutdown) {
                         error!("failed to send session awaiter response: {err:?}");
                     }
                 } else {
-                    *session_awaiter = Some(responder);
+                    state.set_session_awaiter(responder);
                     debug!("registered session awaiter");
                 }
             }
@@ -131,11 +130,8 @@ impl SessionState {
     }
 
     pub fn notify_session_awaiter(&mut self) {
-        if let SessionState::Disconnected {
-            session_awaiter, ..
-        } = self
-        {
-            if let Some(awaiter) = session_awaiter.take() {
+        if let SessionState::Disconnected(state) = self {
+            if let Some(awaiter) = state.take_session_awaiter() {
                 if let Err(err) = awaiter.send(AwaitingActiveSessionResponse::Active) {
                     error!("failed to send session awaiter response: {err:?}");
                 } else {
@@ -163,5 +159,33 @@ impl AwaitingResendState {
             end_seq_number,
             inbound_queue: Default::default(),
         }
+    }
+}
+
+pub struct DisconnectedState {
+    reconnect: bool,
+    session_awaiter: Option<oneshot::Sender<AwaitingActiveSessionResponse>>,
+    reason: String,
+}
+
+impl DisconnectedState {
+    fn new(reconnect: bool, reason: &str) -> Self {
+        Self {
+            reconnect,
+            session_awaiter: None,
+            reason: reason.to_string(),
+        }
+    }
+
+    fn set_session_awaiter(&mut self, responder: oneshot::Sender<AwaitingActiveSessionResponse>) {
+        self.session_awaiter = Some(responder);
+    }
+
+    fn has_session_awaiter(&self) -> bool {
+        self.session_awaiter.is_some()
+    }
+
+    fn take_session_awaiter(&mut self) -> Option<oneshot::Sender<AwaitingActiveSessionResponse>> {
+        self.session_awaiter.take()
     }
 }

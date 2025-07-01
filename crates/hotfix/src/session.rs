@@ -146,11 +146,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             schedule,
             message_config: MessageConfig::default(),
             dictionary,
-            state: SessionState::Disconnected {
-                reconnect: true,
-                _reason: "initialising".to_string(),
-                session_awaiter: None,
-            },
+            state: SessionState::new_disconnected(true, "initialising"),
             application,
             store,
             awaiting_test_response: None,
@@ -333,18 +329,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             | SessionState::AwaitingLogon { .. }
             | SessionState::AwaitingResend(_) => {
                 self.state.disconnect().await;
-                self.state = SessionState::Disconnected {
-                    reconnect: true,
-                    _reason: reason,
-                    session_awaiter: None,
-                }
+                self.state = SessionState::new_disconnected(true, &reason);
             }
             SessionState::LoggedOut { reconnect } => {
-                self.state = SessionState::Disconnected {
-                    reconnect,
-                    _reason: "logged out".to_string(),
-                    session_awaiter: None,
-                }
+                self.state = SessionState::new_disconnected(reconnect, "logged out");
             }
             SessionState::Disconnected { .. } => {
                 warn!("disconnect message was received, but the session is already disconnected")
@@ -401,11 +389,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     async fn on_logout(&mut self) {
         if let SessionState::AwaitingLogout { .. } = &self.state {
             self.state.disconnect().await;
-            self.state = SessionState::Disconnected {
-                reconnect: true,
-                _reason: "we logged out gracefully".to_string(),
-                session_awaiter: None,
-            };
+            self.state = SessionState::new_disconnected(true, "we logged out gracefully");
         } else {
             // TODO: reconnect = false isn't always valid, this should be more sophisticated
             self.state.disconnect().await;
