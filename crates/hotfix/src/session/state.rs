@@ -1,8 +1,10 @@
 use hotfix_message::message::Message;
 use std::collections::VecDeque;
+use tokio::sync::oneshot;
 use tracing::{debug, error};
 
 use crate::message::parser::RawFixMessage;
+use crate::session::event::AwaitingActiveSessionResponse;
 use crate::transport::socket_writer::WriterRef;
 
 pub enum SessionState {
@@ -17,7 +19,14 @@ pub enum SessionState {
     /// The peer has logged us out.
     LoggedOut { reconnect: bool },
     /// The TCP connection has been dropped.
-    Disconnected { reconnect: bool, _reason: String },
+    ///
+    /// This is also the state we're in if we purposefully disconnected due to the current
+    /// time being out of session hours.
+    Disconnected {
+        reconnect: bool,
+        session_awaiter: Option<oneshot::Sender<AwaitingActiveSessionResponse>>,
+        _reason: String,
+    },
 }
 
 impl SessionState {
@@ -90,6 +99,34 @@ impl SessionState {
                 true
             }
             _ => false,
+        }
+    }
+
+    pub fn register_session_awaiter(
+        &self,
+        responder: oneshot::Sender<AwaitingActiveSessionResponse>,
+    ) {
+        match self {
+            SessionState::Disconnected {
+                reconnect: true,
+                session_awaiter,
+                _reason,
+            } => {
+                if session_awaiter.is_some() {
+                    error!("session awaiter already registered");
+                    if let Err(err) = responder.send(AwaitingActiveSessionResponse::Shutdown) {
+                        error!("failed to send session awaiter response: {err:?}");
+                    }
+                } else {
+                    // set the session_awaiter on the current state
+                }
+            }
+            _ => {
+                error!("session awaiter can only be registered on disconnected sessions");
+                if let Err(err) = responder.send(AwaitingActiveSessionResponse::Shutdown) {
+                    error!("failed to send session awaiter response: {err:?}");
+                }
+            }
         }
     }
 }

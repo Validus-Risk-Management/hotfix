@@ -30,6 +30,7 @@ use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
 use crate::message_utils::is_admin;
+use crate::session::event::AwaitingActiveSessionResponse;
 use crate::session::state::AwaitingResendState;
 use crate::session_schedule::SessionSchedule;
 use event::SessionEvent;
@@ -94,6 +95,15 @@ impl<M: FixMessage> SessionRef<M> {
             .unwrap();
         receiver.await.expect("to receive a response")
     }
+
+    pub async fn await_active_session_time(&self) {
+        let (sender, receiver) = oneshot::channel::<AwaitingActiveSessionResponse>();
+        self.sender
+            .send(SessionEvent::AwaitingActiveSession(sender))
+            .await
+            .unwrap();
+        receiver.await.expect("to receive a response");
+    }
 }
 
 struct Session<M, S> {
@@ -137,6 +147,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             state: SessionState::Disconnected {
                 reconnect: true,
                 _reason: "initialising".to_string(),
+                session_awaiter: None,
             },
             application,
             store,
@@ -323,12 +334,14 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 self.state = SessionState::Disconnected {
                     reconnect: true,
                     _reason: reason,
+                    session_awaiter: None,
                 }
             }
             SessionState::LoggedOut { reconnect } => {
                 self.state = SessionState::Disconnected {
                     reconnect,
                     _reason: "logged out".to_string(),
+                    session_awaiter: None,
                 }
             }
             SessionState::Disconnected { .. } => {
@@ -646,6 +659,9 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 responder
                     .send(self.state.should_reconnect())
                     .expect("be able to respond");
+            }
+            SessionEvent::AwaitingActiveSession(responder) => {
+                self.state.register_session_awaiter(responder);
             }
         }
     }

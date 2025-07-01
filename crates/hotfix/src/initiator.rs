@@ -58,10 +58,13 @@ async fn establish_connection<M: FixMessage>(config: SessionConfig, session_ref:
             warn!("session indicated we shouldn't reconnect");
             break;
         }
+        session_ref.await_active_session_time().await;
 
         match FixConnection::connect(&config, session_ref.clone()).await {
             Ok(conn) => {
                 session_ref.register_writer(conn.get_writer()).await;
+
+                // TODO: should this ask the session about disconnects?
                 conn.run_until_disconnect().await;
 
                 warn!("session connection dropped, attempting to reconnect");
