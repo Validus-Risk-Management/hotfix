@@ -1,5 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use futures::TryStreamExt;
 use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
@@ -181,5 +182,9 @@ impl MessageStore for MongoDbMessageStore {
     async fn reset(&mut self) -> Result<()> {
         self.current_sequence = Self::new_sequence(&self.meta_collection).await?;
         Ok(())
+    }
+
+    async fn creation_time(&self) -> Result<DateTime<Utc>> {
+        todo!()
     }
 }

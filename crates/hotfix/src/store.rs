@@ -18,6 +18,7 @@ pub mod mongodb;
 pub mod redb;
 
 use anyhow::Result;
+use chrono::DateTime;
 
 #[async_trait::async_trait]
 pub trait MessageStore {
@@ -29,4 +30,5 @@ pub trait MessageStore {
     async fn increment_target_seq_number(&mut self) -> Result<()>;
     async fn set_target_seq_number(&mut self, seq_number: u64) -> Result<()>;
     async fn reset(&mut self) -> Result<()>;
+    async fn creation_time(&self) -> Result<DateTime<chrono::Utc>>;
 }

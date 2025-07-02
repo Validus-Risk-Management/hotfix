@@ -1,6 +1,6 @@
-use anyhow::Result;
-
 use crate::store::MessageStore;
+use anyhow::Result;
+use chrono::{DateTime, Utc};
 
 #[derive(Debug, Default)]
 pub struct InMemoryMessageStore {
@@ -49,5 +49,9 @@ impl MessageStore for InMemoryMessageStore {
         self.target_seq_number = 0;
         self.messages.clear();
         Ok(())
+    }
+
+    async fn creation_time(&self) -> Result<DateTime<Utc>> {
+        todo!()
     }
 }

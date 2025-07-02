@@ -11,10 +11,10 @@ use serde::{Deserialize, Serialize};
 use serde_dynamo::{from_item, from_items, to_item};
 use tracing::{error, info};
 
+use crate::store::MessageStore;
 pub use aws_config as config;
 pub use aws_sdk_dynamodb as sdk;
-
-use crate::store::MessageStore;
+use chrono::{DateTime, Utc};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct SequenceMeta {
@@ -271,5 +271,9 @@ impl MessageStore for DynamoMessageStore {
         self.current_sequence = Self::new_sequence(&self.client, &self.table_name).await?;
 
         Ok(())
+    }
+
+    async fn creation_time(&self) -> Result<DateTime<Utc>> {
+        todo!()
     }
 }

@@ -1,8 +1,8 @@
+use crate::store::MessageStore;
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use redb::{Database, ReadableTable, TableDefinition, TableError};
 use std::path::Path;
-
-use crate::store::MessageStore;
 
 const MESSAGES_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("messages");
 const SEQ_NUMBER_TABLE: TableDefinition<&str, u64> = TableDefinition::new("seq_numbers");
@@ -131,6 +131,10 @@ impl MessageStore for RedbMessageStore {
         }
         write_txn.commit()?;
         Ok(())
+    }
+
+    async fn creation_time(&self) -> Result<DateTime<Utc>> {
+        todo!()
     }
 }
 
