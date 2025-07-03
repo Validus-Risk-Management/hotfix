@@ -6,8 +6,6 @@ use hotfix::config::Config;
 use hotfix::field_types::{Date, Timestamp};
 use hotfix::initiator::Initiator;
 use hotfix::message::fix44;
-use hotfix::store::dynamodb;
-use hotfix::store::dynamodb::DynamoMessageStore;
 use hotfix::store::mongodb::Client;
 use std::path::Path;
 use tokio::task::spawn_blocking;
@@ -19,7 +17,6 @@ use crate::messages::{Message, NewOrderSingle};
 #[derive(ValueEnum, Clone, Debug)]
 #[clap(rename_all = "lower")]
 enum Database {
-    Dynamodb,
     Redb,
     Mongodb,
 }
@@ -122,22 +119,6 @@ async fn start_session(
     let session_config = config.sessions.pop().expect("config to include a session");
 
     match db_config {
-        Database::Dynamodb => {
-            std::env::set_var("AWS_REGION", "eu-west-1");
-            std::env::set_var("AWS_ACCESS_KEY_ID", "AKIDLOCALSTACK");
-            std::env::set_var("AWS_SECRET_ACCESS_KEY", "localstacksecret");
-            let config =
-                dynamodb::config::load_defaults(dynamodb::config::BehaviorVersion::v2025_01_17())
-                    .await;
-            let local_config = dynamodb::sdk::config::Builder::from(&config)
-                .endpoint_url("http://localhost:8000")
-                .build();
-            let client = dynamodb::sdk::Client::from_conf(local_config);
-            let store = DynamoMessageStore::new(client, "hotfix".to_string())
-                .await
-                .expect("be able to create store");
-            Initiator::new(session_config, app, store).await
-        }
         Database::Redb => {
             let store = hotfix::store::redb::RedbMessageStore::new("session.db")
                 .expect("be able to create store");
