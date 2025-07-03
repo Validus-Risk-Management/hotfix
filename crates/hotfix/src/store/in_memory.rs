@@ -2,11 +2,23 @@ use crate::store::MessageStore;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct InMemoryMessageStore {
     sender_seq_number: u64,
     target_seq_number: u64,
+    creation_time: DateTime<Utc>,
     messages: Vec<Vec<u8>>,
+}
+
+impl Default for InMemoryMessageStore {
+    fn default() -> Self {
+        Self {
+            sender_seq_number: 0,
+            target_seq_number: 0,
+            creation_time: Utc::now(),
+            messages: vec![],
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -48,10 +60,11 @@ impl MessageStore for InMemoryMessageStore {
         self.sender_seq_number = 0;
         self.target_seq_number = 0;
         self.messages.clear();
+        self.creation_time = Utc::now();
         Ok(())
     }
 
     async fn creation_time(&self) -> Result<DateTime<Utc>> {
-        todo!()
+        Ok(self.creation_time)
     }
 }
