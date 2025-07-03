@@ -3,8 +3,8 @@ use hotfix::store::MessageStore;
 
 #[tokio::test]
 async fn test_new_store_initialization() {
-    for factory in create_test_store_factories() {
-        let store = factory.create_store();
+    for factory in create_test_store_factories().await {
+        let store = factory.create_store().await;
 
         assert_eq!(store.next_sender_seq_number(), 1);
         assert_eq!(store.next_target_seq_number(), 1);
@@ -13,8 +13,8 @@ async fn test_new_store_initialization() {
 
 #[tokio::test]
 async fn test_add_and_get_messages() {
-    for factory in create_test_store_factories() {
-        let mut store = factory.create_store();
+    for factory in create_test_store_factories().await {
+        let mut store = factory.create_store().await;
 
         let message1 = b"test message 1";
         let message2 = b"test message 2";
@@ -43,8 +43,8 @@ async fn test_add_and_get_messages() {
 
 #[tokio::test]
 async fn test_get_slice_partial_range() {
-    for factory in create_test_store_factories() {
-        let mut store = factory.create_store();
+    for factory in create_test_store_factories().await {
+        let mut store = factory.create_store().await;
 
         let message1 = b"message 1";
         let message2 = b"message 2";
@@ -77,8 +77,8 @@ async fn test_get_slice_partial_range() {
 
 #[tokio::test]
 async fn test_get_slice_empty_range() {
-    for factory in create_test_store_factories() {
-        let store = factory.create_store();
+    for factory in create_test_store_factories().await {
+        let store = factory.create_store().await;
 
         let messages = store.get_slice(1, 3).await.expect("Failed to get messages");
         assert_eq!(messages.len(), 0);
@@ -87,8 +87,8 @@ async fn test_get_slice_empty_range() {
 
 #[tokio::test]
 async fn test_increment_sender_seq_number() {
-    for factory in create_test_store_factories() {
-        let mut store = factory.create_store();
+    for factory in create_test_store_factories().await {
+        let mut store = factory.create_store().await;
 
         assert_eq!(store.next_sender_seq_number(), 1);
 
@@ -108,8 +108,8 @@ async fn test_increment_sender_seq_number() {
 
 #[tokio::test]
 async fn test_increment_target_seq_number() {
-    for factory in create_test_store_factories() {
-        let mut store = factory.create_store();
+    for factory in create_test_store_factories().await {
+        let mut store = factory.create_store().await;
 
         assert_eq!(store.next_target_seq_number(), 1);
 
@@ -129,8 +129,8 @@ async fn test_increment_target_seq_number() {
 
 #[tokio::test]
 async fn test_set_target_seq_number() {
-    for factory in create_test_store_factories() {
-        let mut store = factory.create_store();
+    for factory in create_test_store_factories().await {
+        let mut store = factory.create_store().await;
 
         assert_eq!(store.next_target_seq_number(), 1);
 
@@ -150,8 +150,8 @@ async fn test_set_target_seq_number() {
 
 #[tokio::test]
 async fn test_reset_store() {
-    for factory in create_test_store_factories() {
-        let mut store = factory.create_store();
+    for factory in create_test_store_factories().await {
+        let mut store = factory.create_store().await;
 
         // Add some messages and increment sequence numbers
         store
@@ -192,14 +192,14 @@ async fn test_reset_store() {
 
 #[tokio::test]
 async fn test_persistence_across_store_instances() {
-    for factory in create_test_store_factories() {
+    for factory in create_test_store_factories().await {
         if !factory.is_persistent() {
             continue;
         }
 
         // Create first store instance and add data
         {
-            let mut store1 = factory.create_store();
+            let mut store1 = factory.create_store().await;
             store1
                 .add(1, b"persistent message")
                 .await
@@ -216,7 +216,7 @@ async fn test_persistence_across_store_instances() {
 
         // Create second store instance and verify data persists
         {
-            let store2 = factory.create_store();
+            let store2 = factory.create_store().await;
 
             assert_eq!(store2.next_sender_seq_number(), 2);
             assert_eq!(store2.next_target_seq_number(), 6);
@@ -233,8 +233,8 @@ async fn test_persistence_across_store_instances() {
 
 #[tokio::test]
 async fn test_get_slice_beyond_available_messages() {
-    for factory in create_test_store_factories() {
-        let mut store = factory.create_store();
+    for factory in create_test_store_factories().await {
+        let mut store = factory.create_store().await;
 
         store
             .add(1, b"only message")
@@ -252,8 +252,8 @@ async fn test_get_slice_beyond_available_messages() {
 
 #[tokio::test]
 async fn test_overwrite_existing_message() {
-    for factory in create_test_store_factories() {
-        let mut store = factory.create_store();
+    for factory in create_test_store_factories().await {
+        let mut store = factory.create_store().await;
 
         store
             .add(1, b"original message")
@@ -270,14 +270,15 @@ async fn test_overwrite_existing_message() {
     }
 }
 
+#[async_trait::async_trait]
 pub trait TestStoreFactory {
-    fn create_store(&self) -> Box<dyn MessageStore>;
+    async fn create_store(&self) -> Box<dyn MessageStore>;
     fn is_persistent(&self) -> bool {
         true
     }
 }
 
-fn create_test_store_factories() -> Vec<Box<dyn TestStoreFactory>> {
+async fn create_test_store_factories() -> Vec<Box<dyn TestStoreFactory>> {
     let mut stores: Vec<Box<dyn TestStoreFactory>> = Vec::new();
 
     // Add in-memory store factory
@@ -291,13 +292,22 @@ fn create_test_store_factories() -> Vec<Box<dyn TestStoreFactory>> {
         );
     }
 
+    #[cfg(feature = "mongodb")]
+    {
+        stores.push(
+            Box::new(mongodb_test_utils::MongodbTestStoreFactory::new().await)
+                as Box<dyn TestStoreFactory>,
+        );
+    }
+
     stores
 }
 
 struct InMemoryMessageStoreTestFactory;
 
+#[async_trait::async_trait]
 impl TestStoreFactory for InMemoryMessageStoreTestFactory {
-    fn create_store(&self) -> Box<dyn MessageStore> {
+    async fn create_store(&self) -> Box<dyn MessageStore> {
         Box::new(InMemoryMessageStore::default())
     }
 
@@ -328,8 +338,9 @@ mod redb_test_utils {
         }
     }
 
+    #[async_trait::async_trait]
     impl TestStoreFactory for RedbTestStoreFactory {
-        fn create_store(&self) -> Box<dyn MessageStore> {
+        async fn create_store(&self) -> Box<dyn MessageStore> {
             Box::new(RedbMessageStore::new(&self.db_path).expect("Failed to create store"))
         }
     }
@@ -338,6 +349,56 @@ mod redb_test_utils {
         fn drop(&mut self) {
             // Clean up the database file when the test store is dropped
             let _ = fs::remove_file(&self.db_path);
+        }
+    }
+}
+
+#[cfg(feature = "mongodb")]
+mod mongodb_test_utils {
+    use crate::TestStoreFactory;
+    use hotfix::store::mongodb::MongoDbMessageStore;
+    use hotfix::store::MessageStore;
+    use mongodb::Client;
+    use testcontainers::GenericImage;
+    use testcontainers_modules::testcontainers::runners::AsyncRunner;
+    use testcontainers_modules::testcontainers::ContainerAsync;
+    use tokio::sync::OnceCell;
+
+    static MONGO_CONTAINER: OnceCell<ContainerAsync<GenericImage>> = OnceCell::const_new();
+    const MONGO_PORT: u16 = 27017;
+
+    pub(crate) struct MongodbTestStoreFactory {
+        client: Client,
+        collection_name: String,
+    }
+
+    impl MongodbTestStoreFactory {
+        pub(crate) async fn new() -> Self {
+            let container = MONGO_CONTAINER.get_or_init(Self::init_container).await;
+            let host = container.get_host().await.unwrap();
+            let port = container.get_host_port_ipv4(MONGO_PORT).await.unwrap();
+            let uri = format!("mongodb://{host}:{port}");
+            let client = Client::with_uri_str(&uri).await.unwrap();
+
+            Self {
+                client,
+                collection_name: uuid::Uuid::new_v4().to_string(),
+            }
+        }
+
+        async fn init_container() -> ContainerAsync<GenericImage> {
+            GenericImage::new("mongo", "8.0").start().await.unwrap()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl TestStoreFactory for MongodbTestStoreFactory {
+        async fn create_store(&self) -> Box<dyn MessageStore> {
+            let db = self.client.database("hotfixIntegrationTests");
+            let store = MongoDbMessageStore::new(db, Some(&self.collection_name))
+                .await
+                .unwrap();
+            Box::new(store)
         }
     }
 }

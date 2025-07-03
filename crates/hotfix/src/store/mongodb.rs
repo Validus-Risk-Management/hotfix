@@ -6,7 +6,7 @@ use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::spec::BinarySubtype;
 use mongodb::bson::Binary;
-use mongodb::options::{FindOneOptions, IndexOptions};
+use mongodb::options::{FindOneOptions, IndexOptions, ReplaceOptions};
 use mongodb::{Collection, Database, IndexModel};
 use serde::{Deserialize, Serialize};
 
@@ -89,8 +89,8 @@ impl MongoDbMessageStore {
         let initial_meta = SequenceMeta {
             object_id: sequence_id,
             meta: true,
-            sender_seq_number: 1,
-            target_seq_number: 1,
+            sender_seq_number: 0,
+            target_seq_number: 0,
         };
         meta_collection.insert_one(&initial_meta, None).await?;
 
@@ -109,7 +109,11 @@ impl MessageStore for MongoDbMessageStore {
                 bytes: message.to_vec(),
             },
         };
-        self.message_collection.insert_one(message, None).await?;
+        let filter = doc! { "sequence_id": self.current_sequence.object_id, "msg_seq_number": sequence_number as u32 };
+        let options = ReplaceOptions::builder().upsert(true).build();
+        self.message_collection
+            .replace_one(filter, message, options)
+            .await?;
 
         Ok(())
     }
@@ -118,8 +122,8 @@ impl MessageStore for MongoDbMessageStore {
         let filter = doc! {
             "sequence_id": self.current_sequence.object_id,
             "msg_seq_number": doc! {
-                "$gt": begin as u32,
-                "$lt": end as u32,
+                "$gte": begin as u32,
+                "$lte": end as u32,
             }
         };
         let mut cursor = self.message_collection.find(filter, None).await?;
@@ -133,11 +137,11 @@ impl MessageStore for MongoDbMessageStore {
     }
 
     fn next_sender_seq_number(&self) -> u64 {
-        self.current_sequence.sender_seq_number
+        self.current_sequence.sender_seq_number + 1
     }
 
     fn next_target_seq_number(&self) -> u64 {
-        self.current_sequence.target_seq_number
+        self.current_sequence.target_seq_number + 1
     }
 
     async fn increment_sender_seq_number(&mut self) -> Result<()> {
