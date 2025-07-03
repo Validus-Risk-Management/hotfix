@@ -74,21 +74,3 @@ impl MessageStore for InMemoryMessageStore {
         Ok(self.creation_time)
     }
 }
-
-#[cfg(test)]
-pub(crate) mod test_utils {
-    use super::*;
-    use crate::store::tests::TestStoreFactory;
-
-    pub(crate) struct InMemoryMessageStoreTestFactory;
-
-    impl TestStoreFactory for InMemoryMessageStoreTestFactory {
-        fn create_store(&self) -> Box<dyn MessageStore> {
-            Box::new(InMemoryMessageStore::default())
-        }
-
-        fn is_persistent(&self) -> bool {
-            false
-        }
-    }
-}

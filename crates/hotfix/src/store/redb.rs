@@ -137,38 +137,3 @@ impl MessageStore for RedbMessageStore {
         todo!()
     }
 }
-
-#[cfg(test)]
-pub(crate) mod test_utils {
-    use super::*;
-    use crate::store::tests::TestStoreFactory;
-    use std::path::PathBuf;
-    use std::{env, fs};
-
-    pub(crate) struct RedbTestStoreFactory {
-        db_path: PathBuf,
-    }
-
-    impl RedbTestStoreFactory {
-        pub(crate) fn new() -> Self {
-            let mut temp_path = env::temp_dir();
-            temp_path.push(format!("redb_test_{}", uuid::Uuid::new_v4()));
-            temp_path.set_extension("db");
-
-            Self { db_path: temp_path }
-        }
-    }
-
-    impl TestStoreFactory for RedbTestStoreFactory {
-        fn create_store(&self) -> Box<dyn MessageStore> {
-            Box::new(RedbMessageStore::new(&self.db_path).expect("Failed to create store"))
-        }
-    }
-
-    impl Drop for RedbTestStoreFactory {
-        fn drop(&mut self) {
-            // Clean up the database file when the test store is dropped
-            let _ = fs::remove_file(&self.db_path);
-        }
-    }
-}
