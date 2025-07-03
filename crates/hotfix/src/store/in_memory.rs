@@ -1,13 +1,14 @@
 use crate::store::MessageStore;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct InMemoryMessageStore {
     sender_seq_number: u64,
     target_seq_number: u64,
     creation_time: DateTime<Utc>,
-    messages: Vec<Vec<u8>>,
+    messages: HashMap<u64, Vec<u8>>,
 }
 
 impl Default for InMemoryMessageStore {
@@ -16,7 +17,7 @@ impl Default for InMemoryMessageStore {
             sender_seq_number: 0,
             target_seq_number: 0,
             creation_time: Utc::now(),
-            messages: vec![],
+            messages: HashMap::new(),
         }
     }
 }
@@ -24,13 +25,18 @@ impl Default for InMemoryMessageStore {
 #[async_trait::async_trait]
 impl MessageStore for InMemoryMessageStore {
     async fn add(&mut self, sequence_number: u64, message: &[u8]) -> Result<()> {
-        assert_eq!(sequence_number as usize, self.messages.len());
-        self.messages.push(message.to_vec());
+        self.messages.insert(sequence_number, message.to_vec());
         Ok(())
     }
 
     async fn get_slice(&self, begin: usize, end: usize) -> Result<Vec<Vec<u8>>> {
-        Ok(self.messages.as_slice()[begin..=end].to_vec())
+        let mut msgs = Vec::with_capacity(end - begin + 1);
+        for idx in begin..=end {
+            if let Some(msg) = self.messages.get(&(idx as u64)) {
+                msgs.push(msg.to_vec());
+            }
+        }
+        Ok(msgs)
     }
 
     fn next_sender_seq_number(&self) -> u64 {
@@ -66,5 +72,23 @@ impl MessageStore for InMemoryMessageStore {
 
     async fn creation_time(&self) -> Result<DateTime<Utc>> {
         Ok(self.creation_time)
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod test_utils {
+    use super::*;
+    use crate::store::tests::TestStoreFactory;
+
+    pub(crate) struct InMemoryMessageStoreTestFactory;
+
+    impl TestStoreFactory for InMemoryMessageStoreTestFactory {
+        fn create_store(&self) -> Box<dyn MessageStore> {
+            Box::new(InMemoryMessageStore::default())
+        }
+
+        fn is_persistent(&self) -> bool {
+            false
+        }
     }
 }
