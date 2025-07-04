@@ -65,7 +65,7 @@ impl MongoDbMessageStore {
             .build();
 
         meta_collection
-            .create_indexes(vec![meta_index, message_index], None)
+            .create_indexes(vec![meta_index, message_index])
             .await?;
         Ok(())
     }
@@ -75,7 +75,8 @@ impl MongoDbMessageStore {
     ) -> Result<SequenceMeta> {
         let options = FindOneOptions::builder().sort(doc! { "_id": -1 }).build();
         let res = meta_collection
-            .find_one(doc! { "meta": true }, options)
+            .find_one(doc! { "meta": true })
+            .with_options(options)
             .await?;
 
         let meta = match res {
@@ -94,7 +95,7 @@ impl MongoDbMessageStore {
             sender_seq_number: 0,
             target_seq_number: 0,
         };
-        meta_collection.insert_one(&initial_meta, None).await?;
+        meta_collection.insert_one(&initial_meta).await?;
 
         Ok(initial_meta)
     }
@@ -114,7 +115,8 @@ impl MessageStore for MongoDbMessageStore {
         let filter = doc! { "sequence_id": self.current_sequence.object_id, "msg_seq_number": sequence_number as u32 };
         let options = ReplaceOptions::builder().upsert(true).build();
         self.message_collection
-            .replace_one(filter, message, options)
+            .replace_one(filter, message)
+            .with_options(options)
             .await?;
 
         Ok(())
@@ -128,7 +130,7 @@ impl MessageStore for MongoDbMessageStore {
                 "$lte": end as u32,
             }
         };
-        let mut cursor = self.message_collection.find(filter, None).await?;
+        let mut cursor = self.message_collection.find(filter).await?;
 
         let mut messages = Vec::new();
         while let Some(message) = cursor.try_next().await? {
@@ -152,7 +154,6 @@ impl MessageStore for MongoDbMessageStore {
             .update_one(
                 doc! { "_id": self.current_sequence.object_id },
                 doc! { "$inc": { "sender_seq_number": 1 } },
-                None,
             )
             .await?;
 
@@ -165,7 +166,6 @@ impl MessageStore for MongoDbMessageStore {
             .update_one(
                 doc! { "_id": self.current_sequence.object_id },
                 doc! { "$inc": { "target_seq_number": 1 } },
-                None,
             )
             .await?;
 
@@ -178,7 +178,6 @@ impl MessageStore for MongoDbMessageStore {
             .update_one(
                 doc! { "_id": self.current_sequence.object_id },
                 doc! { "$set": { "target_seq_number": seq_number as u32 } },
-                None,
             )
             .await?;
 
