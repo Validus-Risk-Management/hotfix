@@ -1,5 +1,5 @@
 use crate::store::MessageStore;
-use anyhow::Result;
+use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use redb::{Database, ReadableTable, TableDefinition, TableError};
 use std::path::Path;
@@ -28,24 +28,28 @@ impl RedbMessageStore {
         let meta = if let Some(stored_metadata) = Self::read_meta_data(&db)? {
             stored_metadata
         } else {
-            let creation_timestamp = Utc::now().timestamp_micros() as u64;
-            let sender_seq_number = 0;
-            let target_seq_number = 0;
-
-            // if we have just set the creation time, we need to write it to redb
-            let write_txn = db.begin_write()?;
-            {
-                let mut meta_table = write_txn.open_table(META_TABLE)?;
-                meta_table.insert(CREATION_TIME_KEY, creation_timestamp)?;
-                meta_table.insert(SENDER_KEY, sender_seq_number)?;
-                meta_table.insert(TARGET_KEY, target_seq_number)?;
-            }
-            write_txn.commit()?;
-
+            Self::persist_default_meta_data(&db)?;
             Self::read_meta_data(&db)?.unwrap()
         };
 
         Ok(Self { db, meta })
+    }
+
+    fn persist_default_meta_data(db: &Database) -> Result<()> {
+        let creation_timestamp = Utc::now().timestamp_micros() as u64;
+        let sender_seq_number = 0;
+        let target_seq_number = 0;
+
+        // if we have just set the creation time, we need to write it to redb
+        let write_txn = db.begin_write()?;
+        {
+            let mut meta_table = write_txn.open_table(META_TABLE)?;
+            meta_table.insert(CREATION_TIME_KEY, creation_timestamp)?;
+            meta_table.insert(SENDER_KEY, sender_seq_number)?;
+            meta_table.insert(TARGET_KEY, target_seq_number)?;
+        }
+        write_txn.commit()?;
+        Ok(())
     }
 
     fn read_meta_data(db: &Database) -> Result<Option<MetaData>> {
@@ -56,20 +60,20 @@ impl RedbMessageStore {
                     if let Some(ts) = DateTime::from_timestamp_micros(v.value() as i64) {
                         ts
                     } else {
-                        anyhow::bail!("invalid creation timestamp found")
+                        bail!("invalid creation timestamp found")
                     }
                 } else {
-                    anyhow::bail!("no creation timestamp found")
+                    bail!("no creation timestamp found")
                 };
                 let sender_seq_number = if let Some(v) = table.get(SENDER_KEY)? {
                     v.value()
                 } else {
-                    anyhow::bail!("no sender seq number found")
+                    bail!("no sender seq number found")
                 };
                 let target_seq_number = if let Some(v) = table.get(TARGET_KEY)? {
                     v.value()
                 } else {
-                    anyhow::bail!("no target seq number found")
+                    bail!("no target seq number found")
                 };
 
                 Some(MetaData {
@@ -160,18 +164,13 @@ impl MessageStore for RedbMessageStore {
     }
 
     async fn reset(&mut self) -> Result<()> {
-        self.meta.sender_seq_number = 0;
-        self.meta.target_seq_number = 0;
-        let write_txn = self.db.begin_write()?;
-        {
-            let mut seq_no_table = write_txn.open_table(META_TABLE)?;
-            seq_no_table.insert(SENDER_KEY, self.meta.sender_seq_number)?;
-            seq_no_table.insert(TARGET_KEY, self.meta.target_seq_number)?;
-            let mut messages_table = write_txn.open_table(MESSAGES_TABLE)?;
-            messages_table.drain::<u64>(..)?;
+        Self::persist_default_meta_data(&self.db)?;
+        if let Some(meta) = Self::read_meta_data(&self.db)? {
+            self.meta = meta;
+            Ok(())
+        } else {
+            bail!("meta unexpectedly not found")
         }
-        write_txn.commit()?;
-        Ok(())
     }
 
     fn creation_time(&self) -> DateTime<Utc> {

@@ -303,6 +303,28 @@ async fn test_creation_time_is_preserved() {
     }
 }
 
+#[tokio::test]
+async fn test_creation_time_gets_reset_correctly() {
+    for factory in create_test_store_factories().await {
+        let mut store = factory.create_store().await;
+
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        let after_sleep = Utc::now();
+
+        store.reset().await.expect("failed to reset store");
+        let reset_creation_time = store.creation_time();
+        assert!(reset_creation_time >= after_sleep);
+
+        if !factory.is_persistent() {
+            continue;
+        }
+
+        drop(store);
+        let store = factory.create_store().await;
+        assert_eq!(reset_creation_time, store.creation_time());
+    }
+}
+
 #[async_trait::async_trait]
 pub trait TestStoreFactory {
     async fn create_store(&self) -> Box<dyn MessageStore>;
