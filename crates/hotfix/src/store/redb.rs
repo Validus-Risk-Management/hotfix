@@ -1,7 +1,7 @@
 use crate::store::MessageStore;
 use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
-use redb::{Database, ReadableTable, TableDefinition, TableError};
+use redb::{Database, ReadOnlyTable, ReadableTable, TableDefinition, TableError};
 use std::path::Path;
 
 const MESSAGES_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("messages");
@@ -25,17 +25,18 @@ impl RedbMessageStore {
     pub fn new(path: impl AsRef<Path>) -> Result<Self> {
         let db = Database::create(path)?;
 
-        let meta = if let Some(stored_metadata) = Self::read_meta_data(&db)? {
+        let meta = if let Some(stored_metadata) = Self::load_metadata(&db)? {
             stored_metadata
         } else {
-            Self::persist_default_meta_data(&db)?;
-            Self::read_meta_data(&db)?.unwrap()
+            Self::persist_default_metadata(&db)?;
+            Self::load_metadata(&db)?
+                .ok_or_else(|| anyhow::anyhow!("failed to read metadata after initialization"))?
         };
 
         Ok(Self { db, meta })
     }
 
-    fn persist_default_meta_data(db: &Database) -> Result<()> {
+    fn persist_default_metadata(db: &Database) -> Result<()> {
         let creation_timestamp = Utc::now().timestamp_micros() as u64;
         let sender_seq_number = 0;
         let target_seq_number = 0;
@@ -47,34 +48,23 @@ impl RedbMessageStore {
             meta_table.insert(CREATION_TIME_KEY, creation_timestamp)?;
             meta_table.insert(SENDER_KEY, sender_seq_number)?;
             meta_table.insert(TARGET_KEY, target_seq_number)?;
+            let mut messages_table = write_txn.open_table(MESSAGES_TABLE)?;
+            messages_table.drain::<u64>(..)?;
         }
         write_txn.commit()?;
         Ok(())
     }
 
-    fn read_meta_data(db: &Database) -> Result<Option<MetaData>> {
+    fn load_metadata(db: &Database) -> Result<Option<MetaData>> {
         let read_txn = db.begin_read()?;
         let metadata = match read_txn.open_table(META_TABLE) {
             Ok(table) => {
-                let creation_time = if let Some(v) = table.get(CREATION_TIME_KEY)? {
-                    if let Some(ts) = DateTime::from_timestamp_micros(v.value() as i64) {
-                        ts
-                    } else {
-                        bail!("invalid creation timestamp found")
-                    }
-                } else {
-                    bail!("no creation timestamp found")
-                };
-                let sender_seq_number = if let Some(v) = table.get(SENDER_KEY)? {
-                    v.value()
-                } else {
-                    bail!("no sender seq number found")
-                };
-                let target_seq_number = if let Some(v) = table.get(TARGET_KEY)? {
-                    v.value()
-                } else {
-                    bail!("no target seq number found")
-                };
+                let creation_time = Self::parse_timestamp(Self::read_required_meta_field(
+                    &table,
+                    CREATION_TIME_KEY,
+                )?)?;
+                let sender_seq_number = Self::read_required_meta_field(&table, SENDER_KEY)?;
+                let target_seq_number = Self::read_required_meta_field(&table, TARGET_KEY)?;
 
                 Some(MetaData {
                     creation_time,
@@ -89,6 +79,28 @@ impl RedbMessageStore {
         };
 
         Ok(metadata)
+    }
+
+    fn read_required_meta_field(table: &ReadOnlyTable<&str, u64>, key: &str) -> Result<u64> {
+        table
+            .get(key)?
+            .map(|v| v.value())
+            .ok_or_else(|| anyhow::anyhow!("missing required metadata field: {key}"))
+    }
+
+    fn parse_timestamp(timestamp: u64) -> Result<DateTime<Utc>> {
+        DateTime::from_timestamp_micros(timestamp as i64)
+            .ok_or_else(|| anyhow::anyhow!("invalid timestamp: {timestamp}"))
+    }
+
+    async fn update_sequence_number(&mut self, key: &str, value: u64) -> Result<()> {
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut table = write_txn.open_table(META_TABLE)?;
+            table.insert(key, value)?;
+        }
+        write_txn.commit()?;
+        Ok(())
     }
 }
 
@@ -105,21 +117,23 @@ impl MessageStore for RedbMessageStore {
     }
 
     async fn get_slice(&self, begin: usize, end: usize) -> Result<Vec<Vec<u8>>> {
-        let read_txn = self.db.begin_read()?;
-        {
-            let res = match read_txn.open_table(MESSAGES_TABLE) {
-                Ok(table) => {
-                    let messages: std::result::Result<Vec<Vec<u8>>, redb::StorageError> = table
-                        .range(begin as u64..=end as u64)?
-                        .map(|m| m.map(|v| v.1.value().to_vec()))
-                        .collect();
-                    Ok(messages?)
-                }
-                Err(TableError::TableDoesNotExist(_)) => Ok(vec![]),
-                Err(err) => Err(err.into()),
-            };
-            res
+        if begin > end {
+            return Ok(vec![]);
         }
+
+        let read_txn = self.db.begin_read()?;
+        let res = match read_txn.open_table(MESSAGES_TABLE) {
+            Ok(table) => {
+                let messages: std::result::Result<Vec<Vec<u8>>, redb::StorageError> = table
+                    .range(begin as u64..=end as u64)?
+                    .map(|m| m.map(|v| v.1.value().to_vec()))
+                    .collect();
+                Ok(messages?)
+            }
+            Err(TableError::TableDoesNotExist(_)) => Ok(vec![]),
+            Err(err) => Err(err.into()),
+        };
+        res
     }
 
     fn next_sender_seq_number(&self) -> u64 {
@@ -131,41 +145,27 @@ impl MessageStore for RedbMessageStore {
     }
 
     async fn increment_sender_seq_number(&mut self) -> Result<()> {
-        self.meta.sender_seq_number += 1;
-        let write_txn = self.db.begin_write()?;
-        {
-            let mut table = write_txn.open_table(META_TABLE)?;
-            table.insert(SENDER_KEY, self.meta.sender_seq_number)?;
-        }
-        write_txn.commit()?;
+        let sender_seq_number = self.meta.sender_seq_number + 1;
+        self.update_sequence_number(SENDER_KEY, sender_seq_number)
+            .await?;
+        self.meta.sender_seq_number = sender_seq_number;
         Ok(())
     }
 
     async fn increment_target_seq_number(&mut self) -> Result<()> {
-        self.meta.target_seq_number += 1;
-        let write_txn = self.db.begin_write()?;
-        {
-            let mut table = write_txn.open_table(META_TABLE)?;
-            table.insert(TARGET_KEY, self.meta.target_seq_number)?;
-        }
-        write_txn.commit()?;
-        Ok(())
+        self.set_target_seq_number(self.meta.target_seq_number + 1)
+            .await
     }
 
     async fn set_target_seq_number(&mut self, seq_number: u64) -> Result<()> {
+        self.update_sequence_number(TARGET_KEY, seq_number).await?;
         self.meta.target_seq_number = seq_number;
-        let write_txn = self.db.begin_write()?;
-        {
-            let mut table = write_txn.open_table(META_TABLE)?;
-            table.insert(TARGET_KEY, seq_number)?;
-        }
-        write_txn.commit()?;
         Ok(())
     }
 
     async fn reset(&mut self) -> Result<()> {
-        Self::persist_default_meta_data(&self.db)?;
-        if let Some(meta) = Self::read_meta_data(&self.db)? {
+        Self::persist_default_metadata(&self.db)?;
+        if let Some(meta) = Self::load_metadata(&self.db)? {
             self.meta = meta;
             Ok(())
         } else {
