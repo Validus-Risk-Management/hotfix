@@ -283,6 +283,26 @@ async fn test_creation_time_is_set() {
     }
 }
 
+#[tokio::test]
+async fn test_creation_time_is_preserved() {
+    for factory in create_test_store_factories().await {
+        if !factory.is_persistent() {
+            continue;
+        }
+
+        let store = factory.create_store().await;
+        let creation_time1 = store.creation_time();
+        drop(store);
+
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+
+        let store = factory.create_store().await;
+        let creation_time2 = store.creation_time();
+
+        assert_eq!(creation_time1, creation_time2);
+    }
+}
+
 #[async_trait::async_trait]
 pub trait TestStoreFactory {
     async fn create_store(&self) -> Box<dyn MessageStore>;
