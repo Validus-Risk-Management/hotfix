@@ -70,7 +70,7 @@ impl MessageStore for InMemoryMessageStore {
         Ok(())
     }
 
-    async fn creation_time(&self) -> Result<DateTime<Utc>> {
-        Ok(self.creation_time)
+    fn creation_time(&self) -> DateTime<Utc> {
+        self.creation_time
     }
 }

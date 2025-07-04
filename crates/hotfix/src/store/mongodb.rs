@@ -19,6 +19,7 @@ struct SequenceMeta {
     #[serde(rename = "_id")]
     object_id: ObjectId,
     meta: bool,
+    creation_time: DateTime<Utc>,
     sender_seq_number: u64,
     target_seq_number: u64,
 }
@@ -89,6 +90,7 @@ impl MongoDbMessageStore {
         let initial_meta = SequenceMeta {
             object_id: sequence_id,
             meta: true,
+            creation_time: Utc::now(),
             sender_seq_number: 0,
             target_seq_number: 0,
         };
@@ -188,7 +190,7 @@ impl MessageStore for MongoDbMessageStore {
         Ok(())
     }
 
-    async fn creation_time(&self) -> Result<DateTime<Utc>> {
-        todo!()
+    fn creation_time(&self) -> DateTime<Utc> {
+        self.current_sequence.creation_time
     }
 }

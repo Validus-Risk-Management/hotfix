@@ -5,12 +5,14 @@ use redb::{Database, ReadableTable, TableDefinition, TableError};
 use std::path::Path;
 
 const MESSAGES_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("messages");
-const SEQ_NUMBER_TABLE: TableDefinition<&str, u64> = TableDefinition::new("seq_numbers");
+const META_TABLE: TableDefinition<&str, u64> = TableDefinition::new("seq_numbers");
 const SENDER_KEY: &str = "sender";
 const TARGET_KEY: &str = "target";
+const CREATION_TIME_KEY: &str = "creation_time";
 
 pub struct RedbMessageStore {
     db: Database,
+    creation_time: DateTime<Utc>,
     sender_seq_number: u64,
     target_seq_number: u64,
 }
@@ -20,11 +22,13 @@ impl RedbMessageStore {
         let db = Database::create(path)?;
         let sender_seq_number;
         let target_seq_number;
+        let mut stored_creation_timestamp: Option<u64> = None;
 
         {
             let read_txn = db.begin_read()?;
-            match read_txn.open_table(SEQ_NUMBER_TABLE) {
+            match read_txn.open_table(META_TABLE) {
                 Ok(table) => {
+                    stored_creation_timestamp = table.get(CREATION_TIME_KEY)?.map(|g| g.value());
                     sender_seq_number = table.get(SENDER_KEY)?.map_or(0, |g| g.value());
                     target_seq_number = table.get(TARGET_KEY)?.map_or(0, |g| g.value());
                 }
@@ -39,8 +43,29 @@ impl RedbMessageStore {
             };
         }
 
+        let creation_time = if let Some(creation_timestamp) = stored_creation_timestamp {
+            if let Some(creation_time) = DateTime::from_timestamp_micros(creation_timestamp as i64)
+            {
+                creation_time
+            } else {
+                anyhow::bail!("Invalid creation timestamp")
+            }
+        } else {
+            let creation_time = Utc::now();
+
+            // if we have just set the creation time, we need to write it to redb
+            let write_txn = &db.begin_write()?;
+            {
+                let mut seq_no_table = write_txn.open_table(META_TABLE)?;
+                let creation_timestamp = creation_time.timestamp_micros() as u64;
+                seq_no_table.insert(CREATION_TIME_KEY, creation_timestamp)?;
+            }
+            creation_time
+        };
+
         Ok(Self {
             db,
+            creation_time,
             sender_seq_number,
             target_seq_number,
         })
@@ -89,7 +114,7 @@ impl MessageStore for RedbMessageStore {
         self.sender_seq_number += 1;
         let write_txn = self.db.begin_write()?;
         {
-            let mut table = write_txn.open_table(SEQ_NUMBER_TABLE)?;
+            let mut table = write_txn.open_table(META_TABLE)?;
             table.insert(SENDER_KEY, self.sender_seq_number)?;
         }
         write_txn.commit()?;
@@ -100,7 +125,7 @@ impl MessageStore for RedbMessageStore {
         self.target_seq_number += 1;
         let write_txn = self.db.begin_write()?;
         {
-            let mut table = write_txn.open_table(SEQ_NUMBER_TABLE)?;
+            let mut table = write_txn.open_table(META_TABLE)?;
             table.insert(TARGET_KEY, self.target_seq_number)?;
         }
         write_txn.commit()?;
@@ -111,7 +136,7 @@ impl MessageStore for RedbMessageStore {
         self.target_seq_number = seq_number;
         let write_txn = self.db.begin_write()?;
         {
-            let mut table = write_txn.open_table(SEQ_NUMBER_TABLE)?;
+            let mut table = write_txn.open_table(META_TABLE)?;
             table.insert(TARGET_KEY, seq_number)?;
         }
         write_txn.commit()?;
@@ -123,7 +148,7 @@ impl MessageStore for RedbMessageStore {
         self.target_seq_number = 0;
         let write_txn = self.db.begin_write()?;
         {
-            let mut seq_no_table = write_txn.open_table(SEQ_NUMBER_TABLE)?;
+            let mut seq_no_table = write_txn.open_table(META_TABLE)?;
             seq_no_table.insert(SENDER_KEY, self.sender_seq_number)?;
             seq_no_table.insert(TARGET_KEY, self.target_seq_number)?;
             let mut messages_table = write_txn.open_table(MESSAGES_TABLE)?;
@@ -133,7 +158,7 @@ impl MessageStore for RedbMessageStore {
         Ok(())
     }
 
-    async fn creation_time(&self) -> Result<DateTime<Utc>> {
-        todo!()
+    fn creation_time(&self) -> DateTime<Utc> {
+        self.creation_time
     }
 }

@@ -27,5 +27,5 @@ pub trait MessageStore {
     async fn increment_target_seq_number(&mut self) -> Result<()>;
     async fn set_target_seq_number(&mut self, seq_number: u64) -> Result<()>;
     async fn reset(&mut self) -> Result<()>;
-    async fn creation_time(&self) -> Result<DateTime<chrono::Utc>>;
+    fn creation_time(&self) -> DateTime<chrono::Utc>;
 }

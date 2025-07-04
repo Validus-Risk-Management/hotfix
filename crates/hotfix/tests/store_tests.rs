@@ -1,3 +1,4 @@
+use chrono::Utc;
 use hotfix::store::in_memory::InMemoryMessageStore;
 use hotfix::store::MessageStore;
 
@@ -267,6 +268,18 @@ async fn test_overwrite_existing_message() {
         let messages = store.get_slice(1, 1).await.expect("Failed to get messages");
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0], b"updated message");
+    }
+}
+
+#[tokio::test]
+async fn test_creation_time_is_set() {
+    for factory in create_test_store_factories().await {
+        let before = Utc::now();
+        let store = factory.create_store().await;
+        let after = Utc::now();
+
+        assert!(before <= store.creation_time());
+        assert!(store.creation_time() <= after);
     }
 }
 

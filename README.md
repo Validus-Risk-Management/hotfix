@@ -20,7 +20,8 @@
 
 ### Overview
 
-HotFIX is a [FIX](https://www.fixtrading.org/standards/) engine implemented in Rust. While the ambition is to create a robust,
+HotFIX is a [FIX](https://www.fixtrading.org/standards/) engine implemented in Rust. While the ambition is to create a
+robust,
 fully compliant, ergonomic and performant engine eventually, this is a large undertaking.
 
 The primary objective of HotFIX is to provide a functional and useful engine for initiators,
@@ -34,9 +35,8 @@ experimental code rather than good code at this stage.
 - [x] TLS support using `rustls`
 - [x] Basic message encoding and decoding (FIX 4.4)
 - [x] Persistent message stores
-  - [x] [dynamodb](https://aws.amazon.com/dynamodb/)
-  - [x] [mongodb](https://www.mongodb.com/docs/drivers/rust/current/)
-  - [x] [redb](https://www.redb.org/)
+    - [x] [mongodb](https://www.mongodb.com/docs/drivers/rust/current/)
+    - [x] [redb](https://www.redb.org/)
 - [x] Heartbeats, logon, reconnecting sessions
 - [x] Basic logic for sending messages
 - [x] Basic logic for receiving messages
@@ -74,4 +74,5 @@ The best way to get in touch is by
 [starting a Discussion](https://github.com/Validus-Risk-Management/hotfix/discussions).
 
 [crates-badge]: https://img.shields.io/crates/v/hotfix.svg
+
 [docs-badge]: https://docs.rs/hotfix/badge.svg
