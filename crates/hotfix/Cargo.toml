@@ -13,6 +13,7 @@ categories.workspace = true
 
 [features]
 redb = ["dep:redb"]
+mongodb = ["dep:mongodb"]
 
 [lints]
 workspace = true
@@ -39,4 +40,3 @@ uuid = { version = "1.5.0", features = ["v4"] }
 
 [dev-dependencies]
 testcontainers = "^0.24"
-testcontainers-modules = { version = "^0.12", features = ["blocking", "mongo"] }

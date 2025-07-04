@@ -414,9 +414,8 @@ mod mongodb_test_utils {
     use hotfix::store::mongodb::MongoDbMessageStore;
     use hotfix::store::MessageStore;
     use mongodb::Client;
-    use testcontainers::GenericImage;
-    use testcontainers_modules::testcontainers::runners::AsyncRunner;
-    use testcontainers_modules::testcontainers::ContainerAsync;
+    use testcontainers::runners::AsyncRunner;
+    use testcontainers::{ContainerAsync, GenericImage};
     use tokio::sync::OnceCell;
 
     static MONGO_CONTAINER: OnceCell<ContainerAsync<GenericImage>> = OnceCell::const_new();
