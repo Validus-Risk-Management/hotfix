@@ -1,7 +1,7 @@
 use crate::store::MessageStore;
 use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
-use redb::{Database, ReadOnlyTable, ReadableTable, TableDefinition, TableError};
+use redb::{Database, ReadOnlyTable, TableDefinition, TableError};
 use std::path::Path;
 
 const MESSAGES_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("messages");
@@ -49,7 +49,7 @@ impl RedbMessageStore {
             meta_table.insert(SENDER_KEY, sender_seq_number)?;
             meta_table.insert(TARGET_KEY, target_seq_number)?;
             let mut messages_table = write_txn.open_table(MESSAGES_TABLE)?;
-            messages_table.drain::<u64>(..)?;
+            messages_table.extract_if(|_, _| true)?.for_each(drop);
         }
         write_txn.commit()?;
         Ok(())
