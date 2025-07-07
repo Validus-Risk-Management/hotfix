@@ -6,13 +6,13 @@ pub mod message;
 mod parser;
 pub(crate) mod parts;
 
+use encoding::Buffer;
+pub use encoding::HardCodedFixFieldDefinition;
 pub use encoding::field_access::FieldType;
 pub use encoding::field_types;
 #[cfg(feature = "fix42")]
 pub use encoding::fix42;
 pub use encoding::fix44;
-use encoding::Buffer;
-pub use encoding::HardCodedFixFieldDefinition;
 pub use hotfix_derive::FieldType;
 pub use hotfix_dictionary::{self as dict, TagU32};
 pub use parts::{Part, RepeatingGroup};

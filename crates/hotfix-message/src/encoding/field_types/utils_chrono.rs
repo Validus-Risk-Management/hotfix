@@ -1,4 +1,4 @@
-use super::{Tz, ERR_TIME, ERR_UTF8};
+use super::{ERR_TIME, ERR_UTF8, Tz};
 use crate::encoding::{Buffer, BufferWriter, FieldType};
 use chrono::{DateTime, NaiveDateTime, Timelike};
 use std::fmt::Write;

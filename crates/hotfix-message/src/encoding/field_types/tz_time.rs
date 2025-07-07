@@ -1,4 +1,4 @@
-use super::{Tz, ERR_TIME};
+use super::{ERR_TIME, Tz};
 use crate::encoding::{Buffer, FieldType};
 
 /// Timezone-aware intra-day timestamp.

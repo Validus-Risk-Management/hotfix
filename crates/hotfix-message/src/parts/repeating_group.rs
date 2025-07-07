@@ -1,6 +1,6 @@
+use crate::HardCodedFixFieldDefinition;
 use crate::field_map::FieldMap;
 use crate::parts::Part;
-use crate::HardCodedFixFieldDefinition;
 use hotfix_dictionary::{IsFieldDefinition, TagU32};
 
 /// Represents a FIX repeating group, such as a party in the list of parties.

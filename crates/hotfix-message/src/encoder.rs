@@ -52,12 +52,12 @@ impl Encode for FieldMap {
 
 #[cfg(test)]
 mod tests {
+    use crate::Part;
     use crate::field_map::Field;
     use crate::field_types::{Date, Time, Timestamp};
     use crate::fix44;
     use crate::message::{Config, Message};
     use crate::parts::RepeatingGroup;
-    use crate::Part;
     use hotfix_dictionary::{Dictionary, IsFieldDefinition};
 
     #[test]

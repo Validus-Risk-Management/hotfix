@@ -1,6 +1,6 @@
 use super::{ERR_DECIMAL, ERR_UTF8};
-use crate::prelude::*;
 use crate::BufferWriter;
+use crate::prelude::*;
 use decimal::d128;
 use std::fmt::Write;
 use std::str::FromStr;

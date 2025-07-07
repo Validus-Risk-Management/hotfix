@@ -9,7 +9,7 @@
 //! the most basic operation.
 
 use crate::dict::FixDatatype;
-use crate::{dict, TagU32};
+use crate::{TagU32, dict};
 
 #[derive(Debug, Clone)]
 #[doc(hidden)]

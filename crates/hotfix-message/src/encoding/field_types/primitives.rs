@@ -1,4 +1,4 @@
-use super::{ZeroPadding, ERR_INT_INVALID, ERR_UTF8};
+use super::{ERR_INT_INVALID, ERR_UTF8, ZeroPadding};
 use crate::encoding::{Buffer, BufferWriter, FieldType};
 use std::fmt::Write;
 

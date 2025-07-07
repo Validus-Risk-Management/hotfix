@@ -42,7 +42,7 @@ pub fn derive_fix_value(input: TokenStream) -> TokenStream {
         proc_macro_crate::FoundCrate::Itself => Ident::new("crate", Span::call_site()),
         proc_macro_crate::FoundCrate::Name(s) => Ident::new(s.as_str(), Span::call_site()),
     };
-    let gen = quote! {
+    let r#gen = quote! {
         impl<'a> FieldType<'a> for #identifier {
             type Error = ();
             type SerializeSettings = ();
@@ -64,7 +64,7 @@ pub fn derive_fix_value(input: TokenStream) -> TokenStream {
             }
         }
     };
-    gen.into()
+    r#gen.into()
 }
 
 #[derive(Debug, Clone, FromVariant)]

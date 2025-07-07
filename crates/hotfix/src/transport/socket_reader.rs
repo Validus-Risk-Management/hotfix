@@ -2,8 +2,8 @@ use tokio::io::{AsyncRead, AsyncReadExt, ReadHalf};
 use tokio::sync::oneshot;
 use tracing::debug;
 
-use crate::message::parser::Parser;
 use crate::message::FixMessage;
+use crate::message::parser::Parser;
 use crate::session::SessionRef;
 
 #[derive(Clone, Debug)]

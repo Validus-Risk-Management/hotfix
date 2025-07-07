@@ -1,26 +1,26 @@
 mod event;
 mod state;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use chrono::Utc;
 use hotfix_message::dict::Dictionary;
 use hotfix_message::field_types::Timestamp;
 use hotfix_message::message::{Config as MessageConfig, Message};
-use hotfix_message::{fix44, FieldType, Part};
+use hotfix_message::{FieldType, Part, fix44};
 use std::cmp::Ordering;
 use std::pin::Pin;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
-use tokio::time::{sleep, Duration, Instant, Sleep};
+use tokio::time::{Duration, Instant, Sleep, sleep};
 use tracing::{debug, error, info, warn};
 
 use crate::application::{ApplicationMessage, ApplicationRef};
 use crate::config::SessionConfig;
+use crate::message::FixMessage;
 use crate::message::generate_message;
 use crate::message::heartbeat::Heartbeat;
 use crate::message::logon::{Logon, ResetSeqNumConfig};
 use crate::message::parser::RawFixMessage;
-use crate::message::FixMessage;
 use crate::store::MessageStore;
 use crate::transport::socket_writer::WriterRef;
 
@@ -358,7 +358,9 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 }
                 Err(err) => match err {
                     MessageVerificationError::SeqNumberTooLow { actual, expected } => {
-                        error!("we expected {expected} sequence number, but target sent lower ({actual}), terminating...");
+                        error!(
+                            "we expected {expected} sequence number, but target sent lower ({actual}), terminating..."
+                        );
                         let reason = format!(
                             "sequence number too low (actual {actual}, expected {expected})"
                         );
@@ -366,7 +368,9 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                         self.state = SessionState::LoggedOut { reconnect: false };
                     }
                     MessageVerificationError::SeqNumberTooHigh { actual, expected } => {
-                        debug!("we are behind target (ours: {expected}, theirs: {actual}), requesting resend.");
+                        debug!(
+                            "we are behind target (ours: {expected}, theirs: {actual}), requesting resend."
+                        );
                         let awaiting_resend = AwaitingResendState::new(writer.to_owned(), actual);
                         self.state = SessionState::AwaitingResend(awaiting_resend);
                         self.send_resend_request(expected, actual).await;

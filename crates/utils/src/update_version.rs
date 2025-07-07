@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use clap::Parser;
-use toml_edit::{value, Document, Formatted};
+use toml_edit::{Document, Formatted, value};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]

@@ -7,7 +7,7 @@ use rustls::ClientConfig;
 use rustls::{RootCertStore, ServerName};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
-use tokio_rustls::{client::TlsStream, TlsConnector};
+use tokio_rustls::{TlsConnector, client::TlsStream};
 
 use crate::config::SessionConfig;
 use crate::transport::tcp::create_tcp_connection;

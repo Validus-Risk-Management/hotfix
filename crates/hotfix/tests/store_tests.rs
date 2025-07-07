@@ -1,6 +1,6 @@
 use chrono::Utc;
-use hotfix::store::in_memory::InMemoryMessageStore;
 use hotfix::store::MessageStore;
+use hotfix::store::in_memory::InMemoryMessageStore;
 
 #[tokio::test]
 async fn test_new_store_initialization() {
@@ -374,8 +374,8 @@ impl TestStoreFactory for InMemoryMessageStoreTestFactory {
 #[cfg(feature = "redb")]
 mod redb_test_utils {
     use super::*;
-    use hotfix::store::redb::RedbMessageStore;
     use hotfix::store::MessageStore;
+    use hotfix::store::redb::RedbMessageStore;
     use std::path::PathBuf;
     use std::{env, fs};
 
@@ -411,8 +411,8 @@ mod redb_test_utils {
 #[cfg(feature = "mongodb")]
 mod mongodb_test_utils {
     use crate::TestStoreFactory;
-    use hotfix::store::mongodb::MongoDbMessageStore;
     use hotfix::store::MessageStore;
+    use hotfix::store::mongodb::MongoDbMessageStore;
     use mongodb::Client;
     use testcontainers::runners::AsyncRunner;
     use testcontainers::{ContainerAsync, GenericImage};

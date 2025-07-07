@@ -1,12 +1,12 @@
 use std::io::Write;
 
+use crate::FieldType;
 use crate::encoder::Encode;
 use crate::error::{EncodingResult, ParserResult};
 use crate::field_map::{Field, FieldMap};
 use crate::parser::{MessageParser, SOH};
 use crate::parts::{Body, Header, Part, RepeatingGroup, Trailer};
-use crate::FieldType;
-use crate::{fix44, HardCodedFixFieldDefinition};
+use crate::{HardCodedFixFieldDefinition, fix44};
 use hotfix_dictionary::{Dictionary, FieldLocation, IsFieldDefinition};
 
 pub struct Message {

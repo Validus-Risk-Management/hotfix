@@ -9,4 +9,4 @@ pub use field_access::{FieldType, FieldValueError};
 
 #[cfg(feature = "fix42")]
 pub use definitions::fix42;
-pub use definitions::{fix44, HardCodedFixFieldDefinition};
+pub use definitions::{HardCodedFixFieldDefinition, fix44};

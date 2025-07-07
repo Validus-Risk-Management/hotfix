@@ -1,7 +1,7 @@
 use crate::message::FixMessage;
 use hotfix_message::field_types::Timestamp;
 use hotfix_message::message::Message;
-use hotfix_message::{fix44, Part};
+use hotfix_message::{Part, fix44};
 
 #[derive(Clone)]
 pub(crate) struct SequenceReset {

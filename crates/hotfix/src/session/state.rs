@@ -45,10 +45,7 @@ impl SessionState {
                     writer.send_raw_message(message).await
                 }
             }
-            Self::AwaitingLogon {
-                writer,
-                ref mut logon_sent,
-            } => {
+            Self::AwaitingLogon { writer, logon_sent } => {
                 match message_type {
                     b"A" => {
                         // Logon message

@@ -1,5 +1,5 @@
 use crate::store::MessageStore;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use chrono::{DateTime, Utc};
 use redb::{Database, ReadOnlyTable, TableDefinition, TableError};
 use std::path::Path;
@@ -122,7 +122,7 @@ impl MessageStore for RedbMessageStore {
         }
 
         let read_txn = self.db.begin_read()?;
-        let res = match read_txn.open_table(MESSAGES_TABLE) {
+        match read_txn.open_table(MESSAGES_TABLE) {
             Ok(table) => {
                 let messages: std::result::Result<Vec<Vec<u8>>, redb::StorageError> = table
                     .range(begin as u64..=end as u64)?
@@ -132,8 +132,7 @@ impl MessageStore for RedbMessageStore {
             }
             Err(TableError::TableDoesNotExist(_)) => Ok(vec![]),
             Err(err) => Err(err.into()),
-        };
-        res
+        }
     }
 
     fn next_sender_seq_number(&self) -> u64 {

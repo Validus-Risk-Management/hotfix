@@ -1,8 +1,8 @@
+use crate::Part;
 use crate::error::{ParserError, ParserResult};
 use crate::field_map::Field;
 use crate::message::{Config, Message};
 use crate::parts::{Body, Header, RepeatingGroup, Trailer};
-use crate::Part;
 use hotfix_dictionary::{Dictionary, LayoutItem, LayoutItemKind, TagU32};
 use std::collections::{HashMap, HashSet};
 
@@ -240,7 +240,7 @@ fn tag_from_bytes(bytes: &[u8]) -> Option<TagU32> {
 mod tests {
     use crate::field_types::Currency;
     use crate::message::{Config, Message};
-    use crate::{fix44, Part};
+    use crate::{Part, fix44};
     use hotfix_dictionary::{Dictionary, IsFieldDefinition};
 
     #[test]
