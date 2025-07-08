@@ -1143,6 +1143,19 @@ mod tests {
     }
 
     #[test]
+    fn test_is_same_session_period_nonstop() {
+        let schedule = SessionSchedule::NonStop;
+
+        let dt1 = DateTime::parse_from_rfc3339("2025-01-15T01:30:00-05:00")
+            .unwrap()
+            .to_utc();
+        let dt2 = DateTime::parse_from_rfc3339("2026-01-15T23:30:00-05:00")
+            .unwrap()
+            .to_utc();
+        assert!(schedule.is_same_session_period(&dt1, &dt2).unwrap());
+    }
+
+    #[test]
     fn test_is_same_session_period_daily_utc() {
         let schedule = SessionSchedule::Daily {
             start_time: NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
@@ -1237,6 +1250,36 @@ mod tests {
     }
 
     #[test]
+    fn test_is_same_session_period_daily_nyc_with_midnight_crossover() {
+        // schedule end time is past midnight
+        let schedule = SessionSchedule::Daily {
+            start_time: NaiveTime::from_hms_opt(6, 0, 0).unwrap(),
+            end_time: NaiveTime::from_hms_opt(1, 0, 0).unwrap(),
+            timezone: Tz::America__New_York,
+        };
+
+        // same session period on consecutive days
+        let dt1 = DateTime::parse_from_rfc3339("2025-01-15T15:30:00-05:00")
+            .unwrap()
+            .to_utc();
+        let dt2 = DateTime::parse_from_rfc3339("2025-01-16T00:45:00-05:00")
+            .unwrap()
+            .to_utc();
+        assert!(schedule.is_same_session_period(&dt1, &dt2).unwrap());
+        assert!(schedule.is_same_session_period(&dt2, &dt1).unwrap());
+
+        // different session period on the same day
+        let dt1 = DateTime::parse_from_rfc3339("2025-01-15T15:30:00-05:00")
+            .unwrap()
+            .to_utc();
+        let dt2 = DateTime::parse_from_rfc3339("2025-01-15T00:45:00-05:00")
+            .unwrap()
+            .to_utc();
+        assert!(!schedule.is_same_session_period(&dt1, &dt2).unwrap());
+        assert!(!schedule.is_same_session_period(&dt2, &dt1).unwrap());
+    }
+
+    #[test]
     fn test_is_same_session_period_weekdays_utc() {
         let schedule = SessionSchedule::Weekdays {
             start_time: NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
@@ -1302,5 +1345,29 @@ mod tests {
         );
         assert!(schedule.is_same_session_period(&dt1, &dt4).is_err());
         assert!(schedule.is_same_session_period(&dt4, &dt1).is_err());
+    }
+
+    #[test]
+    fn construct_utc_at_gap() {
+        // Test DST gap (spring forward) - 2:30 AM doesn't exist on March 10, 2024 in US/Eastern
+        let date = NaiveDate::from_ymd_opt(2024, 3, 10).unwrap();
+        let time = NaiveTime::from_hms_opt(2, 30, 0).unwrap(); // This time is skipped during DST transition
+        let timezone = chrono_tz::US::Eastern;
+
+        let result = construct_utc(&date, &time, &timezone);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn construct_utc_at_fold() {
+        // Test DST fold (fall back) - 1:30 AM occurs twice on November 3, 2024 in US/Eastern
+        let date = NaiveDate::from_ymd_opt(2024, 11, 3).unwrap();
+        let time = NaiveTime::from_hms_opt(1, 30, 0).unwrap(); // This time exists twice during DST transition
+        let timezone = chrono_tz::US::Eastern;
+
+        let result = construct_utc(&date, &time, &timezone);
+
+        assert!(result.is_err());
     }
 }
