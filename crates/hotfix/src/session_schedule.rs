@@ -1135,7 +1135,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_same_session_period_daily_simple_utc() {
+    fn test_is_same_session_period_daily_utc() {
         let schedule = SessionSchedule::Daily {
             start_time: NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
             end_time: NaiveTime::from_hms_opt(17, 0, 0).unwrap(),
@@ -1181,5 +1181,50 @@ mod tests {
         );
         assert!(schedule.is_same_session_period(&dt1, &dt4).is_err());
         assert!(schedule.is_same_session_period(&dt4, &dt1).is_err());
+    }
+
+    #[test]
+    fn test_is_same_session_period_daily_nyc() {
+        let schedule = SessionSchedule::Daily {
+            start_time: NaiveTime::from_hms_opt(1, 0, 0).unwrap(),
+            end_time: NaiveTime::from_hms_opt(23, 0, 0).unwrap(),
+            timezone: Tz::America__New_York,
+        };
+
+        // same session period on the same day (both in EST)
+        let dt1 = DateTime::parse_from_rfc3339("2025-01-15T01:30:00-05:00")
+            .unwrap()
+            .to_utc();
+        let dt2 = DateTime::parse_from_rfc3339("2025-01-15T22:45:00-05:00")
+            .unwrap()
+            .to_utc();
+        assert!(schedule.is_same_session_period(&dt1, &dt2).unwrap());
+
+        // different session periods on consecutive days
+        let dt3 = DateTime::parse_from_rfc3339("2024-01-15T22:30:00-05:00")
+            .unwrap()
+            .to_utc();
+        let dt4 = DateTime::parse_from_rfc3339("2024-01-16T02:30:00-05:00")
+            .unwrap()
+            .to_utc();
+        assert!(!schedule.is_same_session_period(&dt3, &dt4).unwrap());
+
+        // session boundary testing - end of session vs start of next session
+        let dt5 = DateTime::parse_from_rfc3339("2024-01-15T22:59:59-05:00")
+            .unwrap()
+            .to_utc();
+        let dt6 = DateTime::parse_from_rfc3339("2024-01-16T01:00:01-05:00")
+            .unwrap()
+            .to_utc();
+        assert!(!schedule.is_same_session_period(&dt5, &dt6).unwrap());
+
+        // time that doesn't fall into any session period
+        let dt7 = DateTime::parse_from_rfc3339("2024-01-15T23:30:00-05:00")
+            .unwrap()
+            .to_utc();
+        let dt8 = DateTime::parse_from_rfc3339("2024-01-15T10:00:00-05:00")
+            .unwrap()
+            .to_utc();
+        assert!(schedule.is_same_session_period(&dt7, &dt8).is_err());
     }
 }
