@@ -675,11 +675,11 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     async fn handle_schedule_check(&mut self) {
         let is_active = self.schedule.is_active_at(&Utc::now());
 
-        if !is_active {
+        if is_active {
+            self.state.notify_session_awaiter();
+        } else {
             // we are currently outside scheduled session time
             self.initiate_graceful_logout("End of session time").await;
-        } else {
-            self.state.notify_session_awaiter();
         }
 
         let deadline = Instant::now() + Duration::from_secs(SCHEDULE_CHECK_INTERVAL);

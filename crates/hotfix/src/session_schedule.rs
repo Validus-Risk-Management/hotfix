@@ -1,7 +1,9 @@
 use crate::config::ScheduleConfig;
 use crate::error::SessionError;
-use chrono::{DateTime, Datelike, NaiveTime, Utc, Weekday};
+use chrono::{DateTime, Datelike, Days, NaiveDate, NaiveTime, TimeDelta, Utc, Weekday};
 use chrono_tz::Tz;
+
+type Result<T, E = SessionError> = std::result::Result<T, E>;
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
@@ -50,6 +52,81 @@ impl SessionSchedule {
                 Self::check_weekdays_schedule(&adjusted_datetime, weekdays, start_time, end_time)
             }
             SessionSchedule::Weekly { .. } => false,
+        }
+    }
+
+    pub fn is_same_session_period(&self, dt1: &DateTime<Utc>, dt2: &DateTime<Utc>) -> Result<bool> {
+        if !self.is_active_at(dt1) || !self.is_active_at(dt2) {
+            return Err(SessionError::InvalidSchedule(
+                "Time doesn't fall in any session period".to_string(),
+            ));
+        }
+
+        let (start, end) = self.get_session_start_and_end(dt1)?;
+        Ok(start <= *dt2 && *dt2 < end)
+    }
+
+    fn get_session_start_and_end(
+        &self,
+        datetime: &DateTime<Utc>,
+    ) -> Result<(DateTime<Utc>, DateTime<Utc>)> {
+        match self {
+            SessionSchedule::NonStop => {
+                Ok((DateTime::default(), Utc::now() + TimeDelta::weeks(1000)))
+            }
+            SessionSchedule::Daily {
+                start_time,
+                end_time,
+                timezone,
+            } => {
+                let local_datetime = datetime.with_timezone(timezone);
+
+                if local_datetime.time() >= *start_time {
+                    // if the datetime is greater than the start_time, they fall on the same day
+                    let start =
+                        Self::construct_utc(&local_datetime.date_naive(), start_time, timezone)?;
+
+                    // if the end_time is smaller than the start_time, then it must be the next day
+                    let end_date = if end_time < start_time {
+                        local_datetime
+                            .date_naive()
+                            .checked_add_days(Days::new(1))
+                            .ok_or_else(|| {
+                                SessionError::InvalidSchedule("Failed to add day".to_string())
+                            })?
+                    } else {
+                        local_datetime.date_naive()
+                    };
+                    let end = Self::construct_utc(&end_date, end_time, timezone)?;
+                    Ok((start, end))
+                } else {
+                    // if the datetime is lesser than the start_time, it must fall on the previous day
+                    let start_date = local_datetime
+                        .date_naive()
+                        .checked_sub_days(Days::new(1))
+                        .ok_or_else(|| {
+                            SessionError::InvalidSchedule("Failed to get previous day".to_string())
+                        })?;
+                    let start = Self::construct_utc(&start_date, start_time, timezone)?;
+                    let end =
+                        Self::construct_utc(&local_datetime.date_naive(), end_time, timezone)?;
+                    Ok((start, end))
+                }
+            }
+            SessionSchedule::Weekdays { .. } => unimplemented!(),
+            SessionSchedule::Weekly { .. } => unimplemented!(),
+        }
+    }
+
+    fn construct_utc(date: &NaiveDate, time: &NaiveTime, timezone: &Tz) -> Result<DateTime<Utc>> {
+        // TODO: do we want to handle Ambiguous and None outcomes?
+        // these variants correspond to Python's gap and fold: https://peps.python.org/pep-0495/#terminology
+        if let Some(dt) = date.and_time(*time).and_local_timezone(*timezone).single() {
+            Ok(dt.to_utc())
+        } else {
+            Err(SessionError::InvalidSchedule(
+                "Invalid schedule configuration: invalid time".to_string(),
+            ))
         }
     }
 
@@ -288,7 +365,7 @@ mod tests {
         };
 
         let before_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+            NaiveDate::from_ymd_opt(2025, 6, 27)
                 .unwrap()
                 .and_hms_opt(7, 59, 59)
                 .unwrap(),
@@ -298,7 +375,7 @@ mod tests {
 
         // 8AM UTC is 9AM London time, so already in session
         let at_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+            NaiveDate::from_ymd_opt(2025, 6, 27)
                 .unwrap()
                 .and_hms_opt(8, 0, 0)
                 .unwrap(),
@@ -1055,5 +1132,54 @@ mod tests {
 
         let schedule = SessionSchedule::try_from(&config);
         assert!(schedule.is_err());
+    }
+
+    #[test]
+    fn test_is_same_session_period_daily_simple_utc() {
+        let schedule = SessionSchedule::Daily {
+            start_time: NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
+            end_time: NaiveTime::from_hms_opt(17, 0, 0).unwrap(),
+            timezone: Tz::UTC,
+        };
+
+        // two times within the same session period return true
+        let dt1 = DateTime::from_naive_utc_and_offset(
+            NaiveDate::from_ymd_opt(2025, 6, 27)
+                .unwrap()
+                .and_hms_opt(10, 0, 0)
+                .unwrap(),
+            Utc,
+        );
+        let dt2 = DateTime::from_naive_utc_and_offset(
+            NaiveDate::from_ymd_opt(2025, 6, 27)
+                .unwrap()
+                .and_hms_opt(15, 0, 0)
+                .unwrap(),
+            Utc,
+        );
+        assert!(schedule.is_same_session_period(&dt1, &dt2).unwrap());
+        assert!(schedule.is_same_session_period(&dt2, &dt1).unwrap());
+
+        // time for the next session period returns false
+        let dt3 = DateTime::from_naive_utc_and_offset(
+            NaiveDate::from_ymd_opt(2025, 6, 28)
+                .unwrap()
+                .and_hms_opt(10, 0, 0)
+                .unwrap(),
+            Utc,
+        );
+        assert!(!schedule.is_same_session_period(&dt1, &dt3).unwrap());
+        assert!(!schedule.is_same_session_period(&dt3, &dt1).unwrap());
+
+        // time on the same day but outside session time returns error
+        let dt4 = DateTime::from_naive_utc_and_offset(
+            NaiveDate::from_ymd_opt(2025, 6, 27)
+                .unwrap()
+                .and_hms_opt(19, 0, 0)
+                .unwrap(),
+            Utc,
+        );
+        assert!(schedule.is_same_session_period(&dt1, &dt4).is_err());
+        assert!(schedule.is_same_session_period(&dt4, &dt1).is_err());
     }
 }
