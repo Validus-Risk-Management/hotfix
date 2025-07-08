@@ -1,4 +1,4 @@
-use tokio::io::{AsyncWrite, AsyncWriteExt, WriteHalf};
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tracing::{debug, warn};
 
@@ -16,7 +16,7 @@ pub struct WriterRef {
 }
 
 impl WriterRef {
-    pub fn new(writer: WriteHalf<impl AsyncWrite + Send + 'static>) -> Self {
+    pub fn new(writer: impl AsyncWrite + Send + Unpin + 'static) -> Self {
         let (sender, mailbox) = mpsc::channel(10);
         let actor = WriterActor::new(writer, mailbox);
         tokio::spawn(run_writer(actor));
@@ -39,13 +39,13 @@ impl WriterRef {
     }
 }
 
-struct WriterActor<W> {
-    writer: WriteHalf<W>,
+struct WriterActor<W: AsyncWrite> {
+    writer: W,
     mailbox: mpsc::Receiver<WriterMessage>,
 }
 
-impl<W: AsyncWrite> WriterActor<W> {
-    fn new(writer: WriteHalf<W>, mailbox: mpsc::Receiver<WriterMessage>) -> Self {
+impl<W: AsyncWrite + Unpin> WriterActor<W> {
+    fn new(writer: W, mailbox: mpsc::Receiver<WriterMessage>) -> Self {
         Self { writer, mailbox }
     }
 
@@ -65,7 +65,7 @@ impl<W: AsyncWrite> WriterActor<W> {
     }
 }
 
-async fn run_writer<W: AsyncWrite>(mut actor: WriterActor<W>) {
+async fn run_writer<W: AsyncWrite + Unpin>(mut actor: WriterActor<W>) {
     while let Some(msg) = actor.mailbox.recv().await {
         if !actor.handle(msg).await {
             break;
@@ -73,4 +73,25 @@ async fn run_writer<W: AsyncWrite>(mut actor: WriterActor<W>) {
     }
 
     debug!("writer loop is shutting down");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WriterRef;
+    use crate::message::parser::RawFixMessage;
+    use tokio::io::AsyncReadExt;
+
+    #[tokio::test]
+    async fn test_mocked_writer() {
+        let (writer, mut reader) = tokio::io::duplex(10);
+        let writer_ref = WriterRef::new(writer);
+
+        writer_ref
+            .send_raw_message(RawFixMessage::new(vec![1, 2, 3]))
+            .await;
+
+        assert_eq!(1, reader.read_u8().await.unwrap());
+        assert_eq!(2, reader.read_u8().await.unwrap());
+        assert_eq!(3, reader.read_u8().await.unwrap());
+    }
 }

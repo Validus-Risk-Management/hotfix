@@ -1,4 +1,4 @@
-use tokio::io::{AsyncRead, AsyncReadExt, ReadHalf};
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::sync::oneshot;
 use tracing::debug;
 
@@ -16,7 +16,7 @@ pub struct ReaderRef {
 
 impl ReaderRef {
     pub fn new<M: FixMessage>(
-        reader: ReadHalf<impl AsyncRead + Send + 'static>,
+        reader: impl AsyncRead + Send + Unpin + 'static,
         session_ref: SessionRef<M>,
     ) -> Self {
         let (dc_sender, dc_receiver) = oneshot::channel();
@@ -35,18 +35,14 @@ impl ReaderRef {
     }
 }
 
-struct ReaderActor<M, R> {
-    reader: ReadHalf<R>,
+struct ReaderActor<M, R: AsyncRead> {
+    reader: R,
     session_ref: SessionRef<M>,
     dc_sender: oneshot::Sender<()>,
 }
 
 impl<M, R: AsyncRead> ReaderActor<M, R> {
-    fn new(
-        reader: ReadHalf<R>,
-        session_ref: SessionRef<M>,
-        dc_sender: oneshot::Sender<()>,
-    ) -> Self {
+    fn new(reader: R, session_ref: SessionRef<M>, dc_sender: oneshot::Sender<()>) -> Self {
         Self {
             reader,
             session_ref,
@@ -58,7 +54,7 @@ impl<M, R: AsyncRead> ReaderActor<M, R> {
 async fn run_reader<M, R>(mut actor: ReaderActor<M, R>)
 where
     M: FixMessage,
-    R: AsyncRead,
+    R: AsyncRead + Unpin,
 {
     let mut parser = Parser::default();
     loop {
