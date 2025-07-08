@@ -295,7 +295,7 @@ mod tests {
 
         // just before start time (8:59:59)
         let before_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+            NaiveDate::from_ymd_opt(2024, 1, 1)
                 .unwrap()
                 .and_hms_opt(8, 59, 59)
                 .unwrap(),
@@ -305,7 +305,7 @@ mod tests {
 
         // just after start time (9:00:01)
         let after_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+            NaiveDate::from_ymd_opt(2024, 1, 1)
                 .unwrap()
                 .and_hms_opt(9, 0, 1)
                 .unwrap(),
@@ -315,7 +315,7 @@ mod tests {
 
         // in the middle (13:00:00)
         let middle = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+            NaiveDate::from_ymd_opt(2024, 1, 1)
                 .unwrap()
                 .and_hms_opt(13, 0, 0)
                 .unwrap(),
@@ -325,7 +325,7 @@ mod tests {
 
         // just before end time (16:59:59)
         let before_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+            NaiveDate::from_ymd_opt(2024, 1, 1)
                 .unwrap()
                 .and_hms_opt(16, 59, 59)
                 .unwrap(),
@@ -335,7 +335,7 @@ mod tests {
 
         // at end time (17:00:00) - we expect false at exactly the end time (non-inclusive)
         let at_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+            NaiveDate::from_ymd_opt(2024, 1, 1)
                 .unwrap()
                 .and_hms_opt(17, 0, 0)
                 .unwrap(),
@@ -345,7 +345,7 @@ mod tests {
 
         // after end time (17:00:01)
         let after_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+            NaiveDate::from_ymd_opt(2024, 1, 1)
                 .unwrap()
                 .and_hms_opt(17, 0, 1)
                 .unwrap(),
@@ -385,7 +385,7 @@ mod tests {
 
         // 4PM UTC is 5PM London time, so already out of session
         let at_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+            NaiveDate::from_ymd_opt(2025, 6, 27)
                 .unwrap()
                 .and_hms_opt(16, 0, 0)
                 .unwrap(),
@@ -405,7 +405,7 @@ mod tests {
         };
 
         let before_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+            NaiveDate::from_ymd_opt(2025, 6, 27)
                 .unwrap()
                 .and_hms_opt(7, 59, 59)
                 .unwrap(),
@@ -414,7 +414,7 @@ mod tests {
         assert!(!schedule_1.is_active_at(&before_start));
 
         let at_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+            NaiveDate::from_ymd_opt(2025, 6, 27)
                 .unwrap()
                 .and_hms_opt(8, 0, 0)
                 .unwrap(),
@@ -423,7 +423,7 @@ mod tests {
         assert!(schedule_1.is_active_at(&at_start));
 
         let before_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+            NaiveDate::from_ymd_opt(2025, 6, 27)
                 .unwrap()
                 .and_hms_opt(0, 59, 59)
                 .unwrap(),
@@ -432,7 +432,7 @@ mod tests {
         assert!(schedule_1.is_active_at(&before_end));
 
         let at_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+            NaiveDate::from_ymd_opt(2025, 6, 27)
                 .unwrap()
                 .and_hms_opt(1, 0, 0)
                 .unwrap(),
@@ -452,7 +452,7 @@ mod tests {
         };
 
         let before_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+            NaiveDate::from_ymd_opt(2025, 6, 27)
                 .unwrap()
                 .and_hms_opt(7, 59, 59)
                 .unwrap(),
@@ -461,7 +461,7 @@ mod tests {
         assert!(!schedule_1.is_active_at(&before_start));
 
         let at_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+            NaiveDate::from_ymd_opt(2025, 6, 27)
                 .unwrap()
                 .and_hms_opt(8, 0, 0)
                 .unwrap(),
@@ -470,7 +470,7 @@ mod tests {
         assert!(schedule_1.is_active_at(&at_start));
 
         let before_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+            NaiveDate::from_ymd_opt(2025, 6, 27)
                 .unwrap()
                 .and_hms_opt(23, 29, 59)
                 .unwrap(),
@@ -479,7 +479,7 @@ mod tests {
         assert!(schedule_1.is_active_at(&before_end));
 
         let at_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 27)
+            NaiveDate::from_ymd_opt(2025, 6, 27)
                 .unwrap()
                 .and_hms_opt(23, 30, 0)
                 .unwrap(),
@@ -506,7 +506,7 @@ mod tests {
 
         // Monday 8:59:59 - before start time
         let monday_before_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
+            NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
                 .unwrap()
                 .and_hms_opt(8, 59, 59)
                 .unwrap(),
@@ -516,7 +516,7 @@ mod tests {
 
         // Monday 9:00:01 - after start time
         let monday_after_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
+            NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
                 .unwrap()
                 .and_hms_opt(9, 0, 1)
                 .unwrap(),
@@ -526,7 +526,7 @@ mod tests {
 
         // Friday 16:59:59 - just before end time on a valid day
         let friday_before_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 4) // Friday
+            NaiveDate::from_ymd_opt(2025, 7, 4) // Friday
                 .unwrap()
                 .and_hms_opt(16, 59, 59)
                 .unwrap(),
@@ -536,7 +536,7 @@ mod tests {
 
         // Friday 17:00:00 - at end time on a valid day (exclusive end)
         let friday_at_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 4) // Friday
+            NaiveDate::from_ymd_opt(2025, 7, 4) // Friday
                 .unwrap()
                 .and_hms_opt(17, 0, 0)
                 .unwrap(),
@@ -546,7 +546,7 @@ mod tests {
 
         // Saturday 12:00:00 - middle of day on weekend
         let saturday = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 5) // Saturday
+            NaiveDate::from_ymd_opt(2025, 7, 5) // Saturday
                 .unwrap()
                 .and_hms_opt(12, 0, 0)
                 .unwrap(),
@@ -574,7 +574,7 @@ mod tests {
 
         // Monday 7:59:59 UTC = 8:59:59 London - before start time
         let monday_before_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
+            NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
                 .unwrap()
                 .and_hms_opt(7, 59, 59)
                 .unwrap(),
@@ -584,7 +584,7 @@ mod tests {
 
         // Monday 8:00:01 UTC = 9:00:01 London - after start time
         let monday_after_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
+            NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
                 .unwrap()
                 .and_hms_opt(8, 0, 1)
                 .unwrap(),
@@ -594,7 +594,7 @@ mod tests {
 
         // Friday 15:59:59 UTC = 16:59:59 London - just before end time
         let friday_before_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 4) // Friday
+            NaiveDate::from_ymd_opt(2025, 7, 4) // Friday
                 .unwrap()
                 .and_hms_opt(15, 59, 59)
                 .unwrap(),
@@ -604,7 +604,7 @@ mod tests {
 
         // Friday 16:00:00 UTC = 17:00:00 London - at end time (exclusive)
         let friday_at_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 4) // Friday
+            NaiveDate::from_ymd_opt(2025, 7, 4) // Friday
                 .unwrap()
                 .and_hms_opt(16, 0, 0)
                 .unwrap(),
@@ -632,7 +632,7 @@ mod tests {
 
         // Monday 13:29:59 UTC = 9:29:59 NY - just before start time
         let monday_before_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
+            NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
                 .unwrap()
                 .and_hms_opt(13, 29, 59)
                 .unwrap(),
@@ -642,7 +642,7 @@ mod tests {
 
         // Monday 13:30:01 UTC = 9:30:01 NY - just after start time
         let monday_after_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
+            NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
                 .unwrap()
                 .and_hms_opt(13, 30, 1)
                 .unwrap(),
@@ -652,7 +652,7 @@ mod tests {
 
         // Tuesday 19:59:59 UTC = 15:59:59 NY - just before end time
         let tuesday_before_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 1) // Tuesday
+            NaiveDate::from_ymd_opt(2025, 7, 1) // Tuesday
                 .unwrap()
                 .and_hms_opt(19, 59, 59)
                 .unwrap(),
@@ -662,7 +662,7 @@ mod tests {
 
         // Tuesday 20:00:00 UTC = 16:00:00 NY - at end time (exclusive)
         let tuesday_at_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 1) // Tuesday
+            NaiveDate::from_ymd_opt(2025, 7, 1) // Tuesday
                 .unwrap()
                 .and_hms_opt(20, 0, 0)
                 .unwrap(),
@@ -690,7 +690,7 @@ mod tests {
 
         // Monday 11:59:59 UTC = 21:59:59 Sydney - just before start time
         let monday_before_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
+            NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
                 .unwrap()
                 .and_hms_opt(11, 59, 59)
                 .unwrap(),
@@ -700,7 +700,7 @@ mod tests {
 
         // Monday 12:00:01 UTC = 22:00:01 Sydney - just after start time
         let monday_after_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
+            NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
                 .unwrap()
                 .and_hms_opt(12, 0, 1)
                 .unwrap(),
@@ -710,7 +710,7 @@ mod tests {
 
         // Tuesday 19:59:59 UTC = 5:59:59 Sydney Wednesday - just before end time
         let tuesday_before_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 1) // Tuesday
+            NaiveDate::from_ymd_opt(2025, 7, 1) // Tuesday
                 .unwrap()
                 .and_hms_opt(19, 59, 59)
                 .unwrap(),
@@ -720,7 +720,7 @@ mod tests {
 
         // Tuesday 20:00:00 UTC = 6:00:00 Sydney Wednesday - at end time (exclusive)
         let tuesday_at_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 1) // Tuesday
+            NaiveDate::from_ymd_opt(2025, 7, 1) // Tuesday
                 .unwrap()
                 .and_hms_opt(20, 0, 0)
                 .unwrap(),
@@ -730,7 +730,7 @@ mod tests {
 
         // Wednesday 10:00:00 UTC = 20:00:00 Sydney - during inactive period
         let wednesday_inactive = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 2) // Wednesday
+            NaiveDate::from_ymd_opt(2025, 7, 2) // Wednesday
                 .unwrap()
                 .and_hms_opt(10, 0, 0)
                 .unwrap(),
@@ -751,7 +751,7 @@ mod tests {
 
         // Friday 12:00:00 - should be inactive (weekday)
         let friday = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 4) // Friday
+            NaiveDate::from_ymd_opt(2025, 7, 4) // Friday
                 .unwrap()
                 .and_hms_opt(12, 0, 0)
                 .unwrap(),
@@ -761,7 +761,7 @@ mod tests {
 
         // Saturday 9:59:59 - before start time on weekend
         let saturday_before_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 5) // Saturday
+            NaiveDate::from_ymd_opt(2025, 7, 5) // Saturday
                 .unwrap()
                 .and_hms_opt(9, 59, 59)
                 .unwrap(),
@@ -771,7 +771,7 @@ mod tests {
 
         // Saturday 10:00:01 - after start time on weekend
         let saturday_after_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 5) // Saturday
+            NaiveDate::from_ymd_opt(2025, 7, 5) // Saturday
                 .unwrap()
                 .and_hms_opt(10, 0, 1)
                 .unwrap(),
@@ -781,7 +781,7 @@ mod tests {
 
         // Sunday 15:59:59 - before end time on weekend
         let sunday_before_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 6) // Sunday
+            NaiveDate::from_ymd_opt(2025, 7, 6) // Sunday
                 .unwrap()
                 .and_hms_opt(15, 59, 59)
                 .unwrap(),
@@ -803,7 +803,7 @@ mod tests {
 
         // Monday 20:59:59 UTC = 21:59:59 London - just before start time
         let monday_before_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
+            NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
                 .unwrap()
                 .and_hms_opt(20, 59, 59)
                 .unwrap(),
@@ -813,7 +813,7 @@ mod tests {
 
         // Monday 21:00:01 UTC = 22:00:01 London - just after start time
         let monday_after_start = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
+            NaiveDate::from_ymd_opt(2025, 6, 30) // Monday
                 .unwrap()
                 .and_hms_opt(21, 0, 1)
                 .unwrap(),
@@ -823,7 +823,7 @@ mod tests {
 
         // Tuesday 4:59:59 UTC = 5:59:59 London - just before end time, still Monday's session
         let tuesday_before_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 1) // Tuesday
+            NaiveDate::from_ymd_opt(2025, 7, 1) // Tuesday
                 .unwrap()
                 .and_hms_opt(4, 59, 59)
                 .unwrap(),
@@ -833,7 +833,7 @@ mod tests {
 
         // Tuesday 5:00:00 UTC = 6:00:00 London - at end time, should be inactive
         let tuesday_at_end = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 1) // Tuesday
+            NaiveDate::from_ymd_opt(2025, 7, 1) // Tuesday
                 .unwrap()
                 .and_hms_opt(5, 0, 0)
                 .unwrap(),
@@ -843,7 +843,7 @@ mod tests {
 
         // Friday 21:00:01 UTC = 22:00:01 London - after start time but on Friday which is excluded
         let friday_night = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 4) // Friday
+            NaiveDate::from_ymd_opt(2025, 7, 4) // Friday
                 .unwrap()
                 .and_hms_opt(21, 0, 1)
                 .unwrap(),
@@ -853,7 +853,7 @@ mod tests {
 
         // Thursday 21:00:01 UTC = 22:00:01 London - Thursday night session should be active
         let thursday_night = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 3) // Thursday
+            NaiveDate::from_ymd_opt(2025, 7, 3) // Thursday
                 .unwrap()
                 .and_hms_opt(21, 0, 1)
                 .unwrap(),
@@ -863,7 +863,7 @@ mod tests {
 
         // Friday 4:59:59 UTC = 5:59:59 London - still Thursday's session ending on Friday morning
         let friday_morning = DateTime::from_naive_utc_and_offset(
-            chrono::NaiveDate::from_ymd_opt(2025, 7, 4) // Friday
+            NaiveDate::from_ymd_opt(2025, 7, 4) // Friday
                 .unwrap()
                 .and_hms_opt(4, 59, 59)
                 .unwrap(),
