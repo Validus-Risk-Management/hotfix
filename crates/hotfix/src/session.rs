@@ -626,6 +626,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     async fn handle(&mut self, event: SessionEvent<M>) {
+        self.handle_schedule_check().await;
+
         match event {
             SessionEvent::FixMessageReceived(fix_message) => {
                 if let Err(err) = self.on_incoming(fix_message).await {
@@ -673,15 +675,39 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     async fn handle_schedule_check(&mut self) {
-        let is_active = self.schedule.is_active_at(&Utc::now());
+        let now = Utc::now();
+        let is_active = self.schedule.is_active_at(&now);
 
         if is_active {
             self.state.notify_session_awaiter();
+            match self
+                .schedule
+                .is_same_session_period(&self.store.creation_time(), &now)
+            {
+                Ok(true) => {
+                    // we are in the same period, nothing needs to be done
+                }
+                Ok(false) => {
+                    // the message store is for a previous session,
+                    // we need to terminate this session, reset the store, and reestablish the session
+                    self.logout_and_terminate("session period changed").await;
+                    if let Err(err) = self.store.reset().await {
+                        error!("error resetting session store: {err:}");
+                        self.state =
+                            SessionState::new_disconnected(false, "unexpected error in reset");
+                    }
+                }
+                Err(err) => {
+                    error!("error checking session period: {err:?}");
+                    self.logout_and_terminate("internal error").await;
+                }
+            }
         } else {
             // we are currently outside scheduled session time
             self.initiate_graceful_logout("End of session time").await;
         }
 
+        // we always need to reschedule the check, otherwise we won't be able to resume an inactive session
         let deadline = Instant::now() + Duration::from_secs(SCHEDULE_CHECK_INTERVAL);
         self.schedule_check_timer.as_mut().reset(deadline);
     }
