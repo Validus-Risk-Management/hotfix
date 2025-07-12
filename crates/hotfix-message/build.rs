@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+
 use hotfix_codegen as codegen;
 use hotfix_dictionary::Dictionary;
 use std::env::var;

@@ -3,8 +3,10 @@ mod encoding;
 pub mod error;
 mod field_map;
 pub mod message;
+mod parsed_message;
 mod parser;
 pub(crate) mod parts;
+mod tags;
 
 use encoding::Buffer;
 pub use encoding::HardCodedFixFieldDefinition;

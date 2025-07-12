@@ -2,8 +2,9 @@ use std::io::Write;
 
 use crate::FieldType;
 use crate::encoder::Encode;
-use crate::error::{EncodingResult, ParserResult};
+use crate::error::EncodingResult;
 use crate::field_map::{Field, FieldMap};
+use crate::parsed_message::ParsedMessage;
 use crate::parser::{MessageParser, SOH};
 use crate::parts::{Body, Header, Part, RepeatingGroup, Trailer};
 use crate::{HardCodedFixFieldDefinition, fix44};
@@ -28,10 +29,20 @@ impl Message {
         msg
     }
 
-    pub fn from_bytes(config: &Config, dict: &Dictionary, data: &[u8]) -> ParserResult<Self> {
-        let mut builder = MessageParser::new(dict, config, data)?;
+    pub(crate) fn with_header(header: Header) -> Self {
+        Self {
+            header,
+            body: Body::default(),
+            trailer: Trailer::default(),
+        }
+    }
 
-        builder.build()
+    pub fn from_bytes(config: &Config, dict: &Dictionary, data: &[u8]) -> ParsedMessage {
+        if let Ok(parser) = MessageParser::new(dict, config, data) {
+            parser.build()
+        } else {
+            ParsedMessage::UnexpectedError("Failed to create message parser".to_string())
+        }
     }
 
     pub fn encode(&mut self, config: &Config) -> EncodingResult<Vec<u8>> {

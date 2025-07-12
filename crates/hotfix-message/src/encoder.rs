@@ -79,9 +79,11 @@ mod tests {
         let raw_message = msg.encode(&config)?;
 
         let dict = Dictionary::fix44();
-        let parsed_message = Message::from_bytes(&config, &dict, &raw_message)?;
+        let parsed_message = Message::from_bytes(&config, &dict, &raw_message)
+            .into_message()
+            .unwrap();
 
-        let symbol: &str = parsed_message.get(fix44::SYMBOL).unwrap();
+        let symbol: &str = parsed_message.get(fix44::SYMBOL)?;
         assert_eq!(symbol, "AAPL");
 
         let qty: u32 = parsed_message.get(fix44::ORDER_QTY).unwrap();
@@ -150,7 +152,9 @@ mod tests {
         let raw_message = msg.encode(&config)?;
 
         let dict = Dictionary::fix44();
-        let parsed_message = Message::from_bytes(&config, &dict, &raw_message)?;
+        let parsed_message = Message::from_bytes(&config, &dict, &raw_message)
+            .into_message()
+            .unwrap();
 
         let party_a = parsed_message
             .get_group(fix44::NO_PARTY_I_DS, 0)

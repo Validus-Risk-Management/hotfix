@@ -1,8 +1,13 @@
 use crate::Part;
-use crate::error::{ParserError, ParserResult};
+use crate::error::{
+    HeaderParsingError, HeaderParsingResult, ParserError, ParserResult, TrailerParsingError,
+    TrailerParsingResult,
+};
 use crate::field_map::Field;
 use crate::message::{Config, Message};
+use crate::parsed_message::{GarbledReason, InvalidReason, ParsedMessage};
 use crate::parts::{Body, Header, RepeatingGroup, Trailer};
+use crate::tags::{BEGIN_STRING, BODY_LENGTH, CHECK_SUM, MSG_TYPE};
 use hotfix_dictionary::{Dictionary, LayoutItem, LayoutItemKind, TagU32};
 use std::collections::{HashMap, HashSet};
 
@@ -33,33 +38,110 @@ impl<'a> MessageParser<'a> {
         Ok(parser)
     }
 
-    pub(crate) fn build(&mut self) -> ParserResult<Message> {
-        let (header, next) = self.build_header()?;
-        let (body, next) = self.build_body(next)?;
-        let trailer = self.build_trailer(next);
+    pub(crate) fn build(mut self) -> ParsedMessage {
+        let (header, next) = match self.build_header() {
+            Ok((header, field)) => (header, field),
+            Err(err) => {
+                return err.into();
+            }
+        };
+
+        let (body, next) = match self.build_body(next) {
+            Ok((body, field)) => (body, field),
+            Err(err) => {
+                return match err {
+                    ParserError::IOError(_) => ParsedMessage::Garbled(GarbledReason::Malformed),
+                    ParserError::InvalidField(tag) => ParsedMessage::Invalid {
+                        reason: InvalidReason::InvalidField(tag),
+                        message: Message::with_header(header),
+                    },
+                    ParserError::InvalidGroup(tag) => ParsedMessage::Invalid {
+                        reason: InvalidReason::InvalidGroup(tag),
+                        message: Message::with_header(header),
+                    },
+                    ParserError::InvalidComponent(tag) => ParsedMessage::Invalid {
+                        reason: InvalidReason::InvalidComponent(tag),
+                        message: Message::with_header(header),
+                    },
+                    ParserError::Malformed(_) => ParsedMessage::Garbled(GarbledReason::Malformed),
+                };
+            }
+        };
+
+        let trailer = match self.build_trailer(next) {
+            Ok(trailer) => trailer,
+            Err(TrailerParsingError::InvalidField(tag)) => {
+                return ParsedMessage::Invalid {
+                    reason: InvalidReason::InvalidField(tag),
+                    message: Message::with_header(header),
+                };
+            }
+            Err(TrailerParsingError::InvalidCheckSum) => {
+                return ParsedMessage::Garbled(GarbledReason::InvalidChecksum);
+            }
+        };
 
         let msg = Message {
             header,
             body,
             trailer,
         };
-        Ok(msg)
+        if let Ok(body_length) = msg.header().get::<usize>(BODY_LENGTH) {
+            let calculated_length = msg.calculate_length();
+            if calculated_length != body_length {
+                return ParsedMessage::Garbled(GarbledReason::InvalidBodyLength);
+            }
+        } else {
+            return ParsedMessage::Garbled(GarbledReason::InvalidBodyLength);
+        }
+
+        ParsedMessage::Valid(msg)
     }
 
-    fn build_header(&mut self) -> ParserResult<(Header, Field)> {
-        // first three fields need to be BeginString (8), BodyLength (9), and MsgType(35)
+    fn build_header(&mut self) -> HeaderParsingResult<(Header, Field)> {
+        // the first three fields need to be BeginString (8), BodyLength (9), and MsgType(35)
         // https://www.onixs.biz/fix-dictionary/4.4/compblock_standardheader.html
+
         let mut header = Header::default();
 
-        loop {
-            let field = self.next_field().ok_or(ParserError::Malformed(
-                "message ended within header".to_string(),
-            ))?;
+        // parse BeginString
+        if let Some(begin_string) = self.next_field()
+            && begin_string.tag.get() == BEGIN_STRING.tag
+        {
+            header.fields.insert(begin_string);
+        } else {
+            return Err(HeaderParsingError::InvalidBeginString);
+        }
 
-            if self.header_tags.contains(&field.tag) {
-                header.fields.insert(field);
+        // parse BodyLength
+        if let Some(body_length) = self.next_field()
+            && body_length.tag.get() == BODY_LENGTH.tag
+        {
+            header.fields.insert(body_length);
+        } else {
+            return Err(HeaderParsingError::InvalidBodyLength);
+        }
+
+        // parse MsgType
+        if let Some(msg_type) = self.next_field()
+            && msg_type.tag.get() == MSG_TYPE.tag
+        {
+            header.fields.insert(msg_type);
+        } else {
+            return Err(HeaderParsingError::InvalidMsgType);
+        }
+
+        loop {
+            if let Some(field) = self.next_field() {
+                if self.header_tags.contains(&field.tag) {
+                    header.fields.insert(field);
+                } else {
+                    // the parsed field is valid, but no longer in the header, so we're ready to move on
+                    return Ok((header, field));
+                }
             } else {
-                return Ok((header, field));
+                // there is no next field, yet we're still in the header - something is very wrong
+                return Err(HeaderParsingError::IncompleteMessage);
             }
         }
     }
@@ -88,16 +170,31 @@ impl<'a> MessageParser<'a> {
         Ok((body, field))
     }
 
-    fn build_trailer(&mut self, next_field: Field) -> Trailer {
+    fn build_trailer(&mut self, next_field: Field) -> TrailerParsingResult<Trailer> {
         // https://www.onixs.biz/fix-dictionary/4.4/compblock_standardtrailer.html
         let mut trailer = Trailer::default();
-        let mut field = Some(next_field);
-        while let Some(f) = field {
-            trailer.store_field(f);
-            field = self.next_field();
+        let mut field = next_field;
+        loop {
+            if !self.trailer_tags.contains(&field.tag) {
+                return Err(TrailerParsingError::InvalidField(field.tag.get()));
+            }
+
+            let last_tag = field.tag.get();
+            trailer.store_field(field);
+
+            if let Some(next_field) = self.next_field() {
+                field = next_field;
+            } else {
+                // the very last tag needs to be the checksum
+                if last_tag != CHECK_SUM.tag {
+                    return Err(TrailerParsingError::InvalidCheckSum);
+                } else {
+                    break;
+                }
+            }
         }
 
-        trailer
+        Ok(trailer)
     }
 
     fn parse_groups(&mut self, start_tag: TagU32) -> ParserResult<(Vec<RepeatingGroup>, Field)> {
@@ -240,6 +337,7 @@ fn tag_from_bytes(bytes: &[u8]) -> Option<TagU32> {
 mod tests {
     use crate::field_types::Currency;
     use crate::message::{Config, Message};
+    use crate::parsed_message::ParsedMessage;
     use crate::{Part, fix44};
     use hotfix_dictionary::{Dictionary, IsFieldDefinition};
 
@@ -249,7 +347,9 @@ mod tests {
         let raw = b"8=FIX.4.4|9=40|35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|10=091|";
         let dict = Dictionary::fix44();
 
-        let message = Message::from_bytes(&config, &dict, raw).unwrap();
+        let message = Message::from_bytes(&config, &dict, raw)
+            .into_message()
+            .unwrap();
 
         let begin: &str = message.header().get(fix44::BEGIN_STRING).unwrap();
         assert_eq!(begin, "FIX.4.4");
@@ -276,7 +376,9 @@ mod tests {
         let raw = b"8=FIX.4.4|9=219|35=8|49=SENDER|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|139=7|10=128|";
         let dict = Dictionary::fix44();
 
-        let message = Message::from_bytes(&config, &dict, raw).unwrap();
+        let message = Message::from_bytes(&config, &dict, raw)
+            .into_message()
+            .unwrap();
         let begin: &str = message.header().get(fix44::BEGIN_STRING).unwrap();
         assert_eq!(begin, "FIX.4.4");
 
@@ -298,7 +400,9 @@ mod tests {
         let raw = b"8=FIX.4.4|9=000|35=8|34=2|49=Broker|52=20231103-09:30:00|56=Client|11=Order12345|17=Exec12345|150=0|39=0|55=APPL|54=1|38=100|32=50|31=150.00|151=50|14=50|6=150.00|453=2|448=PARTYA|447=D|452=1|802=2|523=SUBPARTYA1|803=1|523=SUBPARTYA2|803=2|448=PARTYB|447=D|452=2|10=111|";
         let dict = Dictionary::fix44();
 
-        let message = Message::from_bytes(&config, &dict, raw).unwrap();
+        let message = Message::from_bytes(&config, &dict, raw)
+            .into_message()
+            .unwrap();
         let party_a = message.get_group(fix44::NO_PARTY_I_DS, 0).unwrap();
         let party_a_0 = party_a
             .get_group(fix44::NO_PARTY_SUB_I_DS.tag(), 0)
