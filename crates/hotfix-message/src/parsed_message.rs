@@ -1,4 +1,4 @@
-use crate::error::HeaderParsingError;
+use crate::error::MessageIntegrityError;
 use crate::message::Message;
 
 pub enum ParsedMessage {
@@ -27,6 +27,7 @@ pub enum InvalidReason {
     InvalidComponent(String),
 }
 
+#[derive(Debug)]
 pub enum GarbledReason {
     Malformed,
     InvalidBeginString,
@@ -35,20 +36,20 @@ pub enum GarbledReason {
     InvalidChecksum,
 }
 
-impl From<HeaderParsingError> for ParsedMessage {
-    fn from(header_error: HeaderParsingError) -> Self {
+impl From<MessageIntegrityError> for ParsedMessage {
+    fn from(header_error: MessageIntegrityError) -> Self {
         match header_error {
-            HeaderParsingError::InvalidBeginString => {
+            MessageIntegrityError::InvalidBeginString => {
                 ParsedMessage::Garbled(GarbledReason::InvalidBeginString)
             }
-            HeaderParsingError::InvalidBodyLength => {
+            MessageIntegrityError::InvalidBodyLength => {
                 ParsedMessage::Garbled(GarbledReason::InvalidBodyLength)
             }
-            HeaderParsingError::InvalidMsgType => {
+            MessageIntegrityError::InvalidMsgType => {
                 ParsedMessage::Garbled(GarbledReason::InvalidMsgType)
             }
-            HeaderParsingError::IncompleteMessage => {
-                ParsedMessage::Garbled(GarbledReason::Malformed)
+            MessageIntegrityError::InvalidCheckSum => {
+                ParsedMessage::Garbled(GarbledReason::InvalidChecksum)
             }
         }
     }

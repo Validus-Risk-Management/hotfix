@@ -26,25 +26,14 @@ pub enum ParserError {
 pub type ParserResult<T> = Result<T, ParserError>;
 
 #[derive(Error, Debug)]
-pub(crate) enum HeaderParsingError {
+#[allow(clippy::enum_variant_names)]
+pub(crate) enum MessageIntegrityError {
     #[error("Invalid BeginString")]
     InvalidBeginString,
     #[error("Invalid BodyLength")]
     InvalidBodyLength,
     #[error("Invalid MsgType")]
     InvalidMsgType,
-    #[error("Message ended before reaching body")]
-    IncompleteMessage,
-}
-
-pub(crate) type HeaderParsingResult<T> = Result<T, HeaderParsingError>;
-
-#[derive(Error, Debug)]
-pub(crate) enum TrailerParsingError {
     #[error("Invalid CheckSum")]
     InvalidCheckSum,
-    #[error("Invalid field")]
-    InvalidField(u32),
 }
-
-pub(crate) type TrailerParsingResult<T> = Result<T, TrailerParsingError>;

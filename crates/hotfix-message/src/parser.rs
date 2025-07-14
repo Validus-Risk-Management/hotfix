@@ -1,9 +1,7 @@
 use crate::Part;
-use crate::error::{
-    HeaderParsingError, HeaderParsingResult, ParserError, ParserResult, TrailerParsingError,
-    TrailerParsingResult,
-};
+use crate::error::{MessageIntegrityError, ParserError, ParserResult};
 use crate::field_map::Field;
+use crate::field_types::CheckSum;
 use crate::message::{Config, Message};
 use crate::parsed_message::{GarbledReason, InvalidReason, ParsedMessage};
 use crate::parts::{Body, Header, RepeatingGroup, Trailer};
@@ -12,6 +10,17 @@ use hotfix_dictionary::{Dictionary, LayoutItem, LayoutItemKind, TagU32};
 use std::collections::{HashMap, HashSet};
 
 pub const SOH: u8 = 0x1;
+
+/// Length of the checksum field.
+///
+/// It should always be 7 bytes:
+/// - 2 bytes for the tag (`10`)
+/// - a byte for the separator
+/// - 3 bytes for the value
+/// - a byte for the final delimiter
+///
+/// e.g. `10=643|`
+const CHECKSUM_LENGTH: usize = 7;
 
 pub struct MessageParser<'a> {
     dict: &'a Dictionary,
@@ -39,109 +48,128 @@ impl<'a> MessageParser<'a> {
     }
 
     pub(crate) fn build(mut self) -> ParsedMessage {
-        let (header, next) = match self.build_header() {
-            Ok((header, field)) => (header, field),
+        let (mut header, mut trailer) = match self.verify_integrity() {
+            Ok((header, trailer)) => (header, trailer),
+            Err(err) => return err.into(),
+        };
+        let next = match self.build_header(&mut header) {
+            Ok(next_field) => next_field,
             Err(err) => {
-                return err.into();
+                return parser_error_to_parsed_message(err, header);
             }
         };
 
         let (body, next) = match self.build_body(next) {
             Ok((body, field)) => (body, field),
             Err(err) => {
-                return match err {
-                    ParserError::IOError(_) => ParsedMessage::Garbled(GarbledReason::Malformed),
-                    ParserError::InvalidField(tag) => ParsedMessage::Invalid {
-                        reason: InvalidReason::InvalidField(tag),
-                        message: Message::with_header(header),
-                    },
-                    ParserError::InvalidGroup(tag) => ParsedMessage::Invalid {
-                        reason: InvalidReason::InvalidGroup(tag),
-                        message: Message::with_header(header),
-                    },
-                    ParserError::InvalidComponent(tag) => ParsedMessage::Invalid {
-                        reason: InvalidReason::InvalidComponent(tag),
-                        message: Message::with_header(header),
-                    },
-                    ParserError::Malformed(_) => ParsedMessage::Garbled(GarbledReason::Malformed),
-                };
+                return parser_error_to_parsed_message(err, header);
             }
         };
 
-        let trailer = match self.build_trailer(next) {
-            Ok(trailer) => trailer,
-            Err(TrailerParsingError::InvalidField(tag)) => {
-                return ParsedMessage::Invalid {
-                    reason: InvalidReason::InvalidField(tag),
-                    message: Message::with_header(header),
-                };
-            }
-            Err(TrailerParsingError::InvalidCheckSum) => {
-                return ParsedMessage::Garbled(GarbledReason::InvalidChecksum);
-            }
-        };
+        self.build_trailer(&mut trailer, next);
 
         let msg = Message {
             header,
             body,
             trailer,
         };
-        if let Ok(body_length) = msg.header().get::<usize>(BODY_LENGTH) {
-            let calculated_length = msg.calculate_length();
-            if calculated_length != body_length {
-                return ParsedMessage::Garbled(GarbledReason::InvalidBodyLength);
-            }
-        } else {
-            return ParsedMessage::Garbled(GarbledReason::InvalidBodyLength);
-        }
-
         ParsedMessage::Valid(msg)
     }
 
-    fn build_header(&mut self) -> HeaderParsingResult<(Header, Field)> {
-        // the first three fields need to be BeginString (8), BodyLength (9), and MsgType(35)
-        // https://www.onixs.biz/fix-dictionary/4.4/compblock_standardheader.html
-
+    fn verify_integrity(&mut self) -> Result<(Header, Trailer), MessageIntegrityError> {
         let mut header = Header::default();
 
-        // parse BeginString
+        // The first field should always be BeginString
+        let begin_string_field = self.parse_begin_string()?;
+        header.fields.insert(begin_string_field);
+
+        // The second field should always be BodyLength
+        let body_length_field = self.parse_body_length()?;
+        header.fields.insert(body_length_field);
+
+        // The BodyLength is the number of bytes between the end of the BodyLength field and the start of the last field (i.e. the checksum)
+        let body_length = if let Ok(body_length) = header.get::<usize>(BODY_LENGTH) {
+            let expected_length = self.position + body_length + CHECKSUM_LENGTH;
+            if self.raw_data.len() != expected_length {
+                return Err(MessageIntegrityError::InvalidBodyLength);
+            }
+            body_length
+        } else {
+            // we failed to parse body length as usize
+            return Err(MessageIntegrityError::InvalidBodyLength);
+        };
+
+        // Parse the checksum (at the end of the message) and verify it matches the computed checksum
+        let mut trailer = Trailer::default();
+        let checksum_field = self.parse_checksum(self.position + body_length)?;
+        trailer.fields.insert(checksum_field);
+
+        if let Ok(checksum) = trailer.get::<CheckSum>(CHECK_SUM) {
+            let computed_checksum =
+                CheckSum::compute(&self.raw_data[0..self.position + body_length]);
+            if computed_checksum != checksum {
+                return Err(MessageIntegrityError::InvalidCheckSum);
+            }
+        }
+
+        // The third field should be the MsgType
+        let msg_type_field = self.parse_message_type()?;
+        header.fields.insert(msg_type_field);
+
+        Ok((header, trailer))
+    }
+
+    fn parse_begin_string(&mut self) -> Result<Field, MessageIntegrityError> {
         if let Some(begin_string) = self.next_field()
             && begin_string.tag.get() == BEGIN_STRING.tag
         {
-            header.fields.insert(begin_string);
+            Ok(begin_string)
         } else {
-            return Err(HeaderParsingError::InvalidBeginString);
+            Err(MessageIntegrityError::InvalidBeginString)
         }
+    }
 
-        // parse BodyLength
+    fn parse_body_length(&mut self) -> Result<Field, MessageIntegrityError> {
         if let Some(body_length) = self.next_field()
             && body_length.tag.get() == BODY_LENGTH.tag
         {
-            header.fields.insert(body_length);
+            Ok(body_length)
         } else {
-            return Err(HeaderParsingError::InvalidBodyLength);
+            Err(MessageIntegrityError::InvalidBodyLength)
         }
+    }
 
-        // parse MsgType
+    fn parse_message_type(&mut self) -> Result<Field, MessageIntegrityError> {
         if let Some(msg_type) = self.next_field()
             && msg_type.tag.get() == MSG_TYPE.tag
         {
-            header.fields.insert(msg_type);
+            Ok(msg_type)
         } else {
-            return Err(HeaderParsingError::InvalidMsgType);
+            Err(MessageIntegrityError::InvalidMsgType)
         }
+    }
 
+    fn parse_checksum(&self, checksum_start: usize) -> Result<Field, MessageIntegrityError> {
+        if let Some((checksum, _)) = self.parse_field_at(checksum_start)
+            && checksum.tag.get() == CHECK_SUM.tag
+        {
+            Ok(checksum)
+        } else {
+            Err(MessageIntegrityError::InvalidCheckSum)
+        }
+    }
+
+    fn build_header(&mut self, header: &mut Header) -> ParserResult<Field> {
+        // we have already added the first 3 mandatory fields, build the rest
         loop {
-            if let Some(field) = self.next_field() {
-                if self.header_tags.contains(&field.tag) {
-                    header.fields.insert(field);
-                } else {
-                    // the parsed field is valid, but no longer in the header, so we're ready to move on
-                    return Ok((header, field));
-                }
+            let field = self.next_field().ok_or(ParserError::Malformed(
+                "message ended within header".to_string(),
+            ))?;
+
+            if self.header_tags.contains(&field.tag) {
+                header.fields.insert(field);
             } else {
-                // there is no next field, yet we're still in the header - something is very wrong
-                return Err(HeaderParsingError::IncompleteMessage);
+                return Ok(field);
             }
         }
     }
@@ -170,31 +198,15 @@ impl<'a> MessageParser<'a> {
         Ok((body, field))
     }
 
-    fn build_trailer(&mut self, next_field: Field) -> TrailerParsingResult<Trailer> {
-        // https://www.onixs.biz/fix-dictionary/4.4/compblock_standardtrailer.html
-        let mut trailer = Trailer::default();
-        let mut field = next_field;
-        loop {
-            if !self.trailer_tags.contains(&field.tag) {
-                return Err(TrailerParsingError::InvalidField(field.tag.get()));
+    fn build_trailer(&mut self, trailer: &mut Trailer, next_field: Field) {
+        let mut field = Some(next_field);
+        while let Some(f) = field {
+            if f.tag.get() == CHECK_SUM.tag {
+                break;
             }
-
-            let last_tag = field.tag.get();
-            trailer.store_field(field);
-
-            if let Some(next_field) = self.next_field() {
-                field = next_field;
-            } else {
-                // the very last tag needs to be the checksum
-                if last_tag != CHECK_SUM.tag {
-                    return Err(TrailerParsingError::InvalidCheckSum);
-                } else {
-                    break;
-                }
-            }
+            trailer.store_field(f);
+            field = self.next_field();
         }
-
-        Ok(trailer)
     }
 
     fn parse_groups(&mut self, start_tag: TagU32) -> ParserResult<(Vec<RepeatingGroup>, Field)> {
@@ -251,18 +263,23 @@ impl<'a> MessageParser<'a> {
     }
 
     fn next_field(&mut self) -> Option<Field> {
-        let mut iter = self.raw_data[self.position..].iter();
-        let equal_sign_position = self.position + iter.position(|c| *c == b'=')?;
+        let (field, end_position) = self.parse_field_at(self.position)?;
+        self.position = end_position + 1;
+
+        Some(field)
+    }
+
+    fn parse_field_at(&self, position: usize) -> Option<(Field, usize)> {
+        let mut iter = self.raw_data[position..].iter();
+        let equal_sign_position = position + iter.position(|c| *c == b'=')?;
         let bytes_until_separator = iter.position(|c| *c == self.config.separator)?;
         let separator_position = equal_sign_position + bytes_until_separator + 1;
 
-        let tag = tag_from_bytes(&self.raw_data[self.position..equal_sign_position])?;
+        let tag = tag_from_bytes(&self.raw_data[position..equal_sign_position])?;
         let data = self.raw_data[equal_sign_position + 1..separator_position].to_vec();
         let field = Field::new(tag, data);
 
-        self.position = separator_position + 1;
-
-        Some(field)
+        Some((field, separator_position))
     }
 
     fn get_dict_field_by_tag(&self, tag: u32) -> ParserResult<hotfix_dictionary::Field> {
@@ -333,18 +350,36 @@ fn tag_from_bytes(bytes: &[u8]) -> Option<TagU32> {
     TagU32::new(tag)
 }
 
+fn parser_error_to_parsed_message(err: ParserError, header: Header) -> ParsedMessage {
+    match err {
+        ParserError::IOError(_) => ParsedMessage::Garbled(GarbledReason::Malformed),
+        ParserError::InvalidField(tag) => ParsedMessage::Invalid {
+            reason: InvalidReason::InvalidField(tag),
+            message: Message::with_header(header),
+        },
+        ParserError::InvalidGroup(tag) => ParsedMessage::Invalid {
+            reason: InvalidReason::InvalidGroup(tag),
+            message: Message::with_header(header),
+        },
+        ParserError::InvalidComponent(tag) => ParsedMessage::Invalid {
+            reason: InvalidReason::InvalidComponent(tag),
+            message: Message::with_header(header),
+        },
+        ParserError::Malformed(_) => ParsedMessage::Garbled(GarbledReason::Malformed),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::field_types::Currency;
     use crate::message::{Config, Message};
-    use crate::parsed_message::ParsedMessage;
     use crate::{Part, fix44};
     use hotfix_dictionary::{Dictionary, IsFieldDefinition};
 
     #[test]
     fn parse_simple_message() {
         let config = Config { separator: b'|' };
-        let raw = b"8=FIX.4.4|9=40|35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|10=091|";
+        let raw = b"8=FIX.4.4|9=40|35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|10=093|";
         let dict = Dictionary::fix44();
 
         let message = Message::from_bytes(&config, &dict, raw)
@@ -367,13 +402,13 @@ mod tests {
         assert_eq!(time_in_force, "0");
 
         let checksum: &str = message.trailer().get(fix44::CHECK_SUM).unwrap();
-        assert_eq!(checksum, "091");
+        assert_eq!(checksum, "093");
     }
 
     #[test]
     fn repeating_group_entries() {
         let config = Config { separator: b'|' };
-        let raw = b"8=FIX.4.4|9=219|35=8|49=SENDER|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|139=7|10=128|";
+        let raw = b"8=FIX.4.4|9=191|35=8|49=SENDER|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|139=7|10=140|";
         let dict = Dictionary::fix44();
 
         let message = Message::from_bytes(&config, &dict, raw)
@@ -391,13 +426,13 @@ mod tests {
         assert_eq!(fee_type, "7");
 
         let checksum: &str = message.trailer().get(fix44::CHECK_SUM).unwrap();
-        assert_eq!(checksum, "128");
+        assert_eq!(checksum, "140");
     }
 
     #[test]
     fn nested_repeating_group_entries() {
         let config = Config { separator: b'|' };
-        let raw = b"8=FIX.4.4|9=000|35=8|34=2|49=Broker|52=20231103-09:30:00|56=Client|11=Order12345|17=Exec12345|150=0|39=0|55=APPL|54=1|38=100|32=50|31=150.00|151=50|14=50|6=150.00|453=2|448=PARTYA|447=D|452=1|802=2|523=SUBPARTYA1|803=1|523=SUBPARTYA2|803=2|448=PARTYB|447=D|452=2|10=111|";
+        let raw = b"8=FIX.4.4|9=247|35=8|34=2|49=Broker|52=20231103-09:30:00|56=Client|11=Order12345|17=Exec12345|150=0|39=0|55=APPL|54=1|38=100|32=50|31=150.00|151=50|14=50|6=150.00|453=2|448=PARTYA|447=D|452=1|802=2|523=SUBPARTYA1|803=1|523=SUBPARTYA2|803=2|448=PARTYB|447=D|452=2|10=129|";
         let dict = Dictionary::fix44();
 
         let message = Message::from_bytes(&config, &dict, raw)
@@ -418,6 +453,6 @@ mod tests {
         assert_eq!(party_b_role, 2);
 
         let checksum: &str = message.trailer().get(fix44::CHECK_SUM).unwrap();
-        assert_eq!(checksum, "111");
+        assert_eq!(checksum, "129");
     }
 }

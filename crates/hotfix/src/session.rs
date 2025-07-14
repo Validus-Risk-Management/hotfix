@@ -34,6 +34,7 @@ use crate::session::event::AwaitingActiveSessionResponse;
 use crate::session::state::AwaitingResendState;
 use crate::session_schedule::SessionSchedule;
 use event::SessionEvent;
+use hotfix_message::parsed_message::ParsedMessage;
 use state::SessionState;
 
 const SCHEDULE_CHECK_INTERVAL: u64 = 1;
@@ -179,16 +180,19 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             &self.dictionary,
             raw_message.as_bytes(),
         ) {
-            Ok(message) => {
+            ParsedMessage::Valid(message) => {
                 self.process_message(message).await?;
                 self.check_end_of_resend().await?;
             }
-            Err(err) => {
+            ParsedMessage::Garbled(r) => {
                 // garbled messages should be skipped and we should assume it was a transmission error
                 let message = raw_message.to_string();
-                let error = err.to_string();
-                error!(message, error, "received garbled message");
+                let reason = format!("{r:?}");
+                error!(message, reason, "received garbled message");
                 // TODO: not all parsing errors indicate garbled messages
+            }
+            _ => {
+                error!("received invalid message, which are not handled yet");
             }
         }
 
@@ -491,6 +495,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             debug!(m, "resending message");
             let mut message =
                 Message::from_bytes(&self.message_config, &self.dictionary, msg.as_slice())
+                    .into_message()
                     .unwrap();
             sequence_number = message.header().get(fix44::MSG_SEQ_NUM).unwrap();
             let message_type: String = message
