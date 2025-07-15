@@ -28,12 +28,12 @@ hotfix-message = { version = "0.0.23", path = "../hotfix-message" }
 mongodb = { version = "^3.2", optional = true }
 pki-types = { package = "rustls-pki-types", version = "^1" }
 redb = { version = "^2.6", optional = true }
-rustls = "^0.21.5"
+rustls = "^0.23"
 rustls-pemfile = "^2.2"
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { version = "^1", features = ["full"] }
-tokio-rustls = "^0.24.1"
+tokio-rustls = "^0.26"
 toml = { workspace = true }
 tracing = { workspace = true }
 uuid = { version = "1.5.0", features = ["v4"] }

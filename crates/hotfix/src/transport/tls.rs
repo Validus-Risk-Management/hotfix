@@ -2,9 +2,9 @@ use std::io::BufReader;
 use std::sync::Arc;
 use std::{fs, io};
 
-use pki_types::CertificateDer;
+use pki_types::{CertificateDer, ServerName};
 use rustls::ClientConfig;
-use rustls::{RootCertStore, ServerName};
+use rustls::RootCertStore;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio_rustls::{TlsConnector, client::TlsStream};
@@ -34,7 +34,6 @@ fn get_client_config(session_config: &SessionConfig) -> ClientConfig {
             .ca_certificate_path,
     );
     ClientConfig::builder()
-        .with_safe_defaults()
         .with_root_certificates(root_store)
         .with_no_client_auth()
 }
@@ -42,7 +41,7 @@ fn get_client_config(session_config: &SessionConfig) -> ClientConfig {
 fn get_root_store(ca_certificate_path: &str) -> RootCertStore {
     let mut root_store = RootCertStore::empty();
     let certs = load_certs(ca_certificate_path);
-    root_store.add_parsable_certificates(&certs);
+    root_store.add_parsable_certificates(certs);
 
     root_store
 }
@@ -63,7 +62,7 @@ pub async fn wrap_stream<S>(
 where
     S: 'static + AsyncRead + AsyncWrite + Send + Unpin,
 {
-    let domain = ServerName::try_from(domain.as_str()).unwrap();
+    let domain = ServerName::try_from(domain).unwrap();
     let stream = TlsConnector::from(config);
     stream.connect(domain, socket).await
 }
