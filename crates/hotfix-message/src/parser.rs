@@ -373,16 +373,18 @@ fn parser_error_to_parsed_message(err: ParserError, header: Header) -> ParsedMes
 mod tests {
     use crate::field_types::Currency;
     use crate::message::{Config, Message};
+    use crate::parsed_message::{GarbledReason, ParsedMessage};
     use crate::{Part, fix44};
     use hotfix_dictionary::{Dictionary, IsFieldDefinition};
 
+    const CONFIG: Config = Config { separator: b'|' };
+
     #[test]
     fn parse_simple_message() {
-        let config = Config { separator: b'|' };
         let raw = b"8=FIX.4.4|9=40|35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|10=093|";
         let dict = Dictionary::fix44();
 
-        let message = Message::from_bytes(&config, &dict, raw)
+        let message = Message::from_bytes(&CONFIG, &dict, raw)
             .into_message()
             .unwrap();
 
@@ -407,11 +409,10 @@ mod tests {
 
     #[test]
     fn repeating_group_entries() {
-        let config = Config { separator: b'|' };
         let raw = b"8=FIX.4.4|9=191|35=8|49=SENDER|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|139=7|10=140|";
         let dict = Dictionary::fix44();
 
-        let message = Message::from_bytes(&config, &dict, raw)
+        let message = Message::from_bytes(&CONFIG, &dict, raw)
             .into_message()
             .unwrap();
         let begin: &str = message.header().get(fix44::BEGIN_STRING).unwrap();
@@ -431,11 +432,10 @@ mod tests {
 
     #[test]
     fn nested_repeating_group_entries() {
-        let config = Config { separator: b'|' };
         let raw = b"8=FIX.4.4|9=247|35=8|34=2|49=Broker|52=20231103-09:30:00|56=Client|11=Order12345|17=Exec12345|150=0|39=0|55=APPL|54=1|38=100|32=50|31=150.00|151=50|14=50|6=150.00|453=2|448=PARTYA|447=D|452=1|802=2|523=SUBPARTYA1|803=1|523=SUBPARTYA2|803=2|448=PARTYB|447=D|452=2|10=129|";
         let dict = Dictionary::fix44();
 
-        let message = Message::from_bytes(&config, &dict, raw)
+        let message = Message::from_bytes(&CONFIG, &dict, raw)
             .into_message()
             .unwrap();
         let party_a = message.get_group(fix44::NO_PARTY_I_DS, 0).unwrap();
@@ -454,5 +454,89 @@ mod tests {
 
         let checksum: &str = message.trailer().get(fix44::CHECK_SUM).unwrap();
         assert_eq!(checksum, "129");
+    }
+
+    #[test]
+    fn test_begin_string_not_the_first_tag() {
+        let raw = b"9=40|8=FIX.4.4|35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|10=093|";
+        let dict = Dictionary::fix44();
+
+        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
+        assert!(matches!(
+            parsed_message,
+            ParsedMessage::Garbled(GarbledReason::InvalidBeginString)
+        ));
+    }
+
+    #[test]
+    fn test_body_length_not_the_second_tag() {
+        let raw = b"8=FIX.4.4|49=SENDER|9=191|35=8|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|139=7|10=140|";
+        let dict = Dictionary::fix44();
+
+        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
+        assert!(matches!(
+            parsed_message,
+            ParsedMessage::Garbled(GarbledReason::InvalidBodyLength)
+        ));
+    }
+
+    #[test]
+    fn test_body_length_is_wrong() {
+        let raw = b"8=FIX.4.4|9=192|35=8|49=SENDER|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|139=7|10=140|";
+        let dict = Dictionary::fix44();
+
+        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
+        assert!(matches!(
+            parsed_message,
+            ParsedMessage::Garbled(GarbledReason::InvalidBodyLength)
+        ));
+    }
+
+    #[test]
+    fn test_body_length_exceeds_message_length() {
+        let raw = b"8=FIX.4.4|9=500|35=8|49=SENDER|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|139=7|10=140|";
+        let dict = Dictionary::fix44();
+
+        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
+        assert!(matches!(
+            parsed_message,
+            ParsedMessage::Garbled(GarbledReason::InvalidBodyLength)
+        ));
+    }
+
+    #[test]
+    fn test_msg_type_is_not_the_third_tag() {
+        let raw = b"8=FIX.4.4|9=191|49=SENDER|35=8|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|139=7|10=140|";
+        let dict = Dictionary::fix44();
+
+        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
+        assert!(matches!(
+            parsed_message,
+            ParsedMessage::Garbled(GarbledReason::InvalidMsgType)
+        ));
+    }
+
+    #[test]
+    fn test_checksum_is_not_the_last_tag() {
+        let raw = b"8=FIX.4.4|9=191|35=8|49=SENDER|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|10=140|139=7|";
+        let dict = Dictionary::fix44();
+
+        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
+        assert!(matches!(
+            parsed_message,
+            ParsedMessage::Garbled(GarbledReason::InvalidChecksum)
+        ));
+    }
+
+    #[test]
+    fn test_invalid_checksum() {
+        let raw = b"8=FIX.4.4|9=40|35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|10=000|";
+        let dict = Dictionary::fix44();
+
+        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
+        assert!(matches!(
+            parsed_message,
+            ParsedMessage::Garbled(GarbledReason::InvalidChecksum)
+        ));
     }
 }
