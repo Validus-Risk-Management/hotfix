@@ -554,4 +554,21 @@ mod tests {
             }
         ));
     }
+
+    #[test]
+    fn test_invalid_group_in_body() {
+        // tag=384 is `NoMsgTypes`, which is supposed to have `RefMsgType` (tag=372) and `MsgDirection` (tag=385)
+        // in our message, `RefMsgType` is missing
+        let raw = b"8=FIX.4.4|9=75|35=A|49=SENDER|56=TARGET|34=1|52=20231103-12:00:00|98=0|108=30|384=1|385=R|10=050|";
+        let dict = Dictionary::fix44();
+
+        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
+        assert!(matches!(
+            parsed_message,
+            ParsedMessage::Invalid {
+                reason: InvalidReason::InvalidGroup(_),
+                ..
+            }
+        ));
+    }
 }
