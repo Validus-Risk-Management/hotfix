@@ -22,28 +22,15 @@ workspace = true
 chrono = "0.4"
 hotfix-derive = { version = "0.0.23", path = "../hotfix-derive" }
 hotfix-dictionary = { version = "0.0.23", path = "../hotfix-dictionary" }
-nohash-hasher = "^0.2"
-serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
-tracing = { workspace = true }
 
 [dev-dependencies]
 anyhow = "1.0.75"
 hotfix-dictionary = { version = "0.0.23", path = "../hotfix-dictionary", features = ["fix42"] }
 quickcheck = "1"
-quickcheck_derive = "0.3"
 quickcheck_macros = "1"
 
 [build-dependencies]
 chrono = "0.4"
 hotfix-codegen = { version = "0.0.23", path = "../hotfix-codegen" }
 hotfix-dictionary = { version = "0.0.23", path = "../hotfix-dictionary", features = ["fix42"] }
-fnv = "1"
-heck = "0.4"
-indoc = "2"
-lazy_static = "1"
-quick-xml = "0.29"
-roxmltree = "0.14"
-rayon = "1"
-strum = "0.24"
-strum_macros = "0.25"
