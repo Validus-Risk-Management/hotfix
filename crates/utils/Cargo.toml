@@ -18,4 +18,4 @@ path = "src/update_version.rs"
 [dependencies]
 anyhow = { workspace = true }
 clap = { version = "4.4.8", features = ["derive"] }
-toml_edit = "0.21.0"
+toml_edit = "0.23"

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use clap::Parser;
-use toml_edit::{Document, Formatted, value};
+use toml_edit::{DocumentMut, Formatted, value};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -59,7 +59,7 @@ fn update_crate(crate_path: PathBuf, version: &str) -> Result<()> {
     Ok(())
 }
 
-fn parse_cargo_toml(cargo_toml_path: &Path) -> Result<Document> {
+fn parse_cargo_toml(cargo_toml_path: &Path) -> Result<DocumentMut> {
     let contents = fs::read_to_string(cargo_toml_path)?;
     Ok(contents.parse()?)
 }

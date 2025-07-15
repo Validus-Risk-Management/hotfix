@@ -18,9 +18,9 @@ workspace = true
 chrono = "0.4"
 hotfix-dictionary = { version = "0.0.23", path = "../hotfix-dictionary" }
 fnv = "1"
-heck = "0.4"
+heck = "0.5"
 indoc = "2"
 
 [dev-dependencies]
 hotfix-dictionary = { version = "0.0.23", path = "../hotfix-dictionary", features = ["fix40", "fix41", "fix42", "fix43", "fix50"] }
-syn = { version = "1", features = ["parsing"] }
+syn = { version = "2", features = ["parsing"] }
