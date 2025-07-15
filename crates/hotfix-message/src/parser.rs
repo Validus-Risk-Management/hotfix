@@ -373,7 +373,7 @@ fn parser_error_to_parsed_message(err: ParserError, header: Header) -> ParsedMes
 mod tests {
     use crate::field_types::Currency;
     use crate::message::{Config, Message};
-    use crate::parsed_message::{GarbledReason, ParsedMessage};
+    use crate::parsed_message::{GarbledReason, InvalidReason, ParsedMessage};
     use crate::{Part, fix44};
     use hotfix_dictionary::{Dictionary, IsFieldDefinition};
 
@@ -537,6 +537,21 @@ mod tests {
         assert!(matches!(
             parsed_message,
             ParsedMessage::Garbled(GarbledReason::InvalidChecksum)
+        ));
+    }
+
+    #[test]
+    fn test_invalid_field_in_body() {
+        let raw = b"8=FIX.4.4|9=53|35=D|49=AFUNDMGR|9999=invalid|56=ABROKER|15=USD|59=0|10=229|";
+        let dict = Dictionary::fix44();
+
+        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
+        assert!(matches!(
+            parsed_message,
+            ParsedMessage::Invalid {
+                reason: InvalidReason::InvalidField(_),
+                ..
+            }
         ));
     }
 }
