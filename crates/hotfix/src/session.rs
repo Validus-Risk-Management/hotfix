@@ -22,7 +22,7 @@ use crate::message::heartbeat::Heartbeat;
 use crate::message::logon::{Logon, ResetSeqNumConfig};
 use crate::message::parser::RawFixMessage;
 use crate::store::MessageStore;
-use crate::transport::socket_writer::WriterRef;
+use crate::transport::writer::WriterRef;
 
 use crate::error::MessageVerificationError;
 use crate::message::logout::Logout;

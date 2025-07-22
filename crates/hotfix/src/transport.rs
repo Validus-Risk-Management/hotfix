@@ -1,7 +1,6 @@
 mod connection;
-pub(crate) mod socket_reader;
-pub(crate) mod socket_writer;
-mod tcp;
-mod tls;
+pub mod socket;
+pub mod writer;
 
 pub use connection::FixConnection;
+pub use socket::*;

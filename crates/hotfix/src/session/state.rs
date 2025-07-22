@@ -1,6 +1,6 @@
 use crate::message::parser::RawFixMessage;
 use crate::session::event::AwaitingActiveSessionResponse;
-use crate::transport::socket_writer::WriterRef;
+use crate::transport::writer::WriterRef;
 use hotfix_message::message::Message;
 use std::collections::VecDeque;
 use tokio::sync::oneshot;

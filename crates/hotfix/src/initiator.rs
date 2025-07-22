@@ -15,7 +15,7 @@ use crate::config::SessionConfig;
 use crate::message::FixMessage;
 use crate::session::SessionRef;
 use crate::store::MessageStore;
-use crate::transport::FixConnection;
+use crate::transport::connect;
 
 pub struct Initiator<M> {
     pub config: SessionConfig,
@@ -60,7 +60,7 @@ async fn establish_connection<M: FixMessage>(config: SessionConfig, session_ref:
         }
         session_ref.await_active_session_time().await;
 
-        match FixConnection::connect(&config, session_ref.clone()).await {
+        match connect(&config, session_ref.clone()).await {
             Ok(conn) => {
                 session_ref.register_writer(conn.get_writer()).await;
 

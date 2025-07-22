@@ -1,42 +1,14 @@
+use crate::transport::writer::{WriterMessage, WriterRef};
 use tokio::io::{AsyncWrite, AsyncWriteExt, WriteHalf};
 use tokio::sync::mpsc;
 use tracing::{debug, warn};
 
-use crate::message::parser::RawFixMessage;
+pub fn spawn_socket_writer(writer: WriteHalf<impl AsyncWrite + Send + 'static>) -> WriterRef {
+    let (sender, mailbox) = mpsc::channel(10);
+    let actor = WriterActor::new(writer, mailbox);
+    tokio::spawn(run_writer(actor));
 
-#[derive(Clone, Debug)]
-pub enum WriterMessage {
-    SendMessage(RawFixMessage),
-    Disconnect,
-}
-
-#[derive(Clone, Debug)]
-pub struct WriterRef {
-    sender: mpsc::Sender<WriterMessage>,
-}
-
-impl WriterRef {
-    pub fn new(writer: WriteHalf<impl AsyncWrite + Send + 'static>) -> Self {
-        let (sender, mailbox) = mpsc::channel(10);
-        let actor = WriterActor::new(writer, mailbox);
-        tokio::spawn(run_writer(actor));
-
-        Self { sender }
-    }
-
-    pub async fn send_raw_message(&self, msg: RawFixMessage) {
-        self.sender
-            .send(WriterMessage::SendMessage(msg))
-            .await
-            .expect("be able to send message");
-    }
-
-    pub async fn disconnect(&self) {
-        self.sender
-            .send(WriterMessage::Disconnect)
-            .await
-            .expect("be able to disconnect")
-    }
+    WriterRef::new(sender)
 }
 
 struct WriterActor<W> {
