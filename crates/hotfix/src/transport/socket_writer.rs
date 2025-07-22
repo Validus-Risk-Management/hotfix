@@ -1,8 +1,10 @@
+use async_trait::async_trait;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tracing::{debug, warn};
 
 use crate::message::parser::RawFixMessage;
+use crate::transport::actor::{Actor, WriterModel};
 
 #[derive(Clone, Debug)]
 pub enum WriterMessage {
@@ -15,40 +17,19 @@ pub struct WriterRef {
     sender: mpsc::Sender<WriterMessage>,
 }
 
-impl WriterRef {
-    pub fn new(writer: impl AsyncWrite + Send + Unpin + 'static) -> Self {
-        let (sender, mailbox) = mpsc::channel(10);
-        let actor = WriterActor::new(writer, mailbox);
-        tokio::spawn(run_writer(actor));
-
-        Self { sender }
-    }
-
-    pub async fn send_raw_message(&self, msg: RawFixMessage) {
-        self.sender
-            .send(WriterMessage::SendMessage(msg))
-            .await
-            .expect("be able to send message");
-    }
-
-    pub async fn disconnect(&self) {
-        self.sender
-            .send(WriterMessage::Disconnect)
-            .await
-            .expect("be able to disconnect")
-    }
-}
-
-struct WriterActor<W: AsyncWrite> {
+pub struct WriterActor<W: AsyncWrite> {
     writer: W,
     mailbox: mpsc::Receiver<WriterMessage>,
 }
 
-impl<W: AsyncWrite + Unpin> WriterActor<W> {
+impl<W: AsyncWrite> WriterActor<W> {
     fn new(writer: W, mailbox: mpsc::Receiver<WriterMessage>) -> Self {
         Self { writer, mailbox }
     }
+}
 
+#[async_trait]
+impl<W: AsyncWrite + Send + Unpin + 'static> Actor<WriterMessage> for WriterActor<W> {
     async fn handle(&mut self, message: WriterMessage) -> bool {
         match message {
             WriterMessage::SendMessage(fix_message) => {
@@ -63,22 +44,41 @@ impl<W: AsyncWrite + Unpin> WriterActor<W> {
             WriterMessage::Disconnect => false,
         }
     }
+    async fn next(&mut self) -> Option<WriterMessage> {
+        self.mailbox.recv().await
+    }
 }
 
-async fn run_writer<W: AsyncWrite + Unpin>(mut actor: WriterActor<W>) {
-    while let Some(msg) = actor.mailbox.recv().await {
-        if !actor.handle(msg).await {
-            break;
-        }
+#[async_trait]
+impl WriterModel for WriterRef {
+    fn new<W: AsyncWrite + Send + Unpin + 'static>(writer: W) -> Self {
+        let (sender, mailbox) = mpsc::channel(10);
+        let actor = WriterActor::new(writer, mailbox);
+        actor.run();
+
+        Self { sender }
     }
 
-    debug!("writer loop is shutting down");
+    async fn send_raw_message(&self, msg: RawFixMessage) {
+        self.sender
+            .send(WriterMessage::SendMessage(msg))
+            .await
+            .expect("be able to send message");
+    }
+
+    async fn disconnect(&self) {
+        self.sender
+            .send(WriterMessage::Disconnect)
+            .await
+            .expect("be able to disconnect")
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::WriterRef;
     use crate::message::parser::RawFixMessage;
+    use crate::transport::actor::WriterModel;
     use tokio::io::AsyncReadExt;
 
     #[tokio::test]
