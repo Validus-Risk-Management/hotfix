@@ -1,4 +1,4 @@
-use crate::transport::socket_reader::ReaderRef;
+use crate::transport::reader::ReaderRef;
 use crate::transport::writer::WriterRef;
 
 pub struct FixConnection {

@@ -5,34 +5,17 @@ use tracing::debug;
 use crate::message::FixMessage;
 use crate::message::parser::Parser;
 use crate::session::SessionRef;
+use crate::transport::reader::ReaderRef;
 
-#[derive(Clone, Debug)]
-#[allow(dead_code)]
-pub struct ReaderMessage;
+pub fn spawn_socket_reader(
+    reader: ReadHalf<impl AsyncRead + Send + 'static>,
+    session_ref: SessionRef<impl FixMessage>,
+) -> ReaderRef {
+    let (dc_sender, dc_receiver) = oneshot::channel();
+    let actor = ReaderActor::new(reader, session_ref, dc_sender);
+    tokio::spawn(run_reader(actor));
 
-pub struct ReaderRef {
-    disconnect_signal: oneshot::Receiver<()>,
-}
-
-impl ReaderRef {
-    pub fn new<M: FixMessage>(
-        reader: ReadHalf<impl AsyncRead + Send + 'static>,
-        session_ref: SessionRef<M>,
-    ) -> Self {
-        let (dc_sender, dc_receiver) = oneshot::channel();
-        let actor = ReaderActor::new(reader, session_ref, dc_sender);
-        tokio::spawn(run_reader(actor));
-
-        Self {
-            disconnect_signal: dc_receiver,
-        }
-    }
-
-    pub async fn wait_for_disconnect(self) {
-        self.disconnect_signal
-            .await
-            .expect("not to drop signal prematurely");
-    }
+    ReaderRef::new(dc_receiver)
 }
 
 struct ReaderActor<M, R> {

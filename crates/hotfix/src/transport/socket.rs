@@ -11,7 +11,7 @@ use crate::{
     message::FixMessage,
     session::SessionRef,
     transport::{
-        FixConnection, socket_reader::ReaderRef, socket_writer::spawn_socket_writer,
+        FixConnection, socket_reader::spawn_socket_reader, socket_writer::spawn_socket_writer,
         tcp::create_tcp_connection, tls::create_tcp_over_tls_connection,
     },
 };
@@ -42,7 +42,7 @@ where
     let (reader, writer) = tokio::io::split(stream);
 
     let writer_ref = spawn_socket_writer(writer);
-    let reader_ref = ReaderRef::new(reader, session_ref);
+    let reader_ref = spawn_socket_reader(reader, session_ref);
 
     FixConnection::new(writer_ref, reader_ref)
 }
