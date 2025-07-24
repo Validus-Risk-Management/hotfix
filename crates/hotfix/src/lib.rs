@@ -29,10 +29,10 @@ pub(crate) mod error;
 pub mod initiator;
 pub mod message;
 mod message_utils;
-pub(crate) mod session;
+pub mod session;
 mod session_schedule;
 pub mod store;
-pub(crate) mod transport;
+pub mod transport;
 
 pub use application::Application;
 pub use hotfix_message::field_types;

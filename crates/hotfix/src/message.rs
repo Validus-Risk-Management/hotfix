@@ -13,6 +13,8 @@ pub(crate) mod resend_request;
 pub(crate) mod sequence_reset;
 pub(crate) mod test_request;
 
+pub use parser::RawFixMessage;
+
 pub trait FixMessage: Clone + Send + 'static {
     fn write(&self, msg: &mut Message);
 
