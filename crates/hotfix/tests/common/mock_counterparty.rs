@@ -1,67 +1,71 @@
-use hotfix::message::{FixMessage, RawFixMessage};
+use hotfix::message::FixMessage;
 use hotfix::session::SessionRef;
 use hotfix::transport::FixConnection;
 use hotfix::transport::reader::ReaderRef;
 use hotfix::transport::writer::{WriterMessage, WriterRef};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::sync::mpsc::Receiver;
-use tokio::sync::{Mutex, mpsc, oneshot};
+use std::time::Duration;
+use tokio::sync::{mpsc, oneshot};
+
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(1);
 
 pub struct MockCounterparty {
-    received_messages: Arc<Mutex<Vec<RawFixMessage>>>,
+    // Receiver-End of the channel
+    receiver: mpsc::UnboundedReceiver<WriterMessage>,
+    // History of Received messages from the client
+    messages: Vec<WriterMessage>,
     _connection: FixConnection,
     _dc_sender: oneshot::Sender<()>,
 }
 
-type MessageStore = Arc<Mutex<Vec<RawFixMessage>>>;
-
 impl MockCounterparty {
     pub async fn start(session_ref: SessionRef<impl FixMessage>) -> Self {
-        let (writer_ref, received_messages) = Self::spawn_writer();
+        let (writer_ref, receiver) = Self::spawn_writer();
         let (reader_ref, dc_sender) = Self::create_reader();
         let connection = FixConnection::new(writer_ref, reader_ref);
 
         session_ref.register_writer(connection.get_writer()).await;
 
         Self {
-            received_messages,
+            receiver,
+            messages: vec![],
             _connection: connection,
             _dc_sender: dc_sender,
         }
     }
 
-    pub async fn assert_message_count(&self, expected_count: usize, timeout_secs: f32) {
-        let timeout_duration = Duration::from_secs_f32(timeout_secs);
-        let start_time = Instant::now();
-
-        loop {
-            {
-                let messages = self.received_messages.lock().await;
-                if messages.len() >= expected_count {
-                    return;
-                }
-            }
-
-            if start_time.elapsed() >= timeout_duration {
-                let current_count = self.received_messages.lock().await.len();
-                panic!(
-                    "Expected {expected_count} messages, but only received {current_count} within {timeout_secs} seconds"
-                );
-            }
-
-            tokio::time::sleep(Duration::from_millis(1)).await;
-        }
+    /// Listen to the next message on the channel
+    pub async fn get_next(&mut self, timeout: Option<Duration>) -> &WriterMessage {
+        let timeout = timeout.unwrap_or(DEFAULT_TIMEOUT);
+        let msg = tokio::time::timeout(timeout, self.receiver.recv())
+            .await
+            .unwrap_or_else(|_| panic!("Message not received in less than {timeout:?}"))
+            .unwrap_or_else(|| panic!("Received message is None"));
+        self.messages.push(msg);
+        self.messages.last().unwrap()
     }
 
-    fn spawn_writer() -> (WriterRef, MessageStore) {
+    pub async fn assert_next<F>(&mut self, timeout: Option<Duration>, assertion: F)
+    where
+        F: FnOnce(&WriterMessage) -> bool,
+    {
+        let msg = self.get_next(timeout).await;
+        assert!(assertion(msg));
+    }
+
+    pub async fn assert_disconnected(&mut self, timeout: Option<Duration>) {
+        self.assert_next(timeout, |msg| matches!(msg, &WriterMessage::Disconnect))
+            .await;
+        assert!(self.receiver.is_closed());
+    }
+
+    fn spawn_writer() -> (WriterRef, mpsc::UnboundedReceiver<WriterMessage>) {
         // mock implementation to receive messages from the session
         // and hold on to them for test assertions
-        let received_messages: MessageStore = Arc::new(Mutex::new(vec![]));
+        let (tx, rx) = mpsc::unbounded_channel();
         let (sender, mailbox) = mpsc::channel(10);
-        tokio::spawn(Self::run_writer(mailbox, received_messages.clone()));
+        tokio::spawn(Self::run_writer(mailbox, tx));
 
-        (WriterRef::new(sender), received_messages)
+        (WriterRef::new(sender), rx)
     }
 
     fn create_reader() -> (ReaderRef, oneshot::Sender<()>) {
@@ -70,19 +74,18 @@ impl MockCounterparty {
     }
 
     async fn run_writer(
-        mut mailbox: Receiver<WriterMessage>,
-        received_messages: Arc<Mutex<Vec<RawFixMessage>>>,
+        mut mailbox: mpsc::Receiver<WriterMessage>,
+        received_messages: mpsc::UnboundedSender<WriterMessage>,
     ) {
         while let Some(msg) = mailbox.recv().await {
-            match msg {
-                WriterMessage::SendMessage(fix_message) => {
-                    println!("Received message from session: {fix_message:?}");
-                    received_messages.lock().await.push(fix_message);
-                }
-                WriterMessage::Disconnect => {
-                    println!("Disconnecting");
-                    break;
-                }
+            println!("Received message from session: {msg:?}");
+            let disconnect = matches!(msg, WriterMessage::Disconnect);
+            if let Err(e) = received_messages.send(msg) {
+                panic!("Failed to send message. Error: {e:?}");
+            }
+            if disconnect {
+                println!("Disconnecting");
+                break;
             }
         }
     }

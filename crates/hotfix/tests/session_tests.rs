@@ -11,8 +11,12 @@ mod common;
 #[tokio::test]
 async fn test_happy_login_flow() {
     let session = create_session();
-    let mock_counterparty = MockCounterparty::start(session).await;
-    mock_counterparty.assert_message_count(1, 0.5).await;
+    let mut mock_counterparty = MockCounterparty::start(session.clone()).await;
+    mock_counterparty.assert_next(None, |_msg| true).await;
+    session
+        .disconnect("Test Session Finished".to_string())
+        .await;
+    mock_counterparty.assert_disconnected(None).await;
 }
 
 fn create_session() -> SessionRef<TestMessage> {
