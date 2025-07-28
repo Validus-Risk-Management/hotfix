@@ -1,4 +1,6 @@
-use hotfix::message::{FixMessage, RawFixMessage};
+use hotfix::config::SessionConfig;
+use hotfix::message::logon::{Logon, ResetSeqNumConfig};
+use hotfix::message::{FixMessage, RawFixMessage, generate_message};
 use hotfix::session::SessionRef;
 use hotfix::transport::FixConnection;
 use hotfix::transport::reader::ReaderRef;
@@ -12,18 +14,23 @@ use tokio::sync::{mpsc, oneshot};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_millis(10);
 
-pub struct MockCounterparty {
+pub struct MockCounterparty<M> {
     receiver: Receiver<WriterMessage>,
-    // History of received messages from the session
-    messages: Vec<Message>,
+    received_messages: Vec<Message>,
+    sent_messages: Vec<Vec<u8>>,
+    session_ref: SessionRef<M>,
+    session_config: SessionConfig,
     dictionary: Dictionary,
     message_config: MessageConfig,
     _connection: FixConnection,
     _dc_sender: oneshot::Sender<()>,
 }
 
-impl MockCounterparty {
-    pub async fn start(session_ref: SessionRef<impl FixMessage>) -> Self {
+impl<M> MockCounterparty<M>
+where
+    M: FixMessage,
+{
+    pub async fn start(session_ref: SessionRef<M>, session_config: SessionConfig) -> Self {
         let (writer_ref, receiver) = Self::create_writer();
         let (reader_ref, dc_sender) = Self::create_reader();
         let connection = FixConnection::new(writer_ref, reader_ref);
@@ -32,12 +39,37 @@ impl MockCounterparty {
 
         Self {
             receiver,
-            messages: vec![],
+            received_messages: vec![],
+            sent_messages: vec![],
+            session_ref,
+            session_config,
             dictionary: Dictionary::fix44(),
             message_config: MessageConfig::default(),
             _connection: connection,
             _dc_sender: dc_sender,
         }
+    }
+
+    pub async fn send_logon(&mut self) {
+        let logon = Logon::new(
+            self.session_config.heartbeat_interval,
+            ResetSeqNumConfig::NoReset(None),
+        );
+        self.send_message(logon).await;
+    }
+
+    pub async fn send_message(&mut self, message: impl FixMessage) {
+        let raw_message = generate_message(
+            &self.session_config.sender_comp_id,
+            &self.session_config.target_comp_id,
+            self.sent_messages.len() + 1,
+            message,
+        )
+        .expect("failed to generate message");
+        self.sent_messages.push(raw_message.clone());
+        self.session_ref
+            .new_fix_message_received(RawFixMessage::new(raw_message))
+            .await;
     }
 
     /// Waits for and returns the next message received from the session.
@@ -51,8 +83,8 @@ impl MockCounterparty {
             .and_then(|writer_message| match writer_message {
                 WriterMessage::SendMessage(raw_message) => {
                     let message = self.parse_message(&raw_message);
-                    self.messages.push(message);
-                    self.messages.last()
+                    self.received_messages.push(message);
+                    self.received_messages.last()
                 }
                 WriterMessage::Disconnect => None,
             })
@@ -73,7 +105,7 @@ impl MockCounterparty {
 
     pub async fn assert_next<F>(&mut self, assertion: F)
     where
-        F: FnOnce(&Message) -> bool,
+        F: FnOnce(&Message),
     {
         self.assert_next_with_timeout(assertion, DEFAULT_TIMEOUT)
             .await;
@@ -81,7 +113,7 @@ impl MockCounterparty {
 
     pub async fn assert_next_with_timeout<F>(&mut self, assertion: F, timeout: Duration)
     where
-        F: FnOnce(&Message) -> bool,
+        F: FnOnce(&Message),
     {
         match tokio::time::timeout(timeout, self.get_next()).await {
             Ok(Some(message)) => {

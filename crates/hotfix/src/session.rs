@@ -120,7 +120,7 @@ struct Session<M, S> {
     store: S,
     awaiting_test_response: Option<TestRequestId>,
 
-    heartbeat_timer: Pin<Box<Sleep>>,
+    heartbeat_timer: Option<Pin<Box<Sleep>>>,
     peer_timer: Pin<Box<Sleep>>,
     schedule_check_timer: Pin<Box<Sleep>>,
 }
@@ -132,7 +132,6 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         application: ApplicationRef<M>,
         store: S,
     ) -> Session<M, S> {
-        let heartbeat_timer = sleep(Duration::from_secs(config.heartbeat_interval));
         let peer_timer = sleep(Duration::from_secs(
             (config.heartbeat_interval as f64 * TEST_REQUEST_THRESHOLD).round() as u64,
         ));
@@ -151,7 +150,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             application,
             store,
             awaiting_test_response: None,
-            heartbeat_timer: Box::pin(heartbeat_timer),
+            heartbeat_timer: None,
             peer_timer: Box::pin(peer_timer),
             schedule_check_timer: Box::pin(schedule_check_timer),
         }
@@ -545,7 +544,12 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     fn reset_heartbeat_timer(&mut self) {
         let deadline = Instant::now() + Duration::from_secs(self.config.heartbeat_interval);
-        self.heartbeat_timer.as_mut().reset(deadline);
+        if let Some(heartbeat_timer) = &mut self.heartbeat_timer {
+            heartbeat_timer.as_mut().reset(deadline);
+        } else {
+            let timer = sleep(Duration::from_secs(self.config.heartbeat_interval));
+            self.heartbeat_timer = Some(Box::pin(timer));
+        }
     }
 
     fn reset_peer_timer(&mut self, awaiting_req_id: Option<TestRequestId>) {
@@ -742,7 +746,13 @@ where
                     None => break,
                 }
             }
-            () = &mut session.heartbeat_timer.as_mut() => {
+            () = async {
+                if let Some(ref mut timer) = session.heartbeat_timer {
+                    timer.as_mut().await
+                } else {
+                    std::future::pending().await
+                }
+            } => {
                 session.handle_heartbeat_timeout().await;
             }
             () = &mut session.peer_timer.as_mut() => {

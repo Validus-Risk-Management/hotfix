@@ -5,13 +5,13 @@ pub use hotfix_message::fix44;
 pub(crate) use hotfix_message::message::{Config, Message};
 pub use hotfix_message::{Part, RepeatingGroup};
 
-pub(crate) mod heartbeat;
-pub(crate) mod logon;
-pub(crate) mod logout;
-pub(crate) mod parser;
-pub(crate) mod resend_request;
-pub(crate) mod sequence_reset;
-pub(crate) mod test_request;
+pub mod heartbeat;
+pub mod logon;
+pub mod logout;
+pub mod parser;
+pub mod resend_request;
+pub mod sequence_reset;
+pub mod test_request;
 
 pub use parser::RawFixMessage;
 
@@ -23,7 +23,7 @@ pub trait FixMessage: Clone + Send + 'static {
     fn parse(message: &Message) -> Self;
 }
 
-pub(crate) fn generate_message(
+pub fn generate_message(
     sender_comp_id: &str,
     target_comp_id: &str,
     msg_seq_num: usize,
