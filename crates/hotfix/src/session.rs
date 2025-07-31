@@ -31,7 +31,7 @@ use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
 use crate::message_utils::is_admin;
 use crate::session::event::AwaitingActiveSessionResponse;
-use crate::session::state::AwaitingResendState;
+use crate::session::state::{ActiveState, AwaitingResendState};
 use crate::session_schedule::SessionSchedule;
 use event::SessionEvent;
 use hotfix_message::parsed_message::ParsedMessage;
@@ -120,7 +120,6 @@ struct Session<M, S> {
     store: S,
     awaiting_test_response: Option<TestRequestId>,
 
-    heartbeat_timer: Option<Pin<Box<Sleep>>>,
     peer_timer: Pin<Box<Sleep>>,
     schedule_check_timer: Pin<Box<Sleep>>,
 }
@@ -150,7 +149,6 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             application,
             store,
             awaiting_test_response: None,
-            heartbeat_timer: None,
             peer_timer: Box::pin(peer_timer),
             schedule_check_timer: Box::pin(schedule_check_timer),
         }
@@ -255,9 +253,12 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     async fn check_end_of_resend(&mut self) -> Result<()> {
         let ended_state = if let SessionState::AwaitingResend(state) = &mut self.state {
             if self.store.next_target_seq_number() > state.end_seq_number {
-                let new_state = SessionState::Active {
+                let new_state = SessionState::Active(ActiveState {
                     writer: state.writer.clone(),
-                };
+                    heartbeat_timer: Box::pin(sleep(Duration::from_secs(
+                        self.config.heartbeat_interval,
+                    ))),
+                });
                 Some(std::mem::replace(&mut self.state, new_state))
             } else {
                 None
@@ -355,9 +356,12 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             match self.verify_message(message).await {
                 Ok(_) => {
                     // happy logon flow, the session is now active
-                    self.state = SessionState::Active {
+                    self.state = SessionState::Active(ActiveState {
                         writer: writer.clone(),
-                    }
+                        heartbeat_timer: Box::pin(sleep(Duration::from_secs(
+                            self.config.heartbeat_interval,
+                        ))),
+                    })
                 }
                 Err(err) => match err {
                     MessageVerificationError::SeqNumberTooLow { actual, expected } => {
@@ -543,13 +547,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     fn reset_heartbeat_timer(&mut self) {
-        let deadline = Instant::now() + Duration::from_secs(self.config.heartbeat_interval);
-        if let Some(heartbeat_timer) = &mut self.heartbeat_timer {
-            heartbeat_timer.as_mut().reset(deadline);
-        } else {
-            let timer = sleep(Duration::from_secs(self.config.heartbeat_interval));
-            self.heartbeat_timer = Some(Box::pin(timer));
-        }
+        self.state
+            .reset_heartbeat_timer(self.config.heartbeat_interval);
     }
 
     fn reset_peer_timer(&mut self, awaiting_req_id: Option<TestRequestId>) {
@@ -747,7 +746,7 @@ where
                 }
             }
             () = async {
-                if let Some(ref mut timer) = session.heartbeat_timer {
+                if let Some(ref mut timer) = session.state.heartbeat_timer() {
                     timer.as_mut().await
                 } else {
                     std::future::pending().await

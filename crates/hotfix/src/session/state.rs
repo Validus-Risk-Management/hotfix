@@ -3,7 +3,10 @@ use crate::session::event::AwaitingActiveSessionResponse;
 use crate::transport::writer::WriterRef;
 use hotfix_message::message::Message;
 use std::collections::VecDeque;
+use std::pin::Pin;
+use std::time::Duration;
 use tokio::sync::oneshot;
+use tokio::time::{Instant, Sleep};
 use tracing::{debug, error};
 
 pub enum SessionState {
@@ -14,7 +17,7 @@ pub enum SessionState {
     /// We are in the process of gracefully logging out
     AwaitingLogout { writer: WriterRef }, // we need the writer so we can disconnect it on successful logout
     /// The session is active, we have connected and mutually logged on.
-    Active { writer: WriterRef },
+    Active(ActiveState),
     /// The peer has logged us out.
     LoggedOut { reconnect: bool },
     /// The TCP connection has been dropped.
@@ -38,7 +41,8 @@ impl SessionState {
 
     pub async fn send_message(&mut self, message_type: &[u8], message: RawFixMessage) {
         match self {
-            Self::Active { writer } | Self::AwaitingResend(AwaitingResendState { writer, .. }) => {
+            Self::Active(ActiveState { writer, .. })
+            | Self::AwaitingResend(AwaitingResendState { writer, .. }) => {
                 if message_type == b"A" {
                     error!("logon message is invalid for active sessions")
                 } else {
@@ -76,7 +80,7 @@ impl SessionState {
 
     pub async fn disconnect(&self) {
         match self {
-            Self::Active { writer }
+            Self::Active(ActiveState { writer, .. })
             | Self::AwaitingLogon { writer, .. }
             | Self::AwaitingLogout { writer }
             | Self::AwaitingResend(AwaitingResendState { writer, .. }) => writer.disconnect().await,
@@ -86,7 +90,7 @@ impl SessionState {
 
     pub fn try_transition_to_awaiting_logout(&mut self) -> bool {
         match self {
-            Self::Active { writer }
+            Self::Active(ActiveState { writer, .. })
             | Self::AwaitingLogon { writer, .. }
             | Self::AwaitingResend(AwaitingResendState { writer, .. }) => {
                 *self = SessionState::AwaitingLogout {
@@ -137,6 +141,30 @@ impl SessionState {
             }
         }
     }
+
+    pub fn heartbeat_timer(&mut self) -> Option<&mut Pin<Box<Sleep>>> {
+        match self {
+            Self::Active(ActiveState {
+                heartbeat_timer, ..
+            }) => Some(heartbeat_timer),
+            _ => None,
+        }
+    }
+
+    pub fn reset_heartbeat_timer(&mut self, heartbeat_interval: u64) {
+        if let Self::Active(ActiveState {
+            heartbeat_timer, ..
+        }) = self
+        {
+            let deadline = Instant::now() + Duration::from_secs(heartbeat_interval);
+            heartbeat_timer.as_mut().reset(deadline);
+        }
+    }
+}
+
+pub struct ActiveState {
+    pub(crate) writer: WriterRef,
+    pub(crate) heartbeat_timer: Pin<Box<Sleep>>,
 }
 
 /// Session state we're in while processing messages we requested to be resent.
