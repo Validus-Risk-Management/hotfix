@@ -31,7 +31,7 @@ use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
 use crate::message_utils::is_admin;
 use crate::session::event::AwaitingActiveSessionResponse;
-use crate::session::state::{ActiveState, AwaitingResendState};
+use crate::session::state::AwaitingResendState;
 use crate::session_schedule::SessionSchedule;
 use event::SessionEvent;
 use hotfix_message::parsed_message::ParsedMessage;
@@ -253,12 +253,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     async fn check_end_of_resend(&mut self) -> Result<()> {
         let ended_state = if let SessionState::AwaitingResend(state) = &mut self.state {
             if self.store.next_target_seq_number() > state.end_seq_number {
-                let new_state = SessionState::Active(ActiveState {
-                    writer: state.writer.clone(),
-                    heartbeat_timer: Box::pin(sleep(Duration::from_secs(
-                        self.config.heartbeat_interval,
-                    ))),
-                });
+                let new_state =
+                    SessionState::new_active(state.writer.clone(), self.config.heartbeat_interval);
                 Some(std::mem::replace(&mut self.state, new_state))
             } else {
                 None
@@ -356,12 +352,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             match self.verify_message(message).await {
                 Ok(_) => {
                     // happy logon flow, the session is now active
-                    self.state = SessionState::Active(ActiveState {
-                        writer: writer.clone(),
-                        heartbeat_timer: Box::pin(sleep(Duration::from_secs(
-                            self.config.heartbeat_interval,
-                        ))),
-                    })
+                    self.state =
+                        SessionState::new_active(writer.clone(), self.config.heartbeat_interval);
                 }
                 Err(err) => match err {
                     MessageVerificationError::SeqNumberTooLow { actual, expected } => {
@@ -746,7 +738,7 @@ where
                 }
             }
             () = async {
-                if let Some(ref mut timer) = session.state.heartbeat_timer() {
+                if let Some(timer) = session.state.heartbeat_timer() {
                     timer.as_mut().await
                 } else {
                     std::future::pending().await

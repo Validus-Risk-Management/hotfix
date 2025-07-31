@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 use std::pin::Pin;
 use std::time::Duration;
 use tokio::sync::oneshot;
-use tokio::time::{Instant, Sleep};
+use tokio::time::{Instant, Sleep, sleep};
 use tracing::{debug, error};
 
 pub enum SessionState {
@@ -30,6 +30,14 @@ pub enum SessionState {
 impl SessionState {
     pub fn new_disconnected(reconnect: bool, reason: &str) -> Self {
         Self::Disconnected(DisconnectedState::new(reconnect, reason))
+    }
+
+    pub fn new_active(writer: WriterRef, heartbeat_interval: u64) -> Self {
+        let heartbeat_timer = Box::pin(sleep(Duration::from_secs(heartbeat_interval)));
+        Self::Active(ActiveState {
+            writer,
+            heartbeat_timer,
+        })
     }
 
     pub fn should_reconnect(&self) -> bool {
@@ -163,8 +171,8 @@ impl SessionState {
 }
 
 pub struct ActiveState {
-    pub(crate) writer: WriterRef,
-    pub(crate) heartbeat_timer: Pin<Box<Sleep>>,
+    writer: WriterRef,
+    heartbeat_timer: Pin<Box<Sleep>>,
 }
 
 /// Session state we're in while processing messages we requested to be resent.
