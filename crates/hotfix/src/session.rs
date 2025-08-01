@@ -44,7 +44,6 @@ pub struct SessionRef<M> {
     sender: mpsc::Sender<SessionEvent<M>>,
 }
 
-const TEST_REQUEST_THRESHOLD: f64 = 1.2;
 type TestRequestId = String;
 
 impl<M: FixMessage> SessionRef<M> {
@@ -119,8 +118,6 @@ struct Session<M, S> {
     application: ApplicationRef<M>,
     store: S,
     awaiting_test_response: Option<TestRequestId>,
-
-    peer_timer: Pin<Box<Sleep>>,
     schedule_check_timer: Pin<Box<Sleep>>,
 }
 
@@ -131,9 +128,6 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         application: ApplicationRef<M>,
         store: S,
     ) -> Session<M, S> {
-        let peer_timer = sleep(Duration::from_secs(
-            (config.heartbeat_interval as f64 * TEST_REQUEST_THRESHOLD).round() as u64,
-        ));
         let schedule_check_timer = sleep(Duration::from_secs(SCHEDULE_CHECK_INTERVAL));
 
         let dictionary = Self::get_data_dictionary(&config);
@@ -149,7 +143,6 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             application,
             store,
             awaiting_test_response: None,
-            peer_timer: Box::pin(peer_timer),
             schedule_check_timer: Box::pin(schedule_check_timer),
         }
     }
@@ -544,11 +537,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     fn reset_peer_timer(&mut self, awaiting_req_id: Option<TestRequestId>) {
-        let seconds =
-            (self.config.heartbeat_interval as f64 * TEST_REQUEST_THRESHOLD).round() as u64;
-        let deadline = Instant::now() + Duration::from_secs(seconds);
-        self.peer_timer.as_mut().reset(deadline);
         self.awaiting_test_response = awaiting_req_id;
+        self.state.reset_peer_timer(self.config.heartbeat_interval);
     }
 
     async fn send_message(&mut self, message: impl FixMessage) {
@@ -616,7 +606,6 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     async fn logout_and_terminate(&mut self, reason: &str) {
         self.logout(reason).await;
         self.state.disconnect().await;
-        self.disable_peer_timer().await;
     }
 
     async fn initiate_graceful_logout(&mut self, reason: &str) {
@@ -711,13 +700,6 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         let deadline = Instant::now() + Duration::from_secs(SCHEDULE_CHECK_INTERVAL);
         self.schedule_check_timer.as_mut().reset(deadline);
     }
-
-    async fn disable_peer_timer(&mut self) {
-        // push the timer out by about a month - there is no way to disable it entirely afaik
-        self.peer_timer
-            .as_mut()
-            .reset(Instant::now() + Duration::from_secs(2592000));
-    }
 }
 
 async fn run_session<M, S>(mut session: Session<M, S>)
@@ -727,6 +709,8 @@ where
 {
     loop {
         let next_message = session.mailbox.recv();
+        let heartbeat_timer = session.state.heartbeat_timer();
+        let peer_timer = session.state.peer_timer();
 
         select! {
             next = next_message => {
@@ -738,7 +722,7 @@ where
                 }
             }
             () = async {
-                if let Some(timer) = session.state.heartbeat_timer() {
+                if let Some(timer) = heartbeat_timer {
                     timer.as_mut().await
                 } else {
                     std::future::pending().await
@@ -746,7 +730,13 @@ where
             } => {
                 session.handle_heartbeat_timeout().await;
             }
-            () = &mut session.peer_timer.as_mut() => {
+            () = async {
+                if let Some(timer) = peer_timer {
+                    timer.as_mut().await
+                } else {
+                    std::future::pending().await
+                }
+            } => {
                 session.handle_peer_timeout().await;
             }
             () = &mut session.schedule_check_timer.as_mut() => {

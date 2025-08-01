@@ -9,6 +9,8 @@ use tokio::sync::oneshot;
 use tokio::time::{Instant, Sleep, sleep};
 use tracing::{debug, error};
 
+const TEST_REQUEST_THRESHOLD: f64 = 1.2;
+
 pub enum SessionState {
     /// We have established a connection, sent a logon message and await a response.
     AwaitingLogon { writer: WriterRef, logon_sent: bool },
@@ -34,9 +36,14 @@ impl SessionState {
 
     pub fn new_active(writer: WriterRef, heartbeat_interval: u64) -> Self {
         let heartbeat_timer = Box::pin(sleep(Duration::from_secs(heartbeat_interval)));
+
+        let peer_interval = calculate_peer_interval(heartbeat_interval);
+        let peer_timer = Box::pin(sleep(Duration::from_secs(peer_interval)));
+
         Self::Active(ActiveState {
             writer,
             heartbeat_timer,
+            peer_timer,
         })
     }
 
@@ -168,11 +175,32 @@ impl SessionState {
             heartbeat_timer.as_mut().reset(deadline);
         }
     }
+
+    pub fn peer_timer(&mut self) -> Option<&mut Pin<Box<Sleep>>> {
+        match self {
+            Self::Active(ActiveState { peer_timer, .. }) => Some(peer_timer),
+            _ => None,
+        }
+    }
+
+    pub fn reset_peer_timer(&mut self, heartbeat_interval: u64) {
+        if let Self::Active(ActiveState { peer_timer, .. }) = self {
+            let interval = calculate_peer_interval(heartbeat_interval);
+            let deadline = Instant::now() + Duration::from_secs(interval);
+            peer_timer.as_mut().reset(deadline);
+        }
+    }
+}
+
+#[inline]
+fn calculate_peer_interval(heartbeat_interval: u64) -> u64 {
+    (heartbeat_interval as f64 * TEST_REQUEST_THRESHOLD).round() as u64
 }
 
 pub struct ActiveState {
     writer: WriterRef,
     heartbeat_timer: Pin<Box<Sleep>>,
+    peer_timer: Pin<Box<Sleep>>,
 }
 
 /// Session state we're in while processing messages we requested to be resent.
