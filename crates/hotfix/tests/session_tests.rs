@@ -51,6 +51,31 @@ async fn test_heartbeats() {
     mock_counterparty.assert_disconnected().await;
 }
 
+#[tokio::test(start_paused = true)]
+async fn test_peer_timeout() {
+    let (_session, mut mock_counterparty) = setup().await;
+    let peer_interval = (1.2 * HEARTBEAT_INTERVAL as f64) as u64 + 1;
+
+    // assert that a logon message is received (type 'A')
+    mock_counterparty
+        .assert_next(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+        .await;
+    // counterparty responds with a logon to establish a happy session
+    mock_counterparty.send_logon().await;
+    tokio::task::yield_now().await;
+
+    // we wait enough time for the peer deadline to pass
+    tokio::time::advance(std::time::Duration::from_secs(peer_interval)).await;
+    // a TestRequest (type '1') is sent to the counterparty
+    mock_counterparty
+        .assert_next(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "1"))
+        .await;
+
+    // we wait even longer and the counterparty never responds, so we disconnect from the counterparty
+    tokio::time::advance(std::time::Duration::from_secs(peer_interval)).await;
+    mock_counterparty.assert_disconnected().await;
+}
+
 async fn setup() -> (SessionRef<TestMessage>, MockCounterparty<TestMessage>) {
     let config = create_session_config();
     let counterparty_config = create_counterparty_session_config(config.clone());
