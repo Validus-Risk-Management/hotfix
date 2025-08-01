@@ -12,21 +12,15 @@ mod common;
 
 const HEARTBEAT_INTERVAL: u64 = 30;
 
-#[tokio::test]
-async fn test_happy_login_flow() {
-    let (session, mut mock_counterparty) = setup().await;
-
-    // assert that a logon message is received (type 'A')
-    mock_counterparty
-        .assert_next(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
-        .await;
-
-    session
-        .disconnect("Test Session Finished".to_string())
-        .await;
-    mock_counterparty.assert_disconnected().await;
-}
-
+/// Tests the automatic heartbeat mechanism in an active FIX session:
+/// 1. Establishes a session by exchanging logon messages with the counterparty
+/// 2. Advances time beyond the configured heartbeat interval
+/// 3. Verifies that a heartbeat message (type '0') is automatically sent
+/// 4. Cleanly disconnects the session
+///
+/// This test ensures that the session maintains connectivity by sending
+/// periodic heartbeat messages when no other messages are being exchanged,
+/// as required by the FIX protocol to prevent timeout disconnections.
 #[tokio::test(start_paused = true)]
 async fn test_heartbeats() {
     let (session, mut mock_counterparty) = setup().await;
@@ -51,6 +45,15 @@ async fn test_heartbeats() {
     mock_counterparty.assert_disconnected().await;
 }
 
+/// Tests the peer timeout and disconnection mechanism:
+/// 1. Establishes a session by exchanging logon messages
+/// 2. Simulates peer inactivity by advancing time past the peer timeout threshold
+/// 3. Verifies that a TestRequest message is sent to check peer responsiveness
+/// 4. Continues to simulate peer silence and verifies automatic disconnection
+///
+/// This test ensures the session properly handles unresponsive peers by first
+/// attempting to verify connectivity with a TestRequest, then disconnecting
+/// if no response is received within the timeout period.
 #[tokio::test(start_paused = true)]
 async fn test_peer_timeout() {
     let (_session, mut mock_counterparty) = setup().await;
