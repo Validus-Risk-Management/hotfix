@@ -31,7 +31,7 @@ use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
 use crate::message_utils::is_admin;
 use crate::session::event::AwaitingActiveSessionResponse;
-use crate::session::state::AwaitingResendState;
+use crate::session::state::{AwaitingResendState, TestRequestId};
 use crate::session_schedule::SessionSchedule;
 use event::SessionEvent;
 use hotfix_message::parsed_message::ParsedMessage;
@@ -43,8 +43,6 @@ const SCHEDULE_CHECK_INTERVAL: u64 = 1;
 pub struct SessionRef<M> {
     sender: mpsc::Sender<SessionEvent<M>>,
 }
-
-type TestRequestId = String;
 
 impl<M: FixMessage> SessionRef<M> {
     pub fn new(
@@ -117,7 +115,6 @@ struct Session<M, S> {
     state: SessionState,
     application: ApplicationRef<M>,
     store: S,
-    awaiting_test_response: Option<TestRequestId>,
     schedule_check_timer: Pin<Box<Sleep>>,
 }
 
@@ -142,7 +139,6 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             state: SessionState::new_disconnected(true, "initialising"),
             application,
             store,
-            awaiting_test_response: None,
             schedule_check_timer: Box::pin(schedule_check_timer),
         }
     }
@@ -159,7 +155,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     async fn on_incoming(&mut self, raw_message: RawFixMessage) -> Result<()> {
         debug!("received message: {}", raw_message);
-        if self.awaiting_test_response.is_none() {
+        if !self.state.is_expecting_test_response() {
             // if we are not awaiting a specific test response, any message can reset the timer
             // otherwise, only a heartbeat with the corresponding TestReqID can
             self.reset_peer_timer(None);
@@ -398,7 +394,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     async fn on_heartbeat(&mut self, message: &Message) {
         if let (Some(expected_req_id), Ok(message_req_id)) = (
-            &self.awaiting_test_response,
+            &self.state.expected_test_response_id(),
             message.get::<&str>(fix44::TEST_REQ_ID),
         ) {
             if expected_req_id.as_str() == message_req_id {
@@ -536,9 +532,9 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             .reset_heartbeat_timer(self.config.heartbeat_interval);
     }
 
-    fn reset_peer_timer(&mut self, awaiting_req_id: Option<TestRequestId>) {
-        self.awaiting_test_response = awaiting_req_id;
-        self.state.reset_peer_timer(self.config.heartbeat_interval);
+    fn reset_peer_timer(&mut self, test_request_id: Option<TestRequestId>) {
+        self.state
+            .reset_peer_timer(self.config.heartbeat_interval, test_request_id);
     }
 
     async fn send_message(&mut self, message: impl FixMessage) {
@@ -651,7 +647,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     async fn handle_peer_timeout(&mut self) {
-        if self.awaiting_test_response.is_some() {
+        if self.state.is_expecting_test_response() {
             warn!("peer didn't respond, terminating..");
             self.logout_and_terminate("peer timeout").await;
         } else {

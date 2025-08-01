@@ -67,8 +67,17 @@ async fn test_peer_timeout() {
     mock_counterparty.send_logon().await;
     tokio::task::yield_now().await;
 
+    // let's wait enough time for a heartbeat and assert that the heartbeat was sent
+    tokio::time::advance(std::time::Duration::from_secs(HEARTBEAT_INTERVAL + 1)).await;
+    mock_counterparty
+        .assert_next(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "0"))
+        .await;
+
     // we wait enough time for the peer deadline to pass
-    tokio::time::advance(std::time::Duration::from_secs(peer_interval)).await;
+    tokio::time::advance(std::time::Duration::from_secs(
+        peer_interval - HEARTBEAT_INTERVAL,
+    ))
+    .await;
     // a TestRequest (type '1') is sent to the counterparty
     mock_counterparty
         .assert_next(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "1"))

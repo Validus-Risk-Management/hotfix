@@ -10,6 +10,8 @@ use tracing::{debug, error};
 
 const TEST_REQUEST_THRESHOLD: f64 = 1.2;
 
+pub(crate) type TestRequestId = String;
+
 pub enum SessionState {
     /// We have established a connection, sent a logon message and await a response.
     AwaitingLogon { writer: WriterRef, logon_sent: bool },
@@ -40,6 +42,7 @@ impl SessionState {
             writer,
             heartbeat_deadline: Instant::now() + Duration::from_secs(heartbeat_interval),
             peer_deadline: Instant::now() + Duration::from_secs(peer_interval),
+            sent_test_request_id: None,
         })
     }
 
@@ -178,11 +181,35 @@ impl SessionState {
         }
     }
 
-    pub fn reset_peer_timer(&mut self, heartbeat_interval: u64) {
-        if let Self::Active(ActiveState { peer_deadline, .. }) = self {
+    pub fn reset_peer_timer(
+        &mut self,
+        heartbeat_interval: u64,
+        test_request_id: Option<TestRequestId>,
+    ) {
+        if let Self::Active(ActiveState {
+            peer_deadline,
+            sent_test_request_id,
+            ..
+        }) = self
+        {
             let interval = calculate_peer_interval(heartbeat_interval);
             *peer_deadline = Instant::now() + Duration::from_secs(interval);
+            *sent_test_request_id = test_request_id;
         }
+    }
+
+    pub fn expected_test_response_id(&self) -> Option<&TestRequestId> {
+        match self {
+            Self::Active(ActiveState {
+                sent_test_request_id: expected_test_response_id,
+                ..
+            }) => expected_test_response_id.as_ref(),
+            _ => None,
+        }
+    }
+
+    pub fn is_expecting_test_response(&self) -> bool {
+        self.expected_test_response_id().is_some()
     }
 }
 
@@ -192,9 +219,14 @@ fn calculate_peer_interval(heartbeat_interval: u64) -> u64 {
 }
 
 pub struct ActiveState {
+    /// The writer's reference to send messages to the counterparty
     writer: WriterRef,
+    /// When we should send the next heartbeat message to the counterparty
     heartbeat_deadline: Instant,
+    /// When the next message from the counterparty is expected at the latest
     peer_deadline: Instant,
+    /// The ID of the test request we sent on peer timer expiry
+    sent_test_request_id: Option<TestRequestId>,
 }
 
 /// Session state we're in while processing messages we requested to be resent.
