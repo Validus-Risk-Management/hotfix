@@ -3,10 +3,9 @@ use crate::session::event::AwaitingActiveSessionResponse;
 use crate::transport::writer::WriterRef;
 use hotfix_message::message::Message;
 use std::collections::VecDeque;
-use std::pin::Pin;
 use std::time::Duration;
 use tokio::sync::oneshot;
-use tokio::time::{Instant, Sleep, sleep};
+use tokio::time::Instant;
 use tracing::{debug, error};
 
 const TEST_REQUEST_THRESHOLD: f64 = 1.2;
@@ -35,15 +34,12 @@ impl SessionState {
     }
 
     pub fn new_active(writer: WriterRef, heartbeat_interval: u64) -> Self {
-        let heartbeat_timer = Box::pin(sleep(Duration::from_secs(heartbeat_interval)));
-
         let peer_interval = calculate_peer_interval(heartbeat_interval);
-        let peer_timer = Box::pin(sleep(Duration::from_secs(peer_interval)));
 
         Self::Active(ActiveState {
             writer,
-            heartbeat_timer,
-            peer_timer,
+            heartbeat_deadline: Instant::now() + Duration::from_secs(heartbeat_interval),
+            peer_deadline: Instant::now() + Duration::from_secs(peer_interval),
         })
     }
 
@@ -157,37 +153,35 @@ impl SessionState {
         }
     }
 
-    pub fn heartbeat_timer(&mut self) -> Option<&mut Pin<Box<Sleep>>> {
+    pub fn heartbeat_deadline(&self) -> Option<&Instant> {
         match self {
             Self::Active(ActiveState {
-                heartbeat_timer, ..
-            }) => Some(heartbeat_timer),
+                heartbeat_deadline, ..
+            }) => Some(heartbeat_deadline),
             _ => None,
         }
     }
 
     pub fn reset_heartbeat_timer(&mut self, heartbeat_interval: u64) {
         if let Self::Active(ActiveState {
-            heartbeat_timer, ..
+            heartbeat_deadline, ..
         }) = self
         {
-            let deadline = Instant::now() + Duration::from_secs(heartbeat_interval);
-            heartbeat_timer.as_mut().reset(deadline);
+            *heartbeat_deadline = Instant::now() + Duration::from_secs(heartbeat_interval);
         }
     }
 
-    pub fn peer_timer(&mut self) -> Option<&mut Pin<Box<Sleep>>> {
+    pub fn peer_deadline(&self) -> Option<&Instant> {
         match self {
-            Self::Active(ActiveState { peer_timer, .. }) => Some(peer_timer),
+            Self::Active(ActiveState { peer_deadline, .. }) => Some(peer_deadline),
             _ => None,
         }
     }
 
     pub fn reset_peer_timer(&mut self, heartbeat_interval: u64) {
-        if let Self::Active(ActiveState { peer_timer, .. }) = self {
+        if let Self::Active(ActiveState { peer_deadline, .. }) = self {
             let interval = calculate_peer_interval(heartbeat_interval);
-            let deadline = Instant::now() + Duration::from_secs(interval);
-            peer_timer.as_mut().reset(deadline);
+            *peer_deadline = Instant::now() + Duration::from_secs(interval);
         }
     }
 }
@@ -199,8 +193,8 @@ fn calculate_peer_interval(heartbeat_interval: u64) -> u64 {
 
 pub struct ActiveState {
     writer: WriterRef,
-    heartbeat_timer: Pin<Box<Sleep>>,
-    peer_timer: Pin<Box<Sleep>>,
+    heartbeat_deadline: Instant,
+    peer_deadline: Instant,
 }
 
 /// Session state we're in while processing messages we requested to be resent.

@@ -11,7 +11,7 @@ use std::cmp::Ordering;
 use std::pin::Pin;
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
-use tokio::time::{Duration, Instant, Sleep, sleep};
+use tokio::time::{Duration, Instant, Sleep, sleep, sleep_until};
 use tracing::{debug, error, info, warn};
 
 use crate::application::{ApplicationMessage, ApplicationRef};
@@ -709,8 +709,6 @@ where
 {
     loop {
         let next_message = session.mailbox.recv();
-        let heartbeat_timer = session.state.heartbeat_timer();
-        let peer_timer = session.state.peer_timer();
 
         select! {
             next = next_message => {
@@ -722,8 +720,8 @@ where
                 }
             }
             () = async {
-                if let Some(timer) = heartbeat_timer {
-                    timer.as_mut().await
+                if let Some(deadline) = session.state.heartbeat_deadline() {
+                    sleep_until(*deadline).await
                 } else {
                     std::future::pending().await
                 }
@@ -731,8 +729,8 @@ where
                 session.handle_heartbeat_timeout().await;
             }
             () = async {
-                if let Some(timer) = peer_timer {
-                    timer.as_mut().await
+                if let Some(deadline) = session.state.peer_deadline() {
+                    sleep_until(*deadline).await
                 } else {
                     std::future::pending().await
                 }
