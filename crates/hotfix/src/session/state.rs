@@ -1,5 +1,6 @@
 use crate::message::parser::RawFixMessage;
 use crate::session::event::AwaitingActiveSessionResponse;
+use crate::session::info::Status as SessionInfoStatus;
 use crate::transport::writer::WriterRef;
 use hotfix_message::message::Message;
 use std::collections::VecDeque;
@@ -210,6 +211,17 @@ impl SessionState {
 
     pub fn is_expecting_test_response(&self) -> bool {
         self.expected_test_response_id().is_some()
+    }
+
+    pub fn as_status(&self) -> SessionInfoStatus {
+        match self {
+            SessionState::AwaitingLogon { .. } => SessionInfoStatus::AwaitingLogon,
+            SessionState::AwaitingResend(_) => SessionInfoStatus::AwaitingResend,
+            SessionState::AwaitingLogout { .. } => SessionInfoStatus::AwaitingLogout,
+            SessionState::Active(_) => SessionInfoStatus::Active,
+            SessionState::LoggedOut { .. } => SessionInfoStatus::LoggedOut,
+            SessionState::Disconnected(_) => SessionInfoStatus::Disconnected,
+        }
     }
 }
 

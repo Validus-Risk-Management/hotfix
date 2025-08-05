@@ -1,6 +1,7 @@
 use tokio::sync::oneshot;
 
 use crate::message::parser::RawFixMessage;
+use crate::session::info::SessionInfo;
 use crate::transport::writer::WriterRef;
 
 #[derive(Debug)]
@@ -17,6 +18,8 @@ pub enum SessionEvent<M> {
     ShouldReconnect(oneshot::Sender<bool>),
     /// Ask the session to notify us when the session is active.
     AwaitingActiveSession(oneshot::Sender<AwaitingActiveSessionResponse>),
+    /// Ask the session for a report on its state
+    SessionInfoRequested(oneshot::Sender<SessionInfo>),
 }
 
 /// The response sent by the session to AwaitingActiveSession messages.

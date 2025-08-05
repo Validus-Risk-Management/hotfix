@@ -1,4 +1,5 @@
 mod event;
+mod info;
 mod state;
 
 use anyhow::{Result, anyhow};
@@ -31,6 +32,7 @@ use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
 use crate::message_utils::is_admin;
 use crate::session::event::AwaitingActiveSessionResponse;
+use crate::session::info::SessionInfo;
 use crate::session::state::{AwaitingResendState, TestRequestId};
 use crate::session_schedule::SessionSchedule;
 use event::SessionEvent;
@@ -103,6 +105,15 @@ impl<M: FixMessage> SessionRef<M> {
             .unwrap();
         receiver.await.expect("to receive a response");
         debug!("resuming connection as session is active");
+    }
+
+    pub async fn get_session_info(&self) -> SessionInfo {
+        let (sender, receiver) = oneshot::channel::<SessionInfo>();
+        self.sender
+            .send(SessionEvent::SessionInfoRequested(sender))
+            .await
+            .unwrap();
+        receiver.await.expect("to receive a response")
     }
 }
 
@@ -639,6 +650,11 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             SessionEvent::AwaitingActiveSession(responder) => {
                 self.state.register_session_awaiter(responder);
             }
+            SessionEvent::SessionInfoRequested(responder) => {
+                if responder.send(self.get_session_info()).is_err() {
+                    error!("failed to respond to session info request");
+                }
+            }
         }
     }
 
@@ -695,6 +711,14 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         // we always need to reschedule the check, otherwise we won't be able to resume an inactive session
         let deadline = Instant::now() + Duration::from_secs(SCHEDULE_CHECK_INTERVAL);
         self.schedule_check_timer.as_mut().reset(deadline);
+    }
+
+    fn get_session_info(&self) -> SessionInfo {
+        SessionInfo {
+            next_sender_seq_number: self.store.next_sender_seq_number(),
+            next_target_seq_number: self.store.next_target_seq_number(),
+            status: self.state.as_status(),
+        }
     }
 }
 
