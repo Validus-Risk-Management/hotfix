@@ -13,7 +13,7 @@ pub struct SessionInfo {
 ///
 /// These roughly correspond to the `SessionState` variants but don't contain
 /// internal state.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Status {
     AwaitingLogon,
     AwaitingResend,

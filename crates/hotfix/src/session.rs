@@ -32,12 +32,13 @@ use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
 use crate::message_utils::is_admin;
 use crate::session::event::AwaitingActiveSessionResponse;
-use crate::session::info::SessionInfo;
 use crate::session::state::{AwaitingResendState, TestRequestId};
 use crate::session_schedule::SessionSchedule;
 use event::SessionEvent;
 use hotfix_message::parsed_message::ParsedMessage;
 use state::SessionState;
+
+pub use info::{SessionInfo, Status};
 
 const SCHEDULE_CHECK_INTERVAL: u64 = 1;
 

@@ -1,9 +1,10 @@
 use crate::common::mock_application::MockApplication;
 use crate::common::mock_counterparty::MockCounterparty;
+use crate::common::session_assertions::SessionAssertions;
 use crate::common::test_messages::TestMessage;
 use hotfix::application::ApplicationRef;
 use hotfix::config::SessionConfig;
-use hotfix::session::SessionRef;
+use hotfix::session::{SessionRef, Status};
 use hotfix::store::in_memory::InMemoryMessageStore;
 use hotfix_message::Part;
 use hotfix_message::fix44::MSG_TYPE;
@@ -56,16 +57,18 @@ async fn test_heartbeats() {
 /// if no response is received within the timeout period.
 #[tokio::test(start_paused = true)]
 async fn test_peer_timeout() {
-    let (_session, mut mock_counterparty) = setup().await;
+    let (session, mut mock_counterparty) = setup().await;
     let peer_interval = (1.2 * HEARTBEAT_INTERVAL as f64) as u64 + 1;
 
     // assert that a logon message is received (type 'A')
     mock_counterparty
         .assert_next(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
+    session.assert_status(Status::AwaitingLogon).await;
+
     // counterparty responds with a logon to establish a happy session
     mock_counterparty.send_logon().await;
-    tokio::task::yield_now().await;
+    session.assert_status(Status::Active).await;
 
     // let's wait enough time for a heartbeat and assert that the heartbeat was sent
     tokio::time::advance(std::time::Duration::from_secs(HEARTBEAT_INTERVAL + 1)).await;
