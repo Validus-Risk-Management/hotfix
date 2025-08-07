@@ -23,7 +23,7 @@ async fn test_heartbeats() {
         .await;
     // counterparty responds with a logon to establish a happy session
     mock_counterparty.send_logon().await;
-    tokio::task::yield_now().await;
+    session.assert_status(Status::Active).await;
 
     // let's wait enough time for a heartbeat and assert that the heartbeat was sent
     tokio::time::advance(std::time::Duration::from_secs(HEARTBEAT_INTERVAL + 1)).await;
