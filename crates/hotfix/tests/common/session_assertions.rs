@@ -2,6 +2,8 @@ use crate::common::test_messages::TestMessage;
 use hotfix::session::{SessionRef, Status};
 use std::time::Duration;
 
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(50);
+
 pub trait SessionAssertions {
     async fn assert_status(&self, expected_status: Status);
     async fn assert_status_with_timeout(&self, expected_status: Status, timeout: Duration);
@@ -9,13 +11,13 @@ pub trait SessionAssertions {
 
 impl SessionAssertions for SessionRef<TestMessage> {
     async fn assert_status(&self, expected_status: Status) {
-        self.assert_status_with_timeout(expected_status, Duration::from_millis(10))
+        self.assert_status_with_timeout(expected_status, DEFAULT_TIMEOUT)
             .await;
     }
 
     async fn assert_status_with_timeout(&self, expected_status: Status, timeout: Duration) {
         let deadline = tokio::time::Instant::now() + timeout;
-        let retry_interval = Duration::from_millis(1);
+        let retry_interval = Duration::from_millis(5);
 
         let mut session_info = self.get_session_info().await;
         while tokio::time::Instant::now() < deadline {

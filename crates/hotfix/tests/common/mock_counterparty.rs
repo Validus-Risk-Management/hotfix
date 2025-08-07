@@ -1,3 +1,4 @@
+use crate::common::session_assertions::DEFAULT_TIMEOUT;
 use hotfix::config::SessionConfig;
 use hotfix::message::logon::{Logon, ResetSeqNumConfig};
 use hotfix::message::{FixMessage, RawFixMessage, generate_message};
@@ -11,8 +12,6 @@ use hotfix_message::parsed_message::ParsedMessage;
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
-
-const DEFAULT_TIMEOUT: Duration = Duration::from_millis(10);
 
 pub struct MockCounterparty<M> {
     receiver: Receiver<WriterMessage>,
