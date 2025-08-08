@@ -1,14 +1,18 @@
 use crate::common::mock_application::MockApplication;
 use crate::common::mock_counterparty::MockCounterparty;
+use crate::common::session_assertions::SessionAssertions;
 use crate::common::test_messages::TestMessage;
 use hotfix::application::ApplicationRef;
 use hotfix::config::SessionConfig;
-use hotfix::session::SessionRef;
+use hotfix::session::{SessionRef, Status};
 use hotfix::store::in_memory::InMemoryMessageStore;
+use hotfix_message::Part;
+use hotfix_message::fix44::MSG_TYPE;
 
 pub const HEARTBEAT_INTERVAL: u64 = 30;
 
-pub async fn setup() -> (SessionRef<TestMessage>, MockCounterparty<TestMessage>) {
+pub async fn given_a_connected_session() -> (SessionRef<TestMessage>, MockCounterparty<TestMessage>)
+{
     let config = create_session_config();
     let counterparty_config = create_counterparty_session_config(config.clone());
 
@@ -17,6 +21,18 @@ pub async fn setup() -> (SessionRef<TestMessage>, MockCounterparty<TestMessage>)
 
     let session = SessionRef::new(config, application_ref, message_store);
     let mock_counterparty = MockCounterparty::start(session.clone(), counterparty_config).await;
+
+    (session, mock_counterparty)
+}
+
+pub async fn given_an_active_session() -> (SessionRef<TestMessage>, MockCounterparty<TestMessage>) {
+    let (session, mut mock_counterparty) = given_a_connected_session().await;
+
+    mock_counterparty
+        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+        .await;
+    mock_counterparty.when_logon_is_sent().await;
+    session.then_status_changes_to(Status::Active).await;
 
     (session, mock_counterparty)
 }

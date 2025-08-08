@@ -1,7 +1,5 @@
 use crate::common::session_actions::SessionActions;
-use crate::common::session_assertions::SessionAssertions;
-use crate::common::setup::{HEARTBEAT_INTERVAL, setup};
-use hotfix::session::Status;
+use crate::common::setup::{HEARTBEAT_INTERVAL, given_an_active_session};
 use hotfix_message::Part;
 use hotfix_message::fix44::MSG_TYPE;
 use std::time::Duration;
@@ -17,15 +15,7 @@ use std::time::Duration;
 /// as required by the FIX protocol to prevent timeout disconnections.
 #[tokio::test(start_paused = true)]
 async fn test_heartbeats() {
-    let (session, mut mock_counterparty) = setup().await;
-
-    // assert that a logon message is received (type 'A')
-    mock_counterparty
-        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
-        .await;
-    // counterparty responds with a logon to establish a happy session
-    mock_counterparty.when_logon_is_sent().await;
-    session.then_status_changes_to(Status::Active).await;
+    let (session, mut mock_counterparty) = given_an_active_session().await;
 
     // let's wait enough time for a heartbeat and assert that the heartbeat was sent
     when_time_elapses(Duration::from_secs(HEARTBEAT_INTERVAL + 1)).await;
@@ -48,18 +38,8 @@ async fn test_heartbeats() {
 /// if no response is received within the timeout period.
 #[tokio::test(start_paused = true)]
 async fn test_peer_timeout() {
-    let (session, mut mock_counterparty) = setup().await;
     let peer_interval = (1.2 * HEARTBEAT_INTERVAL as f64) as u64 + 1;
-
-    // assert that a logon message is received (type 'A')
-    mock_counterparty
-        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
-        .await;
-    session.then_status_changes_to(Status::AwaitingLogon).await;
-
-    // counterparty responds with a logon to establish a happy session
-    mock_counterparty.when_logon_is_sent().await;
-    session.then_status_changes_to(Status::Active).await;
+    let (_session, mut mock_counterparty) = given_an_active_session().await;
 
     // let's wait enough time for a heartbeat and assert that the heartbeat was sent
     when_time_elapses(Duration::from_secs(HEARTBEAT_INTERVAL + 1)).await;
