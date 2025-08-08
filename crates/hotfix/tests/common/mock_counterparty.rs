@@ -49,7 +49,7 @@ where
         }
     }
 
-    pub async fn send_logon(&mut self) {
+    pub async fn when_logon_is_sent(&mut self) {
         let logon = Logon::new(
             self.session_config.heartbeat_interval,
             ResetSeqNumConfig::NoReset(None),
@@ -102,7 +102,7 @@ where
         }
     }
 
-    pub async fn assert_next<F>(&mut self, assertion: F)
+    pub async fn then_receives<F>(&mut self, assertion: F)
     where
         F: FnOnce(&Message),
     {
@@ -127,7 +127,7 @@ where
         }
     }
 
-    pub async fn assert_disconnected(&mut self) {
+    pub async fn then_disconnects(&mut self) {
         self.assert_disconnected_with_timeout(DEFAULT_TIMEOUT).await;
     }
 

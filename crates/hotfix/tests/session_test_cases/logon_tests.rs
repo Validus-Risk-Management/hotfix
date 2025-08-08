@@ -13,14 +13,12 @@ async fn test_happy_logon() {
 
     // assert that a logon message is received (type 'A')
     mock_counterparty
-        .assert_next(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
     // counterparty responds with a logon to establish a happy session
-    mock_counterparty.send_logon().await;
-    session.assert_status(Status::Active).await;
+    mock_counterparty.when_logon_is_sent().await;
+    session.then_status_changes_to(Status::Active).await;
 
-    session
-        .disconnect("Test Session Finished".to_string())
-        .await;
-    mock_counterparty.assert_disconnected().await;
+    session.when_disconnected().await;
+    mock_counterparty.then_disconnects().await;
 }

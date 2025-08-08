@@ -3,6 +3,11 @@ use crate::common::setup::{HEARTBEAT_INTERVAL, setup};
 use hotfix::session::Status;
 use hotfix_message::Part;
 use hotfix_message::fix44::MSG_TYPE;
+use std::time::Duration;
+
+async fn when_time_advances(duration: Duration) {
+    tokio::time::advance(duration).await;
+}
 
 /// Tests the automatic heartbeat mechanism in an active FIX session:
 /// 1. Establishes a session by exchanging logon messages with the counterparty
@@ -19,22 +24,20 @@ async fn test_heartbeats() {
 
     // assert that a logon message is received (type 'A')
     mock_counterparty
-        .assert_next(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
     // counterparty responds with a logon to establish a happy session
-    mock_counterparty.send_logon().await;
-    session.assert_status(Status::Active).await;
+    mock_counterparty.when_logon_is_sent().await;
+    session.then_status_changes_to(Status::Active).await;
 
     // let's wait enough time for a heartbeat and assert that the heartbeat was sent
-    tokio::time::advance(std::time::Duration::from_secs(HEARTBEAT_INTERVAL + 1)).await;
+    when_time_advances(Duration::from_secs(HEARTBEAT_INTERVAL + 1)).await;
     mock_counterparty
-        .assert_next(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "0"))
+        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "0"))
         .await;
 
-    session
-        .disconnect("Test Session Finished".to_string())
-        .await;
-    mock_counterparty.assert_disconnected().await;
+    session.when_disconnected().await;
+    mock_counterparty.then_disconnects().await;
 }
 
 /// Tests the peer timeout and disconnection mechanism:
@@ -53,31 +56,28 @@ async fn test_peer_timeout() {
 
     // assert that a logon message is received (type 'A')
     mock_counterparty
-        .assert_next(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
-    session.assert_status(Status::AwaitingLogon).await;
+    session.then_status_changes_to(Status::AwaitingLogon).await;
 
     // counterparty responds with a logon to establish a happy session
-    mock_counterparty.send_logon().await;
-    session.assert_status(Status::Active).await;
+    mock_counterparty.when_logon_is_sent().await;
+    session.then_status_changes_to(Status::Active).await;
 
     // let's wait enough time for a heartbeat and assert that the heartbeat was sent
-    tokio::time::advance(std::time::Duration::from_secs(HEARTBEAT_INTERVAL + 1)).await;
+    when_time_advances(Duration::from_secs(HEARTBEAT_INTERVAL + 1)).await;
     mock_counterparty
-        .assert_next(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "0"))
+        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "0"))
         .await;
 
     // we wait enough time for the peer deadline to pass
-    tokio::time::advance(std::time::Duration::from_secs(
-        peer_interval - HEARTBEAT_INTERVAL,
-    ))
-    .await;
+    when_time_advances(Duration::from_secs(peer_interval - HEARTBEAT_INTERVAL)).await;
     // a TestRequest (type '1') is sent to the counterparty
     mock_counterparty
-        .assert_next(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "1"))
+        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "1"))
         .await;
 
     // we wait even longer and the counterparty never responds, so we disconnect from the counterparty
-    tokio::time::advance(std::time::Duration::from_secs(peer_interval)).await;
-    mock_counterparty.assert_disconnected().await;
+    when_time_advances(Duration::from_secs(peer_interval)).await;
+    mock_counterparty.then_disconnects().await;
 }

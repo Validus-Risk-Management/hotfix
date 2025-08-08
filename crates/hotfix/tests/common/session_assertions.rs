@@ -5,12 +5,13 @@ use std::time::Duration;
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(50);
 
 pub trait SessionAssertions {
-    async fn assert_status(&self, expected_status: Status);
+    async fn then_status_changes_to(&self, expected_status: Status);
     async fn assert_status_with_timeout(&self, expected_status: Status, timeout: Duration);
+    async fn when_disconnected(&self);
 }
 
 impl SessionAssertions for SessionRef<TestMessage> {
-    async fn assert_status(&self, expected_status: Status) {
+    async fn then_status_changes_to(&self, expected_status: Status) {
         self.assert_status_with_timeout(expected_status, DEFAULT_TIMEOUT)
             .await;
     }
@@ -32,5 +33,9 @@ impl SessionAssertions for SessionRef<TestMessage> {
         panic!(
             "session did not reach expected status within timeout. Expected: {expected_status:?}, Actual: {actual_status:?}"
         );
+    }
+
+    async fn when_disconnected(&self) {
+        self.disconnect("Test Session Finished".to_string()).await;
     }
 }
