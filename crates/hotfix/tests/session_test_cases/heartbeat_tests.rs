@@ -1,13 +1,10 @@
+use crate::common::session_actions::SessionActions;
 use crate::common::session_assertions::SessionAssertions;
 use crate::common::setup::{HEARTBEAT_INTERVAL, setup};
 use hotfix::session::Status;
 use hotfix_message::Part;
 use hotfix_message::fix44::MSG_TYPE;
 use std::time::Duration;
-
-async fn when_time_advances(duration: Duration) {
-    tokio::time::advance(duration).await;
-}
 
 /// Tests the automatic heartbeat mechanism in an active FIX session:
 /// 1. Establishes a session by exchanging logon messages with the counterparty
@@ -31,13 +28,13 @@ async fn test_heartbeats() {
     session.then_status_changes_to(Status::Active).await;
 
     // let's wait enough time for a heartbeat and assert that the heartbeat was sent
-    when_time_advances(Duration::from_secs(HEARTBEAT_INTERVAL + 1)).await;
+    when_time_elapses(Duration::from_secs(HEARTBEAT_INTERVAL + 1)).await;
     mock_counterparty
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "0"))
         .await;
 
-    session.when_disconnected().await;
-    mock_counterparty.then_disconnects().await;
+    session.when_disconnect_is_requested().await;
+    mock_counterparty.then_gets_disconnected().await;
 }
 
 /// Tests the peer timeout and disconnection mechanism:
@@ -65,19 +62,23 @@ async fn test_peer_timeout() {
     session.then_status_changes_to(Status::Active).await;
 
     // let's wait enough time for a heartbeat and assert that the heartbeat was sent
-    when_time_advances(Duration::from_secs(HEARTBEAT_INTERVAL + 1)).await;
+    when_time_elapses(Duration::from_secs(HEARTBEAT_INTERVAL + 1)).await;
     mock_counterparty
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "0"))
         .await;
 
     // we wait enough time for the peer deadline to pass
-    when_time_advances(Duration::from_secs(peer_interval - HEARTBEAT_INTERVAL)).await;
+    when_time_elapses(Duration::from_secs(peer_interval - HEARTBEAT_INTERVAL)).await;
     // a TestRequest (type '1') is sent to the counterparty
     mock_counterparty
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "1"))
         .await;
 
     // we wait even longer and the counterparty never responds, so we disconnect from the counterparty
-    when_time_advances(Duration::from_secs(peer_interval)).await;
-    mock_counterparty.then_disconnects().await;
+    when_time_elapses(Duration::from_secs(peer_interval)).await;
+    mock_counterparty.then_gets_disconnected().await;
+}
+
+async fn when_time_elapses(duration: Duration) {
+    tokio::time::advance(duration).await;
 }

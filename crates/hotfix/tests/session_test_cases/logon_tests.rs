@@ -1,3 +1,4 @@
+use crate::common::session_actions::SessionActions;
 use crate::common::session_assertions::SessionAssertions;
 use crate::common::setup::setup;
 use hotfix::session::Status;
@@ -19,6 +20,6 @@ async fn test_happy_logon() {
     mock_counterparty.when_logon_is_sent().await;
     session.then_status_changes_to(Status::Active).await;
 
-    session.when_disconnected().await;
-    mock_counterparty.then_disconnects().await;
+    session.when_disconnect_is_requested().await;
+    mock_counterparty.then_gets_disconnected().await;
 }

@@ -54,10 +54,10 @@ where
             self.session_config.heartbeat_interval,
             ResetSeqNumConfig::NoReset(None),
         );
-        self.send_message(logon).await;
+        self.when_message_is_sent(logon).await;
     }
 
-    pub async fn send_message(&mut self, message: impl FixMessage) {
+    pub async fn when_message_is_sent(&mut self, message: impl FixMessage) {
         let raw_message = generate_message(
             &self.session_config.sender_comp_id,
             &self.session_config.target_comp_id,
@@ -110,7 +110,7 @@ where
             .await;
     }
 
-    pub async fn assert_next_with_timeout<F>(&mut self, assertion: F, timeout: Duration)
+    async fn assert_next_with_timeout<F>(&mut self, assertion: F, timeout: Duration)
     where
         F: FnOnce(&Message),
     {
@@ -127,11 +127,11 @@ where
         }
     }
 
-    pub async fn then_disconnects(&mut self) {
+    pub async fn then_gets_disconnected(&mut self) {
         self.assert_disconnected_with_timeout(DEFAULT_TIMEOUT).await;
     }
 
-    pub async fn assert_disconnected_with_timeout(&mut self, timeout: Duration) {
+    async fn assert_disconnected_with_timeout(&mut self, timeout: Duration) {
         if tokio::time::timeout(timeout, async {
             // keep consuming messages until a disconnect occurs
             while self.get_next().await.is_some() {}
