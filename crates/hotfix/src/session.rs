@@ -198,6 +198,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     async fn process_message(&mut self, message: Message) -> Result<()> {
+        let message_type = message.header().get(fix44::MSG_TYPE)?;
+
         if let SessionState::AwaitingResend(state) = &mut self.state {
             // TODO: consider what messages won't have a sequence number?
             // e.g. SequenceReset?
@@ -210,9 +212,17 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 return Ok(());
             }
         }
+
+        if let SessionState::AwaitingLogon { .. } = &mut self.state {
+            // TODO: should this (and all inbound message processing) logic be pushed into the state?
+            if message_type != "A" {
+                self.state.disconnect().await;
+                return Ok(());
+            }
+        }
+
         // TODO: should we verify messages here?
 
-        let message_type = message.header().get(fix44::MSG_TYPE)?;
         match message_type {
             "0" => {
                 self.on_heartbeat(&message).await;

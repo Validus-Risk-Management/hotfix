@@ -8,7 +8,7 @@
 //! | `SeqNum`                   | [`u64`].                                                                           |
 //! | `TagNum`                   | [`TagU32`](crate::TagU32).                                                         |
 //! | `DayOfMonth`               | [`u32`].                                                                           |
-//! | `float`, `Price`, etc.     | [`f32`], [`f64`], [`struct@rust_decimal::Decimal`], [`struct@decimal::d128`]. |
+//! | `float`, `Price`, etc.     | [`f32`], [`f64`].                                                                  |
 //! | `Boolean`                  | [`bool`].                                                                          |
 //! | `char`                     | [`u8`] [^1].                                                                      |
 //! | `String`                   | [`Vec<u8>`], `&[u8]`.[^1]                                                          |

@@ -271,7 +271,7 @@ impl Dictionary {
             .map(|data| Abbreviation(self, data))
     }
 
-    /// Returns the [`Message`](Message) associated with `name`, if any.
+    /// Returns the [`Message`] associated with `name`, if any.
     ///
     /// ```
     /// use hotfix_dictionary::Dictionary;
@@ -287,7 +287,7 @@ impl Dictionary {
         self.message_by_msgtype(msg_type)
     }
 
-    /// Returns the [`Message`](Message) that has the given `msgtype`, if any.
+    /// Returns the [`Message`] that has the given `msgtype`, if any.
     ///
     /// ```
     /// use hotfix_dictionary::Dictionary;
