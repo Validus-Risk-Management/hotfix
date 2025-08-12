@@ -1,0 +1,7 @@
+[all]
+workspace = true
+exclude = []
+exclude-files = [
+    "examples/**/*",
+    "tests/**/*"
+]
