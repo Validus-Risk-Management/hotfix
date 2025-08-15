@@ -263,7 +263,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     async fn check_end_of_resend(&mut self) -> Result<()> {
         let ended_state = if let SessionState::AwaitingResend(state) = &mut self.state {
-            if self.store.next_target_seq_number() > state.end_seq_number {
+            if self.store.next_target_seq_number() > state.end_seq_number + 1 {
                 let new_state =
                     SessionState::new_active(state.writer.clone(), self.config.heartbeat_interval);
                 Some(std::mem::replace(&mut self.state, new_state))

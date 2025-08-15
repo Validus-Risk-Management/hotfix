@@ -79,15 +79,17 @@ async fn test_logon_response_with_sequence_number_too_low() {
     mock_counterparty.then_gets_disconnected().await;
 }
 
+/// Tests the scenario where the counterparty's logon response has a higher sequence number than expected.
+///
+/// This simulates a scenario where our session has missed a message from the counterparty
+/// before the logon sequence completes.
 #[tokio::test]
 async fn test_logon_response_with_sequence_number_too_high() {
     let (session, mut mock_counterparty) = given_a_connected_session().await;
 
     // the counterparty previously sent an execution report which we missed
     let dummy_report = TestMessage::dummy_execution_report();
-    mock_counterparty
-        .when_message_was_previously_sent(dummy_report)
-        .await;
+    mock_counterparty.when_previously_sent(dummy_report).await;
 
     // assert that a logon message is received (type 'A')
     mock_counterparty
@@ -95,11 +97,19 @@ async fn test_logon_response_with_sequence_number_too_high() {
         .await;
     session.then_status_changes_to(Status::AwaitingLogon).await;
 
-    // the counterparty responds with a logo with a sequence number that indicates a message we missed
+    // the counterparty responds with a logon with a sequence number that indicates a message we missed
     mock_counterparty.when_logon_is_sent().await;
     // we then ask them to resend the message
     session.then_status_changes_to(Status::AwaitingResend).await;
     mock_counterparty
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
         .await;
+
+    // the counterparty then completes the resend sequence and the session transitions to Active
+    mock_counterparty.when_message_is_resent(1).await; // the missed message is resent
+    mock_counterparty.when_gap_fill_is_sent(2, 3).await; // the logon is gap filled
+    session.then_status_changes_to(Status::Active).await;
+
+    session.when_disconnect_is_requested().await;
+    mock_counterparty.then_gets_disconnected().await;
 }

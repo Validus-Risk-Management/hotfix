@@ -1,6 +1,7 @@
 use crate::common::session_assertions::DEFAULT_TIMEOUT;
 use hotfix::config::SessionConfig;
 use hotfix::message::logon::{Logon, ResetSeqNumConfig};
+use hotfix::message::sequence_reset::SequenceReset;
 use hotfix::message::{FixMessage, RawFixMessage, generate_message};
 use hotfix::session::SessionRef;
 use hotfix::transport::FixConnection;
@@ -49,7 +50,7 @@ where
         }
     }
 
-    pub async fn when_message_was_previously_sent(&mut self, message: impl FixMessage) {
+    pub async fn when_previously_sent(&mut self, message: impl FixMessage) {
         let raw_message = generate_message(
             &self.session_config.sender_comp_id,
             &self.session_config.target_comp_id,
@@ -58,6 +59,30 @@ where
         )
         .expect("failed to generate message");
         self.sent_messages.push(raw_message);
+    }
+
+    pub async fn when_message_is_resent(&mut self, sequence_number: u64) {
+        let message = self.sent_messages[sequence_number as usize - 1].clone();
+        self.session_ref
+            .new_fix_message_received(RawFixMessage::new(message))
+            .await;
+    }
+
+    pub async fn when_gap_fill_is_sent(&mut self, start_seq_no: u64, new_seq_no: u64) {
+        let sequence_reset = SequenceReset {
+            gap_fill: true,
+            new_seq_no,
+        };
+        let raw_message = generate_message(
+            &self.session_config.sender_comp_id,
+            &self.session_config.target_comp_id,
+            start_seq_no as usize,
+            sequence_reset,
+        )
+        .expect("failed to generate message");
+        self.session_ref
+            .new_fix_message_received(RawFixMessage::new(raw_message))
+            .await;
     }
 
     pub async fn when_logon_is_sent(&mut self) {

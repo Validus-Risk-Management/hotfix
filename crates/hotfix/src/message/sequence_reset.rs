@@ -4,9 +4,9 @@ use hotfix_message::message::Message;
 use hotfix_message::{Part, fix44};
 
 #[derive(Clone)]
-pub(crate) struct SequenceReset {
-    pub(crate) gap_fill: bool,
-    pub(crate) new_seq_no: u64,
+pub struct SequenceReset {
+    pub gap_fill: bool,
+    pub new_seq_no: u64,
 }
 
 impl FixMessage for SequenceReset {
