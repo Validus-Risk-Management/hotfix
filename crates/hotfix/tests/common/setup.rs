@@ -13,11 +13,17 @@ pub const HEARTBEAT_INTERVAL: u64 = 30;
 
 pub async fn given_a_connected_session() -> (SessionRef<TestMessage>, MockCounterparty<TestMessage>)
 {
+    let message_store = InMemoryMessageStore::default();
+    given_a_connected_session_with_store(message_store).await
+}
+
+pub async fn given_a_connected_session_with_store(
+    message_store: InMemoryMessageStore,
+) -> (SessionRef<TestMessage>, MockCounterparty<TestMessage>) {
     let config = create_session_config();
     let counterparty_config = create_counterparty_session_config(config.clone());
 
     let application_ref = ApplicationRef::new(MockApplication {});
-    let message_store = InMemoryMessageStore::default();
 
     let session = SessionRef::new(config, application_ref, message_store);
     let mock_counterparty = MockCounterparty::start(session.clone(), counterparty_config).await;
