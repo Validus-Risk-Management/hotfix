@@ -49,6 +49,17 @@ where
         }
     }
 
+    pub async fn when_message_was_previously_sent(&mut self, message: impl FixMessage) {
+        let raw_message = generate_message(
+            &self.session_config.sender_comp_id,
+            &self.session_config.target_comp_id,
+            self.sent_messages.len() + 1,
+            message,
+        )
+        .expect("failed to generate message");
+        self.sent_messages.push(raw_message);
+    }
+
     pub async fn when_logon_is_sent(&mut self) {
         let logon = Logon::new(
             self.session_config.heartbeat_interval,

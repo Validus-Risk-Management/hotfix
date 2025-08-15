@@ -78,3 +78,28 @@ async fn test_logon_response_with_sequence_number_too_low() {
         .await;
     mock_counterparty.then_gets_disconnected().await;
 }
+
+#[tokio::test]
+async fn test_logon_response_with_sequence_number_too_high() {
+    let (session, mut mock_counterparty) = given_a_connected_session().await;
+
+    // the counterparty previously sent an execution report which we missed
+    let dummy_report = TestMessage::dummy_execution_report();
+    mock_counterparty
+        .when_message_was_previously_sent(dummy_report)
+        .await;
+
+    // assert that a logon message is received (type 'A')
+    mock_counterparty
+        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+        .await;
+    session.then_status_changes_to(Status::AwaitingLogon).await;
+
+    // the counterparty responds with a logo with a sequence number that indicates a message we missed
+    mock_counterparty.when_logon_is_sent().await;
+    // we then ask them to resend the message
+    session.then_status_changes_to(Status::AwaitingResend).await;
+    mock_counterparty
+        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
+        .await;
+}
