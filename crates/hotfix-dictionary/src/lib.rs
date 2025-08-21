@@ -265,7 +265,7 @@ impl Dictionary {
 
     /// Return the known abbreviation for `term` -if any- according to the
     /// documentation of this FIX Dictionary.
-    pub fn abbreviation_for(&self, term: &str) -> Option<Abbreviation> {
+    pub fn abbreviation_for(&self, term: &str) -> Option<Abbreviation<'_>> {
         self.abbreviation_definitions
             .get(term)
             .map(|data| Abbreviation(self, data))
@@ -282,7 +282,7 @@ impl Dictionary {
     /// let msg2 = dict.message_by_msgtype("0").unwrap();
     /// assert_eq!(msg1.name(), msg2.name());
     /// ```
-    pub fn message_by_name(&self, name: &str) -> Option<Message> {
+    pub fn message_by_name(&self, name: &str) -> Option<Message<'_>> {
         let msg_type = self.message_msgtypes_by_name.get(name)?;
         self.message_by_msgtype(msg_type)
     }
@@ -298,14 +298,14 @@ impl Dictionary {
     /// let msg2 = dict.message_by_name("Heartbeat").unwrap();
     /// assert_eq!(msg1.name(), msg2.name());
     /// ```
-    pub fn message_by_msgtype(&self, msgtype: &str) -> Option<Message> {
+    pub fn message_by_msgtype(&self, msgtype: &str) -> Option<Message<'_>> {
         self.messages_by_msgtype
             .get(msgtype)
             .map(|data| Message(self, data))
     }
 
     /// Returns the [`Component`] named `name`, if any.
-    pub fn component_by_name(&self, name: &str) -> Option<Component> {
+    pub fn component_by_name(&self, name: &str) -> Option<Component<'_>> {
         self.components_by_name
             .get(name)
             .map(|data| Component(self, data))
@@ -320,7 +320,7 @@ impl Dictionary {
     /// let dt = dict.datatype_by_name("String").unwrap();
     /// assert_eq!(dt.name(), "String");
     /// ```
-    pub fn datatype_by_name(&self, name: &str) -> Option<Datatype> {
+    pub fn datatype_by_name(&self, name: &str) -> Option<Datatype<'_>> {
         self.data_types_by_name
             .get(name)
             .map(|data| Datatype(self, data))
@@ -336,18 +336,18 @@ impl Dictionary {
     /// let field2 = dict.field_by_name("TestReqID").unwrap();
     /// assert_eq!(field1.name(), field2.name());
     /// ```
-    pub fn field_by_tag(&self, tag: u32) -> Option<Field> {
+    pub fn field_by_tag(&self, tag: u32) -> Option<Field<'_>> {
         self.fields_by_tags.get(&tag).map(|data| Field(self, data))
     }
 
     /// Returns the [`Field`] named `name`, if any.
-    pub fn field_by_name(&self, name: &str) -> Option<Field> {
+    pub fn field_by_name(&self, name: &str) -> Option<Field<'_>> {
         let tag = self.field_tags_by_name.get(name)?;
         self.field_by_tag(*tag)
     }
 
     /// Returns the [`Category`] named `name`, if any.
-    fn category_by_name(&self, name: &str) -> Option<Category> {
+    fn category_by_name(&self, name: &str) -> Option<Category<'_>> {
         self.categories_by_name
             .get(name)
             .map(|data| Category(self, data))
@@ -363,7 +363,7 @@ impl Dictionary {
     /// // FIX 4.4 defines 23 (FIXME) datatypes.
     /// assert_eq!(dict.datatypes().len(), 23);
     /// ```
-    pub fn datatypes(&self) -> Vec<Datatype> {
+    pub fn datatypes(&self) -> Vec<Datatype<'_>> {
         self.data_types_by_name
             .values()
             .map(|data| Datatype(self, data))
@@ -381,7 +381,7 @@ impl Dictionary {
     /// let msg = msgs.iter().find(|m| m.name() == "MarketDataRequest");
     /// assert_eq!(msg.unwrap().msg_type(), "V");
     /// ```
-    pub fn messages(&self) -> Vec<Message> {
+    pub fn messages(&self) -> Vec<Message<'_>> {
         self.messages_by_msgtype
             .values()
             .map(|data| Message(self, data))
@@ -390,7 +390,7 @@ impl Dictionary {
 
     /// Returns a [`Vec`] of all [`Category`]'s in this [`Dictionary`]. The ordering
     /// of items is not specified.
-    pub fn categories(&self) -> Vec<Category> {
+    pub fn categories(&self) -> Vec<Category<'_>> {
         self.categories_by_name
             .values()
             .map(|data| Category(self, data))
@@ -399,7 +399,7 @@ impl Dictionary {
 
     /// Returns a [`Vec`] of all [`Field`]'s in this [`Dictionary`]. The ordering
     /// of items is not specified.
-    pub fn fields(&self) -> Vec<Field> {
+    pub fn fields(&self) -> Vec<Field<'_>> {
         self.fields_by_tags
             .values()
             .map(|data| Field(self, data))
@@ -408,7 +408,7 @@ impl Dictionary {
 
     /// Returns a [`Vec`] of all [`Component`]'s in this [`Dictionary`]. The ordering
     /// of items is not specified.
-    pub fn components(&self) -> Vec<Component> {
+    pub fn components(&self) -> Vec<Component<'_>> {
         self.components_by_name
             .values()
             .map(|data| Component(self, data))
@@ -523,14 +523,14 @@ impl<'a> Component<'a> {
     }
 
     /// Returns the [`Category`] to which `self` belongs.
-    pub fn category(&self) -> Category {
+    pub fn category(&self) -> Category<'_> {
         self.0
             .category_by_name(self.1.category_name.as_str())
             .unwrap()
     }
 
     /// Returns an [`Iterator`] over all items that are part of `self`.
-    pub fn items(&self) -> impl Iterator<Item = LayoutItem> {
+    pub fn items(&self) -> impl Iterator<Item = LayoutItem<'_>> {
         self.1
             .layout_items
             .iter()
@@ -1087,7 +1087,7 @@ impl<'a> Field<'a> {
 
     /// In case this field allows any value, it returns `None`; otherwise; it
     /// returns an [`Iterator`] of all allowed values.
-    pub fn enums(&self) -> Option<impl Iterator<Item = FieldEnum>> {
+    pub fn enums(&self) -> Option<impl Iterator<Item = FieldEnum<'_>>> {
         self.1
             .value_restrictions
             .as_ref()
@@ -1095,7 +1095,7 @@ impl<'a> Field<'a> {
     }
 
     /// Returns the [`Datatype`] of `self`.
-    pub fn data_type(&self) -> Datatype {
+    pub fn data_type(&self) -> Datatype<'_> {
         self.0
             .datatype_by_name(self.1.data_type_name.as_str())
             .unwrap()
@@ -1207,7 +1207,7 @@ impl<'a> LayoutItem<'a> {
     }
 
     /// Returns the [`LayoutItemKind`] of `self`.
-    pub fn kind(&self) -> LayoutItemKind {
+    pub fn kind(&self) -> LayoutItemKind<'_> {
         layout_item_kind(&self.1.kind, self.0)
     }
 
@@ -1297,7 +1297,7 @@ impl<'a> Message<'a> {
         self.1.component_id
     }
 
-    pub fn layout(&self) -> impl Iterator<Item = LayoutItem> {
+    pub fn layout(&self) -> impl Iterator<Item = LayoutItem<'_>> {
         self.1
             .layout_items
             .iter()

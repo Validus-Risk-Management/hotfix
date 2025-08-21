@@ -282,7 +282,7 @@ impl<'a> MessageParser<'a> {
         Some((field, separator_position))
     }
 
-    fn get_dict_field_by_tag(&self, tag: u32) -> ParserResult<hotfix_dictionary::Field> {
+    fn get_dict_field_by_tag(&self, tag: u32) -> ParserResult<hotfix_dictionary::Field<'_>> {
         self.dict
             .field_by_tag(tag)
             .ok_or(ParserError::InvalidField(tag))

@@ -139,12 +139,15 @@ pub trait FieldMap<F> {
     fn get_raw(&self, field: F) -> Option<&[u8]>;
 
     /// Looks for a group that starts with `field` within `self`.
-    fn group(&self, field: F) -> Result<Self::Group, FieldValueError<<usize as FieldType>::Error>>;
+    fn group(
+        &self,
+        field: F,
+    ) -> Result<Self::Group, FieldValueError<<usize as FieldType<'_>>::Error>>;
 
     /// Like [`FieldMap::group`], but doesn't return an [`Err`] if the
     /// group is missing.
     #[inline]
-    fn group_opt(&self, field: F) -> Result<Option<Self::Group>, <usize as FieldType>::Error> {
+    fn group_opt(&self, field: F) -> Result<Option<Self::Group>, <usize as FieldType<'_>>::Error> {
         match self.group(field) {
             Ok(group) => Ok(Some(group)),
             Err(FieldValueError::Missing) => Ok(None),
@@ -196,6 +199,7 @@ pub trait FieldMap<F> {
 }
 
 /// Provides access to entries within a FIX repeating group.
+#[allow(dead_code)]
 pub trait RepeatingGroup: Sized {
     /// The type of entries in this FIX repeating group. Must implement
     /// [`FieldMap`].
@@ -210,8 +214,7 @@ pub trait RepeatingGroup: Sized {
     /// Creates and returns an [`Iterator`] over the entries in `self`.
     /// Iteration MUST be done in sequential order, i.e. in which they appear in
     /// the original FIX message.
-    #[allow(dead_code)]
-    fn entries(&self) -> GroupEntries<Self> {
+    fn entries(&self) -> GroupEntries<'_, Self> {
         GroupEntries {
             group: self,
             range: 0..self.len(),
@@ -225,6 +228,7 @@ pub trait RepeatingGroup: Sized {
 /// also implements [`FusedIterator`], [`DoubleEndedIterator`], and
 /// [`ExactSizeIterator`].
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct GroupEntries<'a, G> {
     group: &'a G,
     range: Range<usize>,
