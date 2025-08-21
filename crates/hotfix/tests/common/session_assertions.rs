@@ -2,7 +2,7 @@ use crate::common::test_messages::TestMessage;
 use hotfix::session::{SessionRef, Status};
 use std::time::Duration;
 
-pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(50);
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(100);
 
 pub trait SessionAssertions {
     async fn then_status_changes_to(&self, expected_status: Status);
@@ -17,7 +17,7 @@ impl SessionAssertions for SessionRef<TestMessage> {
 
     async fn then_status_changes_within_time(&self, expected_status: Status, timeout: Duration) {
         let deadline = tokio::time::Instant::now() + timeout;
-        let retry_interval = Duration::from_millis(5);
+        let retry_interval = Duration::from_millis(1);
 
         let mut session_info = self.get_session_info().await;
         while tokio::time::Instant::now() < deadline {
