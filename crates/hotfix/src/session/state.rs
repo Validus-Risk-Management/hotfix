@@ -146,13 +146,13 @@ impl SessionState {
     }
 
     pub fn notify_session_awaiter(&mut self) {
-        if let SessionState::Disconnected(state) = self {
-            if let Some(awaiter) = state.take_session_awaiter() {
-                if let Err(err) = awaiter.send(AwaitingActiveSessionResponse::Active) {
-                    error!("failed to send session awaiter response: {err:?}");
-                } else {
-                    debug!("notified session awaiter");
-                }
+        if let SessionState::Disconnected(state) = self
+            && let Some(awaiter) = state.take_session_awaiter()
+        {
+            if let Err(err) = awaiter.send(AwaitingActiveSessionResponse::Active) {
+                error!("failed to send session awaiter response: {err:?}");
+            } else {
+                debug!("notified session awaiter");
             }
         }
     }

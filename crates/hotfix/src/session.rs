@@ -418,11 +418,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         if let (Some(expected_req_id), Ok(message_req_id)) = (
             &self.state.expected_test_response_id(),
             message.get::<&str>(fix44::TEST_REQ_ID),
-        ) {
-            if expected_req_id.as_str() == message_req_id {
-                debug!("received response for TestRequest, resetting timer");
-                self.reset_peer_timer(None);
-            }
+        ) && expected_req_id.as_str() == message_req_id
+        {
+            debug!("received response for TestRequest, resetting timer");
+            self.reset_peer_timer(None);
         }
     }
 
