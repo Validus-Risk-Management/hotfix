@@ -35,7 +35,7 @@ use crate::session::event::AwaitingActiveSessionResponse;
 use crate::session::state::{AwaitingResendState, TestRequestId};
 use crate::session_schedule::SessionSchedule;
 use event::SessionEvent;
-use hotfix_message::parsed_message::ParsedMessage;
+use hotfix_message::parsed_message::{InvalidReason, ParsedMessage};
 use state::SessionState;
 
 pub use info::{SessionInfo, Status};
@@ -187,10 +187,17 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 let message = raw_message.to_string();
                 let reason = format!("{r:?}");
                 error!(message, reason, "received garbled message");
-                // TODO: not all parsing errors indicate garbled messages
             }
-            _ => {
-                error!("received invalid message, which are not handled yet");
+            ParsedMessage::Invalid { message, reason } => {
+                match reason {
+                    InvalidReason::InvalidField(tag) => {}
+                    InvalidReason::InvalidGroup(tag) => {}
+                    InvalidReason::InvalidComponent(component_name) => {}
+                }
+                // TODO
+            }
+            ParsedMessage::UnexpectedError(err) => {
+                error!("unexpected error: {:?}", err);
             }
         }
 

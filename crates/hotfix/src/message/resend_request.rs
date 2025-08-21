@@ -2,7 +2,7 @@ use crate::message::FixMessage;
 use hotfix_message::message::Message;
 use hotfix_message::{Part, fix44};
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub(crate) struct ResendRequest {
     begin_seq_no: u64,
     end_seq_no: u64,

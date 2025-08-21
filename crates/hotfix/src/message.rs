@@ -9,6 +9,7 @@ pub mod heartbeat;
 pub mod logon;
 pub mod logout;
 pub mod parser;
+mod reject;
 pub mod resend_request;
 pub mod sequence_reset;
 pub mod test_request;
