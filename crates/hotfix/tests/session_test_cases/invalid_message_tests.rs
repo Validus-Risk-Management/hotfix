@@ -7,7 +7,6 @@ use hotfix_message::message::Message;
 use hotfix_message::{HardCodedFixFieldDefinition, Part, fix44};
 
 #[tokio::test]
-#[should_panic]
 async fn test_message_with_invalid_field_gets_rejected() {
     let (session, mut mock_counterparty) = given_an_active_session().await;
 

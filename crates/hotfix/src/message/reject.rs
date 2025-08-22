@@ -4,12 +4,48 @@ use hotfix_message::message::Message;
 use hotfix_message::{Part, fix44};
 
 #[derive(Clone, Debug)]
-struct Reject {
+pub(crate) struct Reject {
     ref_seq_num: u64,
     ref_tag_id: Option<u64>,
     ref_msg_type: Option<MsgType>,
     session_reject_reason: Option<SessionRejectReason>,
     text: Option<String>,
+}
+
+#[allow(dead_code)]
+impl Reject {
+    pub(crate) fn new(ref_seq_num: u64) -> Self {
+        Self {
+            ref_seq_num,
+            ref_tag_id: None,
+            ref_msg_type: None,
+            session_reject_reason: None,
+            text: None,
+        }
+    }
+
+    pub(crate) fn ref_tag_id(mut self, ref_tag_id: u64) -> Self {
+        self.ref_tag_id = Some(ref_tag_id);
+        self
+    }
+
+    pub(crate) fn ref_msg_type(mut self, ref_msg_type: MsgType) -> Self {
+        self.ref_msg_type = Some(ref_msg_type);
+        self
+    }
+
+    pub(crate) fn session_reject_reason(
+        mut self,
+        session_reject_reason: SessionRejectReason,
+    ) -> Self {
+        self.session_reject_reason = Some(session_reject_reason);
+        self
+    }
+
+    pub(crate) fn text(mut self, text: &str) -> Self {
+        self.text = Some(text.to_string());
+        self
+    }
 }
 
 impl FixMessage for Reject {

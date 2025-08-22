@@ -35,9 +35,11 @@ use crate::session::event::AwaitingActiveSessionResponse;
 use crate::session::state::{AwaitingResendState, TestRequestId};
 use crate::session_schedule::SessionSchedule;
 use event::SessionEvent;
+use hotfix_message::fix44::SessionRejectReason;
 use hotfix_message::parsed_message::{InvalidReason, ParsedMessage};
 use state::SessionState;
 
+use crate::message::reject::Reject;
 pub use info::{SessionInfo, Status};
 
 const SCHEDULE_CHECK_INTERVAL: u64 = 1;
@@ -188,14 +190,25 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 let reason = format!("{r:?}");
                 error!(message, reason, "received garbled message");
             }
-            ParsedMessage::Invalid { message, reason } => {
-                match reason {
-                    InvalidReason::InvalidField(tag) => {}
-                    InvalidReason::InvalidGroup(tag) => {}
-                    InvalidReason::InvalidComponent(component_name) => {}
+            ParsedMessage::Invalid { message, reason } => match reason {
+                InvalidReason::InvalidField(tag) | InvalidReason::InvalidGroup(tag) => {
+                    match message.header().get(fix44::MSG_SEQ_NUM) {
+                        Ok(msg_seq_num) => {
+                            let reject = Reject::new(msg_seq_num)
+                                .session_reject_reason(SessionRejectReason::InvalidTagNumber)
+                                .text(&format!("invalid field {tag}"));
+                            self.send_message(reject).await;
+                        }
+                        Err(err) => {
+                            error!("failed to get message seq num: {:?}", err);
+                        }
+                    }
                 }
-                // TODO
-            }
+                InvalidReason::InvalidComponent(_component_name) => {
+                    // TODO: what's the correct way to handle this?
+                    info!("received invalid component");
+                }
+            },
             ParsedMessage::UnexpectedError(err) => {
                 error!("unexpected error: {:?}", err);
             }
