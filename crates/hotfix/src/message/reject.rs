@@ -12,7 +12,6 @@ pub(crate) struct Reject {
     text: Option<String>,
 }
 
-#[allow(dead_code)]
 impl Reject {
     pub(crate) fn new(ref_seq_num: u64) -> Self {
         Self {
@@ -24,11 +23,13 @@ impl Reject {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn ref_tag_id(mut self, ref_tag_id: u64) -> Self {
         self.ref_tag_id = Some(ref_tag_id);
         self
     }
 
+    #[allow(dead_code)]
     pub(crate) fn ref_msg_type(mut self, ref_msg_type: MsgType) -> Self {
         self.ref_msg_type = Some(ref_msg_type);
         self
@@ -89,13 +90,7 @@ mod tests {
 
     #[test]
     fn test_write_reject_with_required_fields_only() {
-        let reject = Reject {
-            ref_seq_num: 123,
-            ref_tag_id: None,
-            ref_msg_type: None,
-            session_reject_reason: None,
-            text: None,
-        };
+        let reject = Reject::new(123);
 
         let mut msg = Message::new("FIX.4.4", "3");
         reject.write(&mut msg);
@@ -112,13 +107,11 @@ mod tests {
 
     #[test]
     fn test_write_reject_with_all_fields() {
-        let reject = Reject {
-            ref_seq_num: 456,
-            ref_tag_id: Some(35),
-            ref_msg_type: Some(MsgType::ExecutionReport),
-            session_reject_reason: Some(SessionRejectReason::InvalidTagNumber),
-            text: Some("Invalid message format".to_string()),
-        };
+        let reject = Reject::new(456)
+            .ref_tag_id(35)
+            .ref_msg_type(MsgType::ExecutionReport)
+            .session_reject_reason(SessionRejectReason::InvalidTagNumber)
+            .text("Invalid message format");
 
         let mut msg = Message::new("FIX.4.4", "3");
         reject.write(&mut msg);
@@ -180,13 +173,11 @@ mod tests {
 
     #[test]
     fn test_round_trip_serialization() {
-        let original = Reject {
-            ref_seq_num: 555,
-            ref_tag_id: Some(44),
-            ref_msg_type: Some(MsgType::OrderCancelRequest),
-            session_reject_reason: Some(SessionRejectReason::ValueIsIncorrect),
-            text: Some("Price field is invalid".to_string()),
-        };
+        let original = Reject::new(555)
+            .ref_tag_id(44)
+            .ref_msg_type(MsgType::OrderCancelRequest)
+            .session_reject_reason(SessionRejectReason::ValueIsIncorrect)
+            .text("Price field is invalid");
 
         let mut msg = Message::new("FIX.4.4", "3");
         original.write(&mut msg);
@@ -202,13 +193,7 @@ mod tests {
 
     #[test]
     fn test_round_trip_with_minimal_fields() {
-        let original = Reject {
-            ref_seq_num: 111,
-            ref_tag_id: None,
-            ref_msg_type: None,
-            session_reject_reason: None,
-            text: None,
-        };
+        let original = Reject::new(111);
 
         let mut msg = Message::new("FIX.4.4", "3");
         original.write(&mut msg);
