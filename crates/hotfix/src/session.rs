@@ -349,6 +349,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         self.state = SessionState::AwaitingLogon {
             writer,
             logon_sent: false,
+            logon_timeout: Instant::now() + Duration::from_secs(self.config.logon_timeout),
         };
         self.reset_peer_timer(None);
         self.send_logon().await;

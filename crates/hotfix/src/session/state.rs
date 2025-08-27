@@ -15,7 +15,11 @@ pub(crate) type TestRequestId = String;
 
 pub enum SessionState {
     /// We have established a connection, sent a logon message and await a response.
-    AwaitingLogon { writer: WriterRef, logon_sent: bool },
+    AwaitingLogon {
+        writer: WriterRef,
+        logon_sent: bool,
+        logon_timeout: Instant,
+    },
     /// We are awaiting the target to resend the gap we have.
     AwaitingResend(AwaitingResendState),
     /// We are in the process of gracefully logging out
@@ -64,7 +68,9 @@ impl SessionState {
                     writer.send_raw_message(message).await
                 }
             }
-            Self::AwaitingLogon { writer, logon_sent } => {
+            Self::AwaitingLogon {
+                writer, logon_sent, ..
+            } => {
                 match message_type {
                     b"A" => {
                         // Logon message
@@ -178,6 +184,7 @@ impl SessionState {
     pub fn peer_deadline(&self) -> Option<&Instant> {
         match self {
             Self::Active(ActiveState { peer_deadline, .. }) => Some(peer_deadline),
+            Self::AwaitingLogon { logon_timeout, .. } => Some(logon_timeout),
             _ => None,
         }
     }

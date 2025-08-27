@@ -10,6 +10,7 @@ use hotfix_message::Part;
 use hotfix_message::fix44::MSG_TYPE;
 
 pub const HEARTBEAT_INTERVAL: u64 = 30;
+pub const LOGON_TIMEOUT: u64 = 10;
 
 pub async fn given_a_connected_session() -> (SessionRef<TestMessage>, MockCounterparty<TestMessage>)
 {
@@ -53,7 +54,7 @@ pub fn create_session_config() -> SessionConfig {
         connection_port: 0,
         tls_config: None,
         heartbeat_interval: HEARTBEAT_INTERVAL,
-        logon_timeout: 10,
+        logon_timeout: LOGON_TIMEOUT,
         reconnect_interval: 30,
         reset_on_logon: false,
         schedule: None,
