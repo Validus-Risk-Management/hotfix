@@ -206,7 +206,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 }
                 InvalidReason::InvalidComponent(_component_name) => {
                     // TODO: what's the correct way to handle this?
-                    info!("received invalid component");
+                    warn!("received invalid component");
                 }
             },
             ParsedMessage::UnexpectedError(err) => {
@@ -697,6 +697,9 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         if self.state.is_expecting_test_response() {
             warn!("peer didn't respond, terminating..");
             self.logout_and_terminate("peer timeout").await;
+        } else if self.state.is_awaiting_logon() {
+            warn!("peer didn't respond to our Logon, disconnecting..");
+            self.state.disconnect().await;
         } else {
             let req_id = format!("TEST_{}", self.store.next_target_seq_number());
             info!("sending TestRequest due to peer timer expiring");

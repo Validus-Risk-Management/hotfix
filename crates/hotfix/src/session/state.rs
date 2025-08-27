@@ -220,6 +220,10 @@ impl SessionState {
         self.expected_test_response_id().is_some()
     }
 
+    pub fn is_awaiting_logon(&self) -> bool {
+        matches!(self, SessionState::AwaitingLogon { .. })
+    }
+
     pub fn as_status(&self) -> SessionInfoStatus {
         match self {
             SessionState::AwaitingLogon { .. } => SessionInfoStatus::AwaitingLogon,
