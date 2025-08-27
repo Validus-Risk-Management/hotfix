@@ -53,6 +53,7 @@ pub fn create_session_config() -> SessionConfig {
         connection_port: 0,
         tls_config: None,
         heartbeat_interval: HEARTBEAT_INTERVAL,
+        logon_timeout: 10,
         reconnect_interval: 30,
         reset_on_logon: false,
         schedule: None,

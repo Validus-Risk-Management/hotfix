@@ -48,35 +48,53 @@ fn default_reconnect_interval() -> u64 {
     30
 }
 
+fn default_logon_timeout() -> u64 {
+    10
+}
+
 /// The configuration of a single FIX session.
 #[derive(Clone, Debug, Deserialize)]
 pub struct SessionConfig {
     /// The begin string specifying the FIX version.
     pub begin_string: String,
+
     /// The sender's comp ID.
     pub sender_comp_id: String,
+
     /// The target's comp ID.
     pub target_comp_id: String,
+
     /// The path to the data dictionary to use.
     pub data_dictionary_path: Option<String>,
+
     /// The host to connect to.
     ///
     /// This can be any representation of a host that can be interpreted
     /// as a host object.
     pub connection_host: String,
+
     /// The port to use to connect.
     pub connection_port: u16,
+
     /// The TLS configuration for the session, if TLS is used.
     #[serde(flatten)]
     pub tls_config: Option<TlsConfig>,
+
     /// The heartbeat interval to agree on with the peer in seconds.
     pub heartbeat_interval: u64,
-    #[serde(default = "default_reconnect_interval")]
+
+    /// The time we wait in seconds for Logon responses before timing out.
+    #[serde(default = "default_logon_timeout")]
+    pub logon_timeout: u64,
+
     /// The interval we should attempt to reconnect at in seconds.
+    #[serde(default = "default_reconnect_interval")]
     pub reconnect_interval: u64,
+
     /// Specifies whether we should reset the state of the message store on logon.
     #[serde(default)]
     pub reset_on_logon: bool,
+
     /// The schedule configuration for the session
     pub schedule: Option<ScheduleConfig>,
 }
@@ -121,6 +139,7 @@ reset_on_logon = false
         };
         assert_eq!(session_config.tls_config, Some(expected_tls_config));
         assert_eq!(session_config.reconnect_interval, 30);
+        assert_eq!(session_config.logon_timeout, 10);
     }
 
     #[test]
@@ -287,5 +306,51 @@ end_day = "Friday"
         assert_eq!(schedule.start_time, NaiveTime::from_hms_opt(9, 30, 0));
         assert_eq!(schedule.end_time, NaiveTime::from_hms_opt(17, 0, 0));
         assert_eq!(schedule.timezone, Some(Tz::Europe__London));
+    }
+
+    #[test]
+    fn test_logon_timeout_config() {
+        let config_contents = r#"
+    [[sessions]]
+    begin_string = "FIX.4.4"
+    sender_comp_id = "send-comp-id"
+    target_comp_id = "target-comp-id"
+    data_dictionary_path = "./spec/FIX44.xml"
+
+    connection_port = 443
+    connection_host = "127.0.0.1"
+    ca_certificate_path = "my_cert.crt"
+    heartbeat_interval = 30
+    logon_timeout = 20
+        "#;
+
+        let config: Config = toml::from_str(config_contents).unwrap();
+        assert_eq!(config.sessions.len(), 1);
+
+        let session_config = config.sessions.first().unwrap();
+        assert_eq!(session_config.logon_timeout, 20);
+    }
+
+    #[test]
+    fn test_reconnect_interval_config() {
+        let config_contents = r#"
+    [[sessions]]
+    begin_string = "FIX.4.4"
+    sender_comp_id = "send-comp-id"
+    target_comp_id = "target-comp-id"
+    data_dictionary_path = "./spec/FIX44.xml"
+
+    connection_port = 443
+    connection_host = "127.0.0.1"
+    ca_certificate_path = "my_cert.crt"
+    heartbeat_interval = 30
+    reconnect_interval = 15
+        "#;
+
+        let config: Config = toml::from_str(config_contents).unwrap();
+        assert_eq!(config.sessions.len(), 1);
+
+        let session_config = config.sessions.first().unwrap();
+        assert_eq!(session_config.reconnect_interval, 15);
     }
 }
