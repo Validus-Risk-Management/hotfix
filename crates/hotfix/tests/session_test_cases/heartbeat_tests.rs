@@ -1,4 +1,4 @@
-use crate::common::session_actions::SessionActions;
+use crate::common::session_actions::{SessionActions, when_time_elapses};
 use crate::common::setup::{HEARTBEAT_INTERVAL, given_an_active_session};
 use hotfix_message::Part;
 use hotfix_message::fix44::MSG_TYPE;
@@ -57,8 +57,4 @@ async fn test_peer_timeout() {
     // we wait even longer and the counterparty never responds, so we disconnect from the counterparty
     when_time_elapses(Duration::from_secs(peer_interval)).await;
     mock_counterparty.then_gets_disconnected().await;
-}
-
-async fn when_time_elapses(duration: Duration) {
-    tokio::time::advance(duration).await;
 }

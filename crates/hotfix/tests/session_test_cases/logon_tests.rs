@@ -1,12 +1,15 @@
-use crate::common::session_actions::SessionActions;
+use crate::common::session_actions::{SessionActions, when_time_elapses};
 use crate::common::session_assertions::SessionAssertions;
-use crate::common::setup::{given_a_connected_session, given_a_connected_session_with_store};
+use crate::common::setup::{
+    LOGON_TIMEOUT, given_a_connected_session, given_a_connected_session_with_store,
+};
 use crate::common::test_messages::TestMessage;
 use hotfix::session::Status;
 use hotfix::store::MessageStore;
 use hotfix::store::in_memory::InMemoryMessageStore;
 use hotfix_message::Part;
 use hotfix_message::fix44::MSG_TYPE;
+use std::time::Duration;
 
 /// Tests successful FIX session establishment via logon message exchange.
 /// Verifies that a session sends a logon message, receives a response,
@@ -111,5 +114,25 @@ async fn test_logon_response_with_sequence_number_too_high() {
     session.then_status_changes_to(Status::Active).await;
 
     session.when_disconnect_is_requested().await;
+    mock_counterparty.then_gets_disconnected().await;
+}
+
+/// Tests the scenario where the counterparty does not respond to our logon message
+/// within the configured timeout.
+///
+/// This results in us disconnecting.
+#[tokio::test(start_paused = true)]
+async fn test_logon_timeout() {
+    let (session, mut mock_counterparty) = given_a_connected_session().await;
+
+    // assert that a logon message is received (type 'A')
+    mock_counterparty
+        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+        .await;
+    session.then_status_changes_to(Status::AwaitingLogon).await;
+
+    // enough time elapses for the logon to timeout
+    when_time_elapses(Duration::from_secs(LOGON_TIMEOUT)).await;
+
     mock_counterparty.then_gets_disconnected().await;
 }
