@@ -109,17 +109,46 @@ impl SessionState {
         }
     }
 
-    pub fn try_transition_to_awaiting_logout(&mut self) -> bool {
+    fn get_writer(&self) -> Option<&WriterRef> {
         match self {
             Self::Active(ActiveState { writer, .. })
             | Self::AwaitingLogon { writer, .. }
-            | Self::AwaitingResend(AwaitingResendState { writer, .. }) => {
-                *self = SessionState::AwaitingLogout {
-                    writer: writer.clone(),
-                };
-                true
-            }
-            _ => false,
+            | Self::AwaitingLogout { writer }
+            | Self::AwaitingResend(AwaitingResendState { writer, .. }) => Some(writer),
+            _ => None,
+        }
+    }
+
+    pub fn try_transition_to_awaiting_logout(&mut self) -> bool {
+        if matches!(self, SessionState::AwaitingLogout { .. }) {
+            debug!("already in awaiting logout state");
+            return false;
+        }
+
+        if let Some(writer) = self.get_writer() {
+            *self = SessionState::AwaitingLogout {
+                writer: writer.clone(),
+            };
+            true
+        } else {
+            error!("trying to transition to awaiting logout without an established connection");
+            false
+        }
+    }
+
+    pub fn try_transition_to_awaiting_resend(&mut self, end_seq_number: u64) -> bool {
+        if matches!(self, SessionState::AwaitingLogout { .. }) {
+            error!("trying to request a resend while we are already logging out");
+            return false;
+        }
+
+        if let Some(writer) = self.get_writer() {
+            let awaiting_resend = AwaitingResendState::new(writer.to_owned(), end_seq_number);
+            *self = SessionState::AwaitingResend(awaiting_resend);
+            true
+        } else {
+            error!("trying to transition to awaiting resend without an established connection");
+            false
         }
     }
 

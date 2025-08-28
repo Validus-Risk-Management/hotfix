@@ -32,7 +32,7 @@ use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
 use crate::message_utils::is_admin;
 use crate::session::event::AwaitingActiveSessionResponse;
-use crate::session::state::{AwaitingResendState, TestRequestId};
+use crate::session::state::TestRequestId;
 use crate::session_schedule::SessionSchedule;
 use event::SessionEvent;
 use hotfix_message::fix44::SessionRejectReason;
@@ -241,8 +241,6 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             }
         }
 
-        // TODO: should we verify messages here?
-
         match message_type {
             "0" => {
                 self.on_heartbeat(&message).await;
@@ -275,10 +273,15 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         Ok(())
     }
 
-    async fn process_app_message(&self, message: &Message) {
-        let parsed_message = M::parse(message);
-        let app_message = ApplicationMessage::ReceivedMessage(parsed_message);
-        self.application.send_message(app_message).await;
+    async fn process_app_message(&mut self, message: &Message) {
+        match self.verify_message(message).await {
+            Ok(_) => {
+                let parsed_message = M::parse(message);
+                let app_message = ApplicationMessage::ReceivedMessage(parsed_message);
+                self.application.send_message(app_message).await;
+            }
+            Err(err) => self.handle_verification_error(err).await,
+        }
     }
 
     async fn check_end_of_resend(&mut self) -> Result<()> {
@@ -317,7 +320,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         message: &Message,
     ) -> std::result::Result<(), MessageVerificationError> {
         let begin_string: &str = message.header().get(fix44::BEGIN_STRING).unwrap();
-        if begin_string != "FIX.4.4" {
+        if begin_string != self.config.begin_string.as_str() {
             return Err(MessageVerificationError::IncorrectBeginString(
                 begin_string.to_string(),
             ));
@@ -387,34 +390,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                     self.state =
                         SessionState::new_active(writer.clone(), self.config.heartbeat_interval);
                 }
-                Err(err) => match err {
-                    MessageVerificationError::SeqNumberTooLow { actual, expected } => {
-                        error!(
-                            "we expected {expected} sequence number, but target sent lower ({actual}), terminating..."
-                        );
-                        let reason = format!(
-                            "sequence number too low (actual {actual}, expected {expected})"
-                        );
-                        self.logout_and_terminate(&reason).await;
-                        self.state = SessionState::LoggedOut { reconnect: false };
-                    }
-                    MessageVerificationError::SeqNumberTooHigh { actual, expected } => {
-                        debug!(
-                            "we are behind target (ours: {expected}, theirs: {actual}), requesting resend."
-                        );
-                        let awaiting_resend = AwaitingResendState::new(writer.to_owned(), actual);
-                        self.state = SessionState::AwaitingResend(awaiting_resend);
-                        self.send_resend_request(expected, actual).await;
-                    }
-                    MessageVerificationError::IncorrectBeginString(_) => {
-                        // TODO: handle incorrect begin string/comp ID by disconnecting session
-                        // see: https://www.fixtrading.org/standards/fix-session-layer-online/#when-to-terminate-a-fix-connection-by-terminating-the-transport-layer-connection-instead-of-sending-a-logout355
-                        panic!("incorrect begin string received");
-                    }
-                    MessageVerificationError::IncorrectCompId(_) => {
-                        panic!("incorrect comp ID received");
-                    }
-                },
+                Err(err) => self.handle_verification_error(err).await,
             }
         } else {
             error!("received unexpected logon message");
@@ -504,6 +480,50 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
         let end: u64 = message.get(fix44::NEW_SEQ_NO).unwrap();
         self.store.set_target_seq_number(end).await.unwrap();
+    }
+
+    async fn handle_verification_error(&mut self, error: MessageVerificationError) {
+        match error {
+            MessageVerificationError::SeqNumberTooLow { actual, expected } => {
+                self.handle_sequence_number_too_low(actual, expected).await;
+            }
+            MessageVerificationError::SeqNumberTooHigh { actual, expected } => {
+                self.handle_sequence_number_too_high(actual, expected).await;
+            }
+            MessageVerificationError::IncorrectBeginString(begin_string) => {
+                self.handle_incorrect_begin_string(begin_string).await;
+            }
+            MessageVerificationError::IncorrectCompId(comp_id) => {
+                self.handle_incorrect_comp_id(comp_id).await;
+            }
+        }
+    }
+
+    async fn handle_incorrect_begin_string(&mut self, received_begin_string: String) {
+        // TODO: this should be a disconnect (and maybe a reject first?)
+        // see: https://www.fixtrading.org/standards/fix-session-layer-online/#when-to-terminate-a-fix-connection-by-terminating-the-transport-layer-connection-instead-of-sending-a-logout355
+        panic!("incorrect begin string received: {received_begin_string}");
+    }
+
+    async fn handle_incorrect_comp_id(&mut self, received_comp_id: String) {
+        // TODO: this should also be a disconnect I think (and maybe a reject first?)
+        panic!("incorrect comp ID received: {received_comp_id}");
+    }
+
+    async fn handle_sequence_number_too_low(&mut self, actual: u64, expected: u64) {
+        error!(
+            "we expected {expected} sequence number, but target sent lower ({actual}), terminating..."
+        );
+        let reason = format!("sequence number too low (actual {actual}, expected {expected})");
+        self.logout_and_terminate(&reason).await;
+        self.state = SessionState::LoggedOut { reconnect: false };
+    }
+
+    async fn handle_sequence_number_too_high(&mut self, actual: u64, expected: u64) {
+        if self.state.try_transition_to_awaiting_resend(actual) {
+            debug!("we are behind target (ours: {expected}, theirs: {actual}), requesting resend.");
+            self.send_resend_request(expected, actual).await;
+        }
     }
 
     async fn resend_messages(&mut self, begin: usize, end: usize, _message: &Message) {
