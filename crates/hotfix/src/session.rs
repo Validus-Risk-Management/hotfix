@@ -264,7 +264,8 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 self.on_logout().await;
             }
             "A" => {
-                self.on_logon(&message).await;
+                self.on_logon(&message).await?;
+                return Ok(());
             }
             _ => self.process_app_message(&message).await,
         }
@@ -381,7 +382,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         }
     }
 
-    async fn on_logon(&mut self, message: &Message) {
+    async fn on_logon(&mut self, message: &Message) -> Result<()> {
         // TODO: this should wait to see if a resend request is sent
         if let SessionState::AwaitingLogon { writer, .. } = &self.state {
             match self.verify_message(message).await {
@@ -389,12 +390,15 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                     // happy logon flow, the session is now active
                     self.state =
                         SessionState::new_active(writer.clone(), self.config.heartbeat_interval);
+                    self.store.increment_target_seq_number().await?;
                 }
                 Err(err) => self.handle_verification_error(err).await,
             }
         } else {
             error!("received unexpected logon message");
         }
+
+        Ok(())
     }
 
     async fn on_logout(&mut self) {
