@@ -243,51 +243,49 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
         match message_type {
             "0" => {
-                self.on_heartbeat(&message).await;
+                self.on_heartbeat(&message).await?;
             }
             "1" => {
-                self.on_test_request(&message).await;
+                self.on_test_request(&message).await?;
             }
             "2" => {
-                self.on_resend_request(&message).await;
+                self.on_resend_request(&message).await?;
             }
             "3" => {
-                if !self.on_reject(&message).await {
-                    return Ok(());
-                }
+                self.on_reject(&message).await?;
             }
             "4" => {
                 self.on_sequence_reset(&message).await;
-                return Ok(()); // early return as we don't need to increment target seq number
             }
             "5" => {
-                self.on_logout().await;
+                self.on_logout().await?;
             }
             "A" => {
                 self.on_logon(&message).await?;
-                return Ok(());
             }
-            _ => self.process_app_message(&message).await,
+            _ => self.process_app_message(&message).await?,
         }
 
-        self.store.increment_target_seq_number().await?;
         Ok(())
     }
 
-    async fn process_app_message(&mut self, message: &Message) {
+    async fn process_app_message(&mut self, message: &Message) -> Result<()> {
         match self.verify_message(message).await {
             Ok(_) => {
                 let parsed_message = M::parse(message);
                 let app_message = ApplicationMessage::ReceivedMessage(parsed_message);
                 self.application.send_message(app_message).await;
+                self.store.increment_target_seq_number().await?;
             }
             Err(err) => self.handle_verification_error(err).await,
         }
+
+        Ok(())
     }
 
     async fn check_end_of_resend(&mut self) -> Result<()> {
         let ended_state = if let SessionState::AwaitingResend(state) = &mut self.state {
-            if self.store.next_target_seq_number() > state.end_seq_number + 1 {
+            if self.store.next_target_seq_number() > state.end_seq_number {
                 let new_state =
                     SessionState::new_active(state.writer.clone(), self.config.heartbeat_interval);
                 Some(std::mem::replace(&mut self.state, new_state))
@@ -401,7 +399,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         Ok(())
     }
 
-    async fn on_logout(&mut self) {
+    async fn on_logout(&mut self) -> Result<()> {
         if let SessionState::AwaitingLogout { .. } = &self.state {
             self.state.disconnect().await;
             self.state = SessionState::new_disconnected(true, "we logged out gracefully");
@@ -413,9 +411,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 .send_logout("peer has logged us out".to_string())
                 .await;
         }
+        self.store.increment_target_seq_number().await
     }
 
-    async fn on_heartbeat(&mut self, message: &Message) {
+    async fn on_heartbeat(&mut self, message: &Message) -> Result<()> {
         if let (Some(expected_req_id), Ok(message_req_id)) = (
             &self.state.expected_test_response_id(),
             message.get::<&str>(fix44::TEST_REQ_ID),
@@ -424,19 +423,25 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             debug!("received response for TestRequest, resetting timer");
             self.reset_peer_timer(None);
         }
+
+        self.store.increment_target_seq_number().await
     }
 
-    async fn on_test_request(&mut self, message: &Message) {
+    async fn on_test_request(&mut self, message: &Message) -> Result<()> {
         let req_id: &str = message.get(fix44::TEST_REQ_ID).unwrap_or_else(|_| {
             // TODO: send reject?
             todo!()
         });
 
+        self.store.increment_target_seq_number().await?;
+
         self.send_message(Heartbeat::for_request(req_id.to_string()))
             .await;
+
+        Ok(())
     }
 
-    async fn on_resend_request(&mut self, message: &Message) {
+    async fn on_resend_request(&mut self, message: &Message) -> Result<()> {
         // TODO: verify message and send reject as necessary
 
         let begin_seq_number: usize = message.get(fix44::BEGIN_SEQ_NO).unwrap_or_else(|_| {
@@ -459,20 +464,26 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             }
         };
 
+        self.store.increment_target_seq_number().await?;
+
         self.resend_messages(begin_seq_number, end_seq_number, message)
             .await;
+
+        Ok(())
     }
 
     /// Handle Reject messages.
     ///
     /// Returns whether the message should be processed as usual
     /// and whether the target sequence number should be incremented.
-    async fn on_reject(&self, message: &Message) -> bool {
-        if let Ok(seq_num) = message.get::<u64>(fix44::MSG_SEQ_NUM) {
-            seq_num == self.store.next_target_seq_number()
-        } else {
-            false
+    async fn on_reject(&mut self, message: &Message) -> Result<()> {
+        if let Ok(seq_num) = message.get::<u64>(fix44::MSG_SEQ_NUM)
+            && seq_num == self.store.next_target_seq_number()
+        {
+            self.store.increment_target_seq_number().await?;
         }
+
+        Ok(())
     }
 
     async fn on_sequence_reset(&mut self, message: &Message) {

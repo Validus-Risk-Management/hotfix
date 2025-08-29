@@ -26,6 +26,11 @@ async fn test_message_sequence_number_too_high() {
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
         .await;
 
+    // the first message is the logon message, which doesn't need to be resent
+    mock_counterparty.when_message_is_resent(2).await; // the missed message is resent
+    mock_counterparty.when_message_is_resent(3).await; // the second message is resent
+    session.then_status_changes_to(Status::Active).await;
+
     session.when_disconnect_is_requested().await;
     mock_counterparty.then_gets_disconnected().await;
 }
