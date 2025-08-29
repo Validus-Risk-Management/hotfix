@@ -255,7 +255,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 self.on_reject(&message).await?;
             }
             "4" => {
-                self.on_sequence_reset(&message).await;
+                self.on_sequence_reset(&message).await?;
             }
             "5" => {
                 self.on_logout().await?;
@@ -486,7 +486,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         Ok(())
     }
 
-    async fn on_sequence_reset(&mut self, message: &Message) {
+    async fn on_sequence_reset(&mut self, message: &Message) -> Result<()> {
         let gap_fill: bool = message.get(fix44::GAP_FILL_FLAG).unwrap();
         if !gap_fill {
             // TODO: non gap fill is valid as well of course, but I don't yet know the use-case for it is
@@ -494,7 +494,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         }
 
         let end: u64 = message.get(fix44::NEW_SEQ_NO).unwrap();
-        self.store.set_target_seq_number(end).await.unwrap();
+        self.store.set_target_seq_number(end - 1).await
     }
 
     async fn handle_verification_error(&mut self, error: MessageVerificationError) {
