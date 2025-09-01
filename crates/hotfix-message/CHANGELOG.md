@@ -11,5 +11,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
-- Fix clippy warnings related to elided lifetimes introduced in v1.89
-- Disconnect counterparty if they respond with non-logon message to logon
+- Initial release with changelogs
