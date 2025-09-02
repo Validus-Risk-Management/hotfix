@@ -1,5 +1,5 @@
 use crate::common::actions::when;
-use crate::common::assertions::SessionAssertions;
+use crate::common::assertions::then;
 use crate::common::setup::{
     LOGON_TIMEOUT, given_a_connected_session, given_a_connected_session_with_store,
 };
@@ -22,11 +22,13 @@ async fn test_happy_logon() {
     mock_counterparty
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
-    session.then_status_changes_to(Status::AwaitingLogon).await;
+    then(&session)
+        .status_changes_to(Status::AwaitingLogon)
+        .await;
 
     // counterparty responds with a logon to establish a happy session
     when(&mut mock_counterparty).sends_logon().await;
-    session.then_status_changes_to(Status::Active).await;
+    then(&session).status_changes_to(Status::Active).await;
 
     when(&session).requests_disconnect().await;
     mock_counterparty.then_gets_disconnected().await;
@@ -43,7 +45,9 @@ async fn test_non_logon_response_to_logon() {
     mock_counterparty
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
-    session.then_status_changes_to(Status::AwaitingLogon).await;
+    then(&session)
+        .status_changes_to(Status::AwaitingLogon)
+        .await;
 
     // counterparty sends an execution report without ever responding to our logon
     let dummy_report = TestMessage::dummy_execution_report();
@@ -73,7 +77,9 @@ async fn test_logon_response_with_sequence_number_too_low() {
     mock_counterparty
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
-    session.then_status_changes_to(Status::AwaitingLogon).await;
+    then(&session)
+        .status_changes_to(Status::AwaitingLogon)
+        .await;
 
     // counterparty responds with a logon, but their sequence number is lower than what we expect, which is 5
     when(&mut mock_counterparty).sends_logon().await;
@@ -102,12 +108,16 @@ async fn test_logon_response_with_sequence_number_too_high() {
     mock_counterparty
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
-    session.then_status_changes_to(Status::AwaitingLogon).await;
+    then(&session)
+        .status_changes_to(Status::AwaitingLogon)
+        .await;
 
     // the counterparty responds with a logon with a sequence number that indicates a message we missed
     when(&mut mock_counterparty).sends_logon().await;
     // we then ask them to resend the message
-    session.then_status_changes_to(Status::AwaitingResend).await;
+    then(&session)
+        .status_changes_to(Status::AwaitingResend)
+        .await;
     mock_counterparty
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
         .await;
@@ -115,7 +125,7 @@ async fn test_logon_response_with_sequence_number_too_high() {
     // the counterparty then completes the resend sequence and the session transitions to Active
     when(&mut mock_counterparty).resends_message(1).await; // the missed message is resent
     when(&mut mock_counterparty).sends_gap_fill(2, 3).await; // the logon is gap filled
-    session.then_status_changes_to(Status::Active).await;
+    then(&session).status_changes_to(Status::Active).await;
 
     when(&session).requests_disconnect().await;
     mock_counterparty.then_gets_disconnected().await;
@@ -133,7 +143,9 @@ async fn test_logon_timeout() {
     mock_counterparty
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
-    session.then_status_changes_to(Status::AwaitingLogon).await;
+    then(&session)
+        .status_changes_to(Status::AwaitingLogon)
+        .await;
 
     // enough time elapses for the logon to timeout
     when(Duration::from_secs(LOGON_TIMEOUT)).elapses().await;

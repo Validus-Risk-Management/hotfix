@@ -1,5 +1,5 @@
 use crate::common::actions::when;
-use crate::common::assertions::SessionAssertions;
+use crate::common::assertions::then;
 use crate::common::setup::given_an_active_session;
 use crate::common::test_messages::TestMessage;
 use hotfix::session::Status;
@@ -21,7 +21,9 @@ async fn test_message_sequence_number_too_high() {
         .await;
 
     // we then ask them to resend the first message
-    session.then_status_changes_to(Status::AwaitingResend).await;
+    then(&session)
+        .status_changes_to(Status::AwaitingResend)
+        .await;
     mock_counterparty
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
         .await;
@@ -29,7 +31,7 @@ async fn test_message_sequence_number_too_high() {
     // the first message is the logon message, which doesn't need to be resent
     when(&mut mock_counterparty).resends_message(2).await; // the missed message is resent
     when(&mut mock_counterparty).resends_message(3).await; // the second message is resent
-    session.then_status_changes_to(Status::Active).await;
+    then(&session).status_changes_to(Status::Active).await;
 
     when(&session).requests_disconnect().await;
     mock_counterparty.then_gets_disconnected().await;
