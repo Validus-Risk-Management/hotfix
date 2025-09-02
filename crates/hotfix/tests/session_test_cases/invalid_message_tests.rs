@@ -1,4 +1,4 @@
-use crate::common::session_actions::SessionActions;
+use crate::common::session_actions::when;
 use crate::common::setup::given_an_active_session;
 use hotfix::message::FixMessage;
 use hotfix_message::dict::{FieldLocation, FixDatatype};
@@ -8,7 +8,7 @@ use hotfix_message::{HardCodedFixFieldDefinition, Part, fix44};
 
 #[tokio::test]
 async fn test_message_with_invalid_field_gets_rejected() {
-    let (session, mut mock_counterparty) = given_an_active_session().await;
+    let (mut session, mut mock_counterparty) = given_an_active_session().await;
 
     mock_counterparty
         .when_message_is_sent(ExecutionReportWithInvalidField::default())
@@ -17,7 +17,7 @@ async fn test_message_with_invalid_field_gets_rejected() {
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "3"))
         .await;
 
-    session.when_disconnect_is_requested().await;
+    when(&mut session).requests_disconnect().await;
     mock_counterparty.then_gets_disconnected().await;
 }
 

@@ -2,18 +2,23 @@ use crate::common::test_messages::TestMessage;
 use hotfix::session::SessionRef;
 use std::time::Duration;
 
-pub trait SessionActions {
-    async fn when_disconnect_is_requested(&self);
-    async fn when_message_is_sent(&self, message: TestMessage);
+pub struct When<'a, T> {
+    pub target: &'a mut T,
 }
 
-impl SessionActions for SessionRef<TestMessage> {
-    async fn when_disconnect_is_requested(&self) {
-        self.disconnect("Test Session Finished".to_string()).await;
+pub fn when<'a, T>(target: &'a mut T) -> When<'a, T> {
+    When { target }
+}
+
+impl<'a> When<'a, SessionRef<TestMessage>> {
+    pub async fn requests_disconnect(&self) {
+        self.target
+            .disconnect("Test Session Finished".to_string())
+            .await;
     }
 
-    async fn when_message_is_sent(&self, message: TestMessage) {
-        self.send_message(message).await;
+    pub async fn sends_message(&self, message: TestMessage) {
+        self.target.send_message(message).await;
     }
 }
 
