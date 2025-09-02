@@ -1,4 +1,5 @@
 use crate::common::actions::when;
+use crate::common::assertions::then;
 use crate::common::setup::{HEARTBEAT_INTERVAL, given_an_active_session};
 use hotfix_message::Part;
 use hotfix_message::fix44::MSG_TYPE;
@@ -21,12 +22,12 @@ async fn test_heartbeats() {
     when(Duration::from_secs(HEARTBEAT_INTERVAL + 1))
         .elapses()
         .await;
-    mock_counterparty
-        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "0"))
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "0"))
         .await;
 
     when(&session).requests_disconnect().await;
-    mock_counterparty.then_gets_disconnected().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
 }
 
 /// Tests the peer timeout and disconnection mechanism:
@@ -47,8 +48,8 @@ async fn test_peer_timeout() {
     when(Duration::from_secs(HEARTBEAT_INTERVAL + 1))
         .elapses()
         .await;
-    mock_counterparty
-        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "0"))
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "0"))
         .await;
 
     // we wait enough time for the peer deadline to pass
@@ -56,11 +57,11 @@ async fn test_peer_timeout() {
         .elapses()
         .await;
     // a TestRequest (type '1') is sent to the counterparty
-    mock_counterparty
-        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "1"))
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "1"))
         .await;
 
     // we wait even longer and the counterparty never responds, so we disconnect from the counterparty
     when(Duration::from_secs(peer_interval)).elapses().await;
-    mock_counterparty.then_gets_disconnected().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
 }

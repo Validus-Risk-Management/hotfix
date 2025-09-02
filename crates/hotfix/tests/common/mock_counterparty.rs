@@ -1,4 +1,3 @@
-use crate::common::assertions::DEFAULT_TIMEOUT;
 use hotfix::config::SessionConfig;
 use hotfix::message::logon::{Logon, ResetSeqNumConfig};
 use hotfix::message::sequence_reset::SequenceReset;
@@ -138,15 +137,7 @@ where
         }
     }
 
-    pub async fn then_receives<F>(&mut self, assertion: F)
-    where
-        F: FnOnce(&Message),
-    {
-        self.assert_next_with_timeout(assertion, DEFAULT_TIMEOUT)
-            .await;
-    }
-
-    async fn assert_next_with_timeout<F>(&mut self, assertion: F, timeout: Duration)
+    pub(crate) async fn assert_next_with_timeout<F>(&mut self, assertion: F, timeout: Duration)
     where
         F: FnOnce(&Message),
     {
@@ -163,11 +154,7 @@ where
         }
     }
 
-    pub async fn then_gets_disconnected(&mut self) {
-        self.assert_disconnected_with_timeout(DEFAULT_TIMEOUT).await;
-    }
-
-    async fn assert_disconnected_with_timeout(&mut self, timeout: Duration) {
+    pub async fn assert_disconnected_with_timeout(&mut self, timeout: Duration) {
         if tokio::time::timeout(timeout, async {
             // keep consuming messages until a disconnect occurs
             while self.get_next().await.is_some() {}

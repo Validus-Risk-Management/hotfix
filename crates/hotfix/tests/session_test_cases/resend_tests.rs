@@ -24,8 +24,8 @@ async fn test_message_sequence_number_too_high() {
     then(&session)
         .status_changes_to(Status::AwaitingResend)
         .await;
-    mock_counterparty
-        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
         .await;
 
     // the first message is the logon message, which doesn't need to be resent
@@ -34,5 +34,5 @@ async fn test_message_sequence_number_too_high() {
     then(&session).status_changes_to(Status::Active).await;
 
     when(&session).requests_disconnect().await;
-    mock_counterparty.then_gets_disconnected().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
 }

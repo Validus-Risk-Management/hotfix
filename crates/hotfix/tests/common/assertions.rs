@@ -1,5 +1,7 @@
+use crate::common::mock_counterparty::MockCounterparty;
 use crate::common::test_messages::TestMessage;
 use hotfix::session::{SessionRef, Status};
+use hotfix_message::message::Message;
 use std::time::Duration;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(500);
@@ -35,5 +37,22 @@ impl Then<&SessionRef<TestMessage>> {
         panic!(
             "session did not reach expected status within timeout. Expected: {expected_status:?}, Actual: {actual_status:?}"
         );
+    }
+}
+
+impl Then<&mut MockCounterparty<TestMessage>> {
+    pub async fn receives<F>(self, assertion: F)
+    where
+        F: FnOnce(&Message),
+    {
+        self.target
+            .assert_next_with_timeout(assertion, DEFAULT_TIMEOUT)
+            .await;
+    }
+
+    pub async fn gets_disconnected(self) {
+        self.target
+            .assert_disconnected_with_timeout(DEFAULT_TIMEOUT)
+            .await;
     }
 }

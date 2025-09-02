@@ -1,4 +1,5 @@
 use crate::common::actions::when;
+use crate::common::assertions::then;
 use crate::common::setup::given_an_active_session;
 use hotfix::message::FixMessage;
 use hotfix_message::dict::{FieldLocation, FixDatatype};
@@ -13,12 +14,12 @@ async fn test_message_with_invalid_field_gets_rejected() {
     when(&mut mock_counterparty)
         .sends_message(ExecutionReportWithInvalidField::default())
         .await;
-    mock_counterparty
-        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "3"))
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "3"))
         .await;
 
     when(&session).requests_disconnect().await;
-    mock_counterparty.then_gets_disconnected().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
 }
 
 /// A new order message with an extra, invalid field.

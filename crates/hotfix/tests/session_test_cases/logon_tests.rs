@@ -19,8 +19,8 @@ async fn test_happy_logon() {
     let (session, mut mock_counterparty) = given_a_connected_session().await;
 
     // assert that a logon message is received (type 'A')
-    mock_counterparty
-        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
     then(&session)
         .status_changes_to(Status::AwaitingLogon)
@@ -31,7 +31,7 @@ async fn test_happy_logon() {
     then(&session).status_changes_to(Status::Active).await;
 
     when(&session).requests_disconnect().await;
-    mock_counterparty.then_gets_disconnected().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
 }
 
 /// Tests that sending a non-logon message (execution report) in response to a logon
@@ -42,8 +42,8 @@ async fn test_non_logon_response_to_logon() {
     let (session, mut mock_counterparty) = given_a_connected_session().await;
 
     // assert that a logon message is received (type 'A')
-    mock_counterparty
-        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
     then(&session)
         .status_changes_to(Status::AwaitingLogon)
@@ -56,7 +56,7 @@ async fn test_non_logon_response_to_logon() {
         .await;
 
     // we disconnect them as a result
-    mock_counterparty.then_gets_disconnected().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
 }
 
 /// Tests the scenario where the counterparty responds to our Logon message
@@ -74,8 +74,8 @@ async fn test_logon_response_with_sequence_number_too_low() {
         given_a_connected_session_with_store(message_store).await;
 
     // assert that a logon message is received (type 'A')
-    mock_counterparty
-        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
     then(&session)
         .status_changes_to(Status::AwaitingLogon)
@@ -84,10 +84,10 @@ async fn test_logon_response_with_sequence_number_too_low() {
     // counterparty responds with a logon, but their sequence number is lower than what we expect, which is 5
     when(&mut mock_counterparty).sends_logon().await;
     // the counterparty then receives a logout message (type '5') and gets disconnected
-    mock_counterparty
-        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "5"))
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "5"))
         .await;
-    mock_counterparty.then_gets_disconnected().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
 }
 
 /// Tests the scenario where the counterparty's logon response has a higher sequence number than expected.
@@ -105,8 +105,8 @@ async fn test_logon_response_with_sequence_number_too_high() {
         .await;
 
     // assert that a logon message is received (type 'A')
-    mock_counterparty
-        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
     then(&session)
         .status_changes_to(Status::AwaitingLogon)
@@ -118,8 +118,8 @@ async fn test_logon_response_with_sequence_number_too_high() {
     then(&session)
         .status_changes_to(Status::AwaitingResend)
         .await;
-    mock_counterparty
-        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
         .await;
 
     // the counterparty then completes the resend sequence and the session transitions to Active
@@ -128,7 +128,7 @@ async fn test_logon_response_with_sequence_number_too_high() {
     then(&session).status_changes_to(Status::Active).await;
 
     when(&session).requests_disconnect().await;
-    mock_counterparty.then_gets_disconnected().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
 }
 
 /// Tests the scenario where the counterparty does not respond to our logon message
@@ -140,8 +140,8 @@ async fn test_logon_timeout() {
     let (session, mut mock_counterparty) = given_a_connected_session().await;
 
     // assert that a logon message is received (type 'A')
-    mock_counterparty
-        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
     then(&session)
         .status_changes_to(Status::AwaitingLogon)
@@ -150,5 +150,5 @@ async fn test_logon_timeout() {
     // enough time elapses for the logon to timeout
     when(Duration::from_secs(LOGON_TIMEOUT)).elapses().await;
 
-    mock_counterparty.then_gets_disconnected().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
 }

@@ -36,8 +36,8 @@ pub async fn given_a_connected_session_with_store(
 pub async fn given_an_active_session() -> (SessionRef<TestMessage>, MockCounterparty<TestMessage>) {
     let (session, mut mock_counterparty) = given_a_connected_session().await;
 
-    mock_counterparty
-        .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
     when(&mut mock_counterparty).sends_logon().await;
     then(&session).status_changes_to(Status::Active).await;
