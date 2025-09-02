@@ -22,6 +22,8 @@ impl When<&SessionRef<TestMessage>> {
     }
 }
 
-pub async fn when_time_elapses(duration: Duration) {
-    tokio::time::advance(duration).await;
+impl When<Duration> {
+    pub async fn elapses(self) {
+        tokio::time::advance(self.target).await;
+    }
 }

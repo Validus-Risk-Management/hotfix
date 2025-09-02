@@ -1,4 +1,4 @@
-use crate::common::session_actions::when;
+use crate::common::actions::when;
 use crate::common::setup::given_an_active_session;
 use hotfix::message::FixMessage;
 use hotfix_message::dict::{FieldLocation, FixDatatype};

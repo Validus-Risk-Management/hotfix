@@ -1,4 +1,4 @@
-use crate::common::session_assertions::DEFAULT_TIMEOUT;
+use crate::common::assertions::DEFAULT_TIMEOUT;
 use hotfix::config::SessionConfig;
 use hotfix::message::logon::{Logon, ResetSeqNumConfig};
 use hotfix::message::sequence_reset::SequenceReset;

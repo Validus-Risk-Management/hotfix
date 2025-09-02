@@ -1,6 +1,6 @@
+use crate::common::assertions::SessionAssertions;
 use crate::common::mock_application::MockApplication;
 use crate::common::mock_counterparty::MockCounterparty;
-use crate::common::session_assertions::SessionAssertions;
 use crate::common::test_messages::TestMessage;
 use hotfix::application::ApplicationRef;
 use hotfix::config::SessionConfig;

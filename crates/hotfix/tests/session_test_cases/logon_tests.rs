@@ -1,5 +1,5 @@
-use crate::common::session_actions::{when, when_time_elapses};
-use crate::common::session_assertions::SessionAssertions;
+use crate::common::actions::when;
+use crate::common::assertions::SessionAssertions;
 use crate::common::setup::{
     LOGON_TIMEOUT, given_a_connected_session, given_a_connected_session_with_store,
 };
@@ -132,7 +132,6 @@ async fn test_logon_timeout() {
     session.then_status_changes_to(Status::AwaitingLogon).await;
 
     // enough time elapses for the logon to timeout
-    when_time_elapses(Duration::from_secs(LOGON_TIMEOUT)).await;
-
+    when(Duration::from_secs(LOGON_TIMEOUT)).elapses().await;
     mock_counterparty.then_gets_disconnected().await;
 }

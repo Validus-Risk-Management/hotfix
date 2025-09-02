@@ -1,4 +1,4 @@
-use crate::common::session_actions::when;
+use crate::common::actions::when;
 use crate::common::setup::given_an_active_session;
 use crate::common::test_messages::TestMessage;
 use hotfix::message::FixMessage;

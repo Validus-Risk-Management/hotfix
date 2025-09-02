@@ -1,5 +1,5 @@
-use crate::common::session_actions::when;
-use crate::common::session_assertions::SessionAssertions;
+use crate::common::actions::when;
+use crate::common::assertions::SessionAssertions;
 use crate::common::setup::given_an_active_session;
 use crate::common::test_messages::TestMessage;
 use hotfix::session::Status;
