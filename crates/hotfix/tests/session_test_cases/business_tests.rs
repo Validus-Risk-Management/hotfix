@@ -18,8 +18,8 @@ async fn test_new_order_single() {
         })
         .await;
 
-    mock_counterparty
-        .when_message_is_sent(TestMessage::dummy_execution_report())
+    when(&mut mock_counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
         .await;
     // TODO: we currently have no good way of asserting this message was received
 

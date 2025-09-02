@@ -1,3 +1,4 @@
+use crate::common::actions::when;
 use crate::common::assertions::SessionAssertions;
 use crate::common::mock_application::MockApplication;
 use crate::common::mock_counterparty::MockCounterparty;
@@ -38,7 +39,7 @@ pub async fn given_an_active_session() -> (SessionRef<TestMessage>, MockCounterp
     mock_counterparty
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
-    mock_counterparty.when_logon_is_sent().await;
+    when(&mut mock_counterparty).sends_logon().await;
     session.then_status_changes_to(Status::Active).await;
 
     (session, mock_counterparty)

@@ -11,13 +11,13 @@ async fn test_message_sequence_number_too_high() {
     let (session, mut mock_counterparty) = given_an_active_session().await;
 
     // the counterparty previously sent an execution report which we missed
-    mock_counterparty
-        .when_previously_sent(TestMessage::dummy_execution_report())
+    when(&mut mock_counterparty)
+        .has_previously_sent(TestMessage::dummy_execution_report())
         .await;
 
     // and they send a new report which we do receive
-    mock_counterparty
-        .when_message_is_sent(TestMessage::dummy_execution_report())
+    when(&mut mock_counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
         .await;
 
     // we then ask them to resend the first message
@@ -27,8 +27,8 @@ async fn test_message_sequence_number_too_high() {
         .await;
 
     // the first message is the logon message, which doesn't need to be resent
-    mock_counterparty.when_message_is_resent(2).await; // the missed message is resent
-    mock_counterparty.when_message_is_resent(3).await; // the second message is resent
+    when(&mut mock_counterparty).resends_message(2).await; // the missed message is resent
+    when(&mut mock_counterparty).resends_message(3).await; // the second message is resent
     session.then_status_changes_to(Status::Active).await;
 
     when(&session).requests_disconnect().await;

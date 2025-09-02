@@ -50,7 +50,7 @@ where
         }
     }
 
-    pub async fn when_previously_sent(&mut self, message: impl FixMessage) {
+    pub async fn push_previously_sent_message(&mut self, message: impl FixMessage) {
         let raw_message = generate_message(
             &self.session_config.sender_comp_id,
             &self.session_config.target_comp_id,
@@ -61,14 +61,14 @@ where
         self.sent_messages.push(raw_message);
     }
 
-    pub async fn when_message_is_resent(&mut self, sequence_number: u64) {
+    pub async fn resend_message(&mut self, sequence_number: u64) {
         let message = self.sent_messages[sequence_number as usize - 1].clone();
         self.session_ref
             .new_fix_message_received(RawFixMessage::new(message))
             .await;
     }
 
-    pub async fn when_gap_fill_is_sent(&mut self, start_seq_no: u64, new_seq_no: u64) {
+    pub async fn send_gap_fill(&mut self, start_seq_no: u64, new_seq_no: u64) {
         let sequence_reset = SequenceReset {
             gap_fill: true,
             new_seq_no,
@@ -85,15 +85,15 @@ where
             .await;
     }
 
-    pub async fn when_logon_is_sent(&mut self) {
+    pub async fn send_logon(&mut self) {
         let logon = Logon::new(
             self.session_config.heartbeat_interval,
             ResetSeqNumConfig::NoReset(None),
         );
-        self.when_message_is_sent(logon).await;
+        self.send_message(logon).await;
     }
 
-    pub async fn when_message_is_sent(&mut self, message: impl FixMessage) {
+    pub async fn send_message(&mut self, message: impl FixMessage) {
         let raw_message = generate_message(
             &self.session_config.sender_comp_id,
             &self.session_config.target_comp_id,

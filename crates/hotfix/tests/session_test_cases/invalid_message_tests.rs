@@ -10,8 +10,8 @@ use hotfix_message::{HardCodedFixFieldDefinition, Part, fix44};
 async fn test_message_with_invalid_field_gets_rejected() {
     let (session, mut mock_counterparty) = given_an_active_session().await;
 
-    mock_counterparty
-        .when_message_is_sent(ExecutionReportWithInvalidField::default())
+    when(&mut mock_counterparty)
+        .sends_message(ExecutionReportWithInvalidField::default())
         .await;
     mock_counterparty
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "3"))

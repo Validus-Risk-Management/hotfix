@@ -25,7 +25,7 @@ async fn test_happy_logon() {
     session.then_status_changes_to(Status::AwaitingLogon).await;
 
     // counterparty responds with a logon to establish a happy session
-    mock_counterparty.when_logon_is_sent().await;
+    when(&mut mock_counterparty).sends_logon().await;
     session.then_status_changes_to(Status::Active).await;
 
     when(&session).requests_disconnect().await;
@@ -47,7 +47,9 @@ async fn test_non_logon_response_to_logon() {
 
     // counterparty sends an execution report without ever responding to our logon
     let dummy_report = TestMessage::dummy_execution_report();
-    mock_counterparty.when_message_is_sent(dummy_report).await;
+    when(&mut mock_counterparty)
+        .sends_message(dummy_report)
+        .await;
 
     // we disconnect them as a result
     mock_counterparty.then_gets_disconnected().await;
@@ -74,7 +76,7 @@ async fn test_logon_response_with_sequence_number_too_low() {
     session.then_status_changes_to(Status::AwaitingLogon).await;
 
     // counterparty responds with a logon, but their sequence number is lower than what we expect, which is 5
-    mock_counterparty.when_logon_is_sent().await;
+    when(&mut mock_counterparty).sends_logon().await;
     // the counterparty then receives a logout message (type '5') and gets disconnected
     mock_counterparty
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "5"))
@@ -92,7 +94,9 @@ async fn test_logon_response_with_sequence_number_too_high() {
 
     // the counterparty previously sent an execution report which we missed
     let dummy_report = TestMessage::dummy_execution_report();
-    mock_counterparty.when_previously_sent(dummy_report).await;
+    when(&mut mock_counterparty)
+        .has_previously_sent(dummy_report)
+        .await;
 
     // assert that a logon message is received (type 'A')
     mock_counterparty
@@ -101,7 +105,7 @@ async fn test_logon_response_with_sequence_number_too_high() {
     session.then_status_changes_to(Status::AwaitingLogon).await;
 
     // the counterparty responds with a logon with a sequence number that indicates a message we missed
-    mock_counterparty.when_logon_is_sent().await;
+    when(&mut mock_counterparty).sends_logon().await;
     // we then ask them to resend the message
     session.then_status_changes_to(Status::AwaitingResend).await;
     mock_counterparty
@@ -109,8 +113,8 @@ async fn test_logon_response_with_sequence_number_too_high() {
         .await;
 
     // the counterparty then completes the resend sequence and the session transitions to Active
-    mock_counterparty.when_message_is_resent(1).await; // the missed message is resent
-    mock_counterparty.when_gap_fill_is_sent(2, 3).await; // the logon is gap filled
+    when(&mut mock_counterparty).resends_message(1).await; // the missed message is resent
+    when(&mut mock_counterparty).sends_gap_fill(2, 3).await; // the logon is gap filled
     session.then_status_changes_to(Status::Active).await;
 
     when(&session).requests_disconnect().await;
@@ -133,5 +137,6 @@ async fn test_logon_timeout() {
 
     // enough time elapses for the logon to timeout
     when(Duration::from_secs(LOGON_TIMEOUT)).elapses().await;
+
     mock_counterparty.then_gets_disconnected().await;
 }
