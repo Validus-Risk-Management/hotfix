@@ -16,7 +16,7 @@ use std::time::Duration;
 /// transitions to Active status, and disconnects cleanly.
 #[tokio::test]
 async fn test_happy_logon() {
-    let (mut session, mut mock_counterparty) = given_a_connected_session().await;
+    let (session, mut mock_counterparty) = given_a_connected_session().await;
 
     // assert that a logon message is received (type 'A')
     mock_counterparty
@@ -28,7 +28,7 @@ async fn test_happy_logon() {
     mock_counterparty.when_logon_is_sent().await;
     session.then_status_changes_to(Status::Active).await;
 
-    when(&mut session).requests_disconnect().await;
+    when(&session).requests_disconnect().await;
     mock_counterparty.then_gets_disconnected().await;
 }
 
@@ -88,7 +88,7 @@ async fn test_logon_response_with_sequence_number_too_low() {
 /// before the logon sequence completes.
 #[tokio::test]
 async fn test_logon_response_with_sequence_number_too_high() {
-    let (mut session, mut mock_counterparty) = given_a_connected_session().await;
+    let (session, mut mock_counterparty) = given_a_connected_session().await;
 
     // the counterparty previously sent an execution report which we missed
     let dummy_report = TestMessage::dummy_execution_report();
@@ -113,7 +113,7 @@ async fn test_logon_response_with_sequence_number_too_high() {
     mock_counterparty.when_gap_fill_is_sent(2, 3).await; // the logon is gap filled
     session.then_status_changes_to(Status::Active).await;
 
-    when(&mut session).requests_disconnect().await;
+    when(&session).requests_disconnect().await;
     mock_counterparty.then_gets_disconnected().await;
 }
 

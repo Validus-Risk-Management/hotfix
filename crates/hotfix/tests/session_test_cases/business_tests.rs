@@ -5,10 +5,10 @@ use hotfix::message::FixMessage;
 
 #[tokio::test]
 async fn test_new_order_single() {
-    let (mut session, mut mock_counterparty) = given_an_active_session().await;
+    let (session, mut mock_counterparty) = given_an_active_session().await;
 
     // we send a new order to the counterparty and they receive it successfully
-    when(&mut session)
+    when(&session)
         .sends_message(TestMessage::dummy_new_order_single())
         .await;
     mock_counterparty
@@ -23,6 +23,6 @@ async fn test_new_order_single() {
         .await;
     // TODO: we currently have no good way of asserting this message was received
 
-    when(&mut session).requests_disconnect().await;
+    when(&session).requests_disconnect().await;
     mock_counterparty.then_gets_disconnected().await;
 }

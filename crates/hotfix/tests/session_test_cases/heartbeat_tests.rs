@@ -15,7 +15,7 @@ use std::time::Duration;
 /// as required by the FIX protocol to prevent timeout disconnections.
 #[tokio::test(start_paused = true)]
 async fn test_heartbeats() {
-    let (mut session, mut mock_counterparty) = given_an_active_session().await;
+    let (session, mut mock_counterparty) = given_an_active_session().await;
 
     // let's wait enough time for a heartbeat and assert that the heartbeat was sent
     when_time_elapses(Duration::from_secs(HEARTBEAT_INTERVAL + 1)).await;
@@ -23,7 +23,7 @@ async fn test_heartbeats() {
         .then_receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "0"))
         .await;
 
-    when(&mut session).requests_disconnect().await;
+    when(&session).requests_disconnect().await;
     mock_counterparty.then_gets_disconnected().await;
 }
 

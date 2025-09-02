@@ -8,7 +8,7 @@ use hotfix_message::fix44::MSG_TYPE;
 
 #[tokio::test]
 async fn test_message_sequence_number_too_high() {
-    let (mut session, mut mock_counterparty) = given_an_active_session().await;
+    let (session, mut mock_counterparty) = given_an_active_session().await;
 
     // the counterparty previously sent an execution report which we missed
     mock_counterparty
@@ -31,6 +31,6 @@ async fn test_message_sequence_number_too_high() {
     mock_counterparty.when_message_is_resent(3).await; // the second message is resent
     session.then_status_changes_to(Status::Active).await;
 
-    when(&mut session).requests_disconnect().await;
+    when(&session).requests_disconnect().await;
     mock_counterparty.then_gets_disconnected().await;
 }
