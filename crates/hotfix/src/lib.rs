@@ -31,6 +31,8 @@ pub mod message;
 mod message_utils;
 pub mod session;
 mod session_schedule;
+#[cfg(feature = "status")]
+pub mod status;
 pub mod store;
 pub mod transport;
 

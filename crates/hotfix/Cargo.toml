@@ -14,6 +14,7 @@ categories.workspace = true
 [features]
 redb = ["dep:redb"]
 mongodb = ["dep:mongodb"]
+status = ["dep:hotfix-status"]
 
 [lints]
 workspace = true
@@ -25,6 +26,7 @@ chrono = { workspace = true, features = ["serde"] }
 chrono-tz = { workspace = true, features = ["serde"] }
 futures = "^0.3.28"
 hotfix-message = { version = "0.0.25", path = "../hotfix-message" }
+hotfix-status = { version = "0.0.25", path = "../hotfix-status", optional = true }
 mongodb = { version = "^3.2", optional = true }
 pki-types = { package = "rustls-pki-types", version = "^1" }
 redb = { version = "^2.6", optional = true }
@@ -32,8 +34,8 @@ rustls = "^0.23"
 rustls-pemfile = "^2.2"
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
-tokio = { version = "^1", features = ["full"] }
-tokio-rustls = "^0.26"
+tokio = { workspace = true, features = ["full"] }
+tokio-rustls = { workspace = true }
 toml = { workspace = true }
 tracing = { workspace = true }
 uuid = { version = "1.5.0", features = ["v4"] }

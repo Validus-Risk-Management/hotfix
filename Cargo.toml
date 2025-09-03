@@ -18,10 +18,13 @@ categories = ["finance", "encoding", "parsing"]
 
 [workspace.dependencies]
 anyhow = "^1.0.75"
+axum = "^0.8"
 chrono = "^0.4"
 chrono-tz = "^0.10"
 serde = "^1.0.177"
 thiserror = "1"
+tokio = { version = "^1" }
+tokio-rustls = "^0.26"
 toml = "^0.8.8"
 tracing = "^0.1.37"
 
