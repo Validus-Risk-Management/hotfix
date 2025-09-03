@@ -1,18 +1,19 @@
 mod application;
 mod messages;
 
+use crate::application::TestApplication;
+use crate::messages::{Message, NewOrderSingle};
 use clap::{Parser, ValueEnum};
 use hotfix::config::Config;
 use hotfix::field_types::{Date, Timestamp};
 use hotfix::initiator::Initiator;
 use hotfix::message::fix44;
+use hotfix::status::build_router;
 use hotfix::store::mongodb::Client;
 use std::path::Path;
 use tokio::task::spawn_blocking;
+use tracing::info;
 use tracing_subscriber::EnvFilter;
-
-use crate::application::TestApplication;
-use crate::messages::{Message, NewOrderSingle};
 
 #[derive(ValueEnum, Clone, Debug)]
 #[clap(rename_all = "lower")]
@@ -60,6 +61,8 @@ async fn main() {
     let db_config = args.database.unwrap_or(Database::Redb);
     let app = TestApplication::default();
     let session = start_session(&args.config, &db_config, app).await;
+
+    tokio::spawn(start_status_service());
 
     user_loop(session).await;
 }
@@ -136,4 +139,13 @@ async fn start_session(
             Initiator::new(session_config, app, store).await
         }
     }
+}
+
+async fn start_status_service() {
+    let status_router = build_router();
+    let host_and_port = std::env::var("HOST_AND_PORT").unwrap_or("0.0.0.0:9881".to_string());
+    let listener = tokio::net::TcpListener::bind(&host_and_port).await.unwrap();
+
+    info!("starting status service on {host_and_port}");
+    axum::serve(listener, status_router).await.unwrap();
 }

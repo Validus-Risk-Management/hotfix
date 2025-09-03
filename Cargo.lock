@@ -2622,6 +2622,7 @@ name = "simple-new-order"
 version = "0.0.25"
 dependencies = [
  "async-trait",
+ "axum",
  "clap",
  "hotfix",
  "tokio",

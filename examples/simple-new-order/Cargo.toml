@@ -8,8 +8,9 @@ publish = false
 
 [dependencies]
 async-trait = "0.1.73"
+axum = { workspace = true }
 clap = { version = "4.4.4", features = ["derive"] }
-hotfix = { path = "../../crates/hotfix", features = ["mongodb", "redb"] }
+hotfix = { path = "../../crates/hotfix", features = ["mongodb", "redb", "status"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
