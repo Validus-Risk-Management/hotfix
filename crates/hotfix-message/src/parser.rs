@@ -377,7 +377,7 @@ mod tests {
     use crate::{Part, fix44};
     use hotfix_dictionary::{Dictionary, IsFieldDefinition};
 
-    const CONFIG: Config = Config { separator: b'|' };
+    const CONFIG: Config = Config::with_separator(b'|');
 
     #[test]
     fn parse_simple_message() {

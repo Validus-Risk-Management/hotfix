@@ -132,7 +132,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn with_separator(separator: u8) -> Self {
+    pub const fn with_separator(separator: u8) -> Self {
         Self { separator }
     }
 }
