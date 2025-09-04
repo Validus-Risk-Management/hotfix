@@ -17,4 +17,5 @@ pub use encoding::fix42;
 pub use encoding::fix44;
 pub use hotfix_derive::FieldType;
 pub use hotfix_dictionary::{self as dict, TagU32};
+pub use parser::SOH;
 pub use parts::{Part, RepeatingGroup};

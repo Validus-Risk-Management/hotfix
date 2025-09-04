@@ -131,6 +131,12 @@ pub struct Config {
     pub(crate) separator: u8,
 }
 
+impl Config {
+    pub fn with_separator(separator: u8) -> Self {
+        Self { separator }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self { separator: SOH }
