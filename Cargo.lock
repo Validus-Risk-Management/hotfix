@@ -1191,10 +1191,12 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
+ "displaydoc",
  "hotfix",
  "mime_guess",
  "rust-embed",
  "serde",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

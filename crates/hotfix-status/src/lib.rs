@@ -1,5 +1,6 @@
 mod api;
 mod data_provider;
+mod error;
 #[cfg(feature = "ui")]
 mod ui;
 
