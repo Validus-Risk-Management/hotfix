@@ -1,25 +1,134 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }}</title>
     <script src="/static/tailwind.js"></script>
 </head>
-<body>
-<div class="bg-gray-500">
-    HotFIX dashboard
-</div>
-<div>
-    <h2>
-        Session info
-    </h2>
-    <p>
-        Status: {{ session_info.status | json }}
-    </p>
-    <p>
-        Next sender sequence number: {{ session_info.next_sender_seq_number }}
-    </p>
-    <p>
-        Next target sequence number: {{ session_info.next_target_seq_number }}
-    </p>
-</div>
+<body class="bg-gray-50 min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-2xl font-semibold text-gray-900">HotFIX</h1>
+                    </div>
+                    <div class="ml-4">
+                        <span class="text-sm text-gray-500">Session Dashboard</span>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <div class="text-sm text-gray-500">
+                        Last updated: <span class="font-medium">{{ timestamp_string }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 w-full">
+        <!-- Page Title -->
+        <div class="mb-8">
+            <h2 class="text-3xl font-bold text-gray-900">Session Overview</h2>
+            <p class="mt-2 text-gray-600">Monitor your FIX session status and sequence numbers</p>
+        </div>
+
+        <!-- Session Status Card -->
+        <div class="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200 mb-6">
+            <div class="px-6 py-5 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-blue-600 fill-none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Session Status
+                </h3>
+            </div>
+            <div class="px-6 py-5">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            {% match session_info.status %}
+                                {% when Active %}
+                                <div class="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                                {% when Disconnected %}
+                                <div class="w-3 h-3 bg-red-400 rounded-full"></div>
+                                {% else %}
+                                <div class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
+                            {% endmatch %}
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        {% match session_info.status %}
+                            {% when Active %}
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Active
+                            </span>
+                            {% when Disconnected %}
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                Disconnected
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                {{ session_info.status | json }}
+                            </span>
+                        {% endmatch %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sequence Numbers Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Sender Sequence Number -->
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+                <div class="px-6 py-5 border-b border-gray-200 bg-blue-50">
+                    <h3 class="text-lg font-semibold text-blue-900 flex items-center">
+                        <svg class="w-5 h-5 mr-2 fill-none" stroke="currentColor" viewBox="-0.5 0 25 25" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 22.4199C17.5228 22.4199 22 17.9428 22 12.4199C22 6.89707 17.5228 2.41992 12 2.41992C6.47715 2.41992 2 6.89707 2 12.4199C2 17.9428 6.47715 22.4199 12 22.4199Z" stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M8 13.8599L10.87 10.8C11.0125 10.6416 11.1868 10.5149 11.3815 10.4282C11.5761 10.3415 11.7869 10.2966 12 10.2966C12.2131 10.2966 12.4239 10.3415 12.6185 10.4282C12.8132 10.5149 12.9875 10.6416 13.13 10.8L16 13.8599" stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Outbound Messages
+                    </h3>
+                </div>
+                <div class="px-6 py-8">
+                    <div class="text-center">
+                        <p class="text-sm text-gray-600 mb-2">Next sender sequence number</p>
+                        <p class="text-4xl font-bold text-blue-600">{{ session_info.next_sender_seq_number }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Target Sequence Number -->
+            <div class="bg-white overflow-hidden shadow-sm rounded-lg border border-gray-200">
+                <div class="px-6 py-5 border-b border-gray-200 bg-green-50">
+                    <h3 class="text-lg font-semibold text-green-900 flex items-center">
+                        <svg class="w-5 h-5 mr-2 fill-none" stroke="currentColor" viewBox="-0.5 0 25 25" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 22.4199C17.5228 22.4199 22 17.9428 22 12.4199C22 6.89707 17.5228 2.41992 12 2.41992C6.47715 2.41992 2 6.89707 2 12.4199C2 17.9428 6.47715 22.4199 12 22.4199Z" stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M16 10.99L13.13 14.05C12.9858 14.2058 12.811 14.3298 12.6166 14.4148C12.4221 14.4998 12.2122 14.5437 12 14.5437C11.7878 14.5437 11.5779 14.4998 11.3834 14.4148C11.189 14.3298 11.0142 14.2058 10.87 14.05L8 10.99" stroke="#000000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Inbound Messages
+                    </h3>
+                </div>
+                <div class="px-6 py-8">
+                    <div class="text-center">
+                        <p class="text-sm text-gray-600 mb-2">Next target sequence number</p>
+                        <p class="text-4xl font-bold text-green-600">{{ session_info.next_target_seq_number }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-12">
+        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+            <p class="text-center text-sm text-gray-500">
+                HotFIX — Session Dashboard
+            </p>
+        </div>
+    </footer>
 </body>
+</html>
