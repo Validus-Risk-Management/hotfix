@@ -1,23 +1,46 @@
+mod data_provider;
+
+use crate::data_provider::{DataProvider, SessionDataProvider};
+use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
+use hotfix::message::FixMessage;
+use hotfix::session::{SessionInfo, SessionRef};
 use serde::Serialize;
 
 #[derive(Clone)]
-struct AppState {}
+struct AppState<P> {
+    data_provider: P,
+}
 
-pub fn build_router() -> Router {
+pub fn build_router<M: FixMessage>(session_ref: SessionRef<M>) -> Router {
+    let data_provider = SessionDataProvider { session_ref };
     Router::new()
         .route("/health", get(get_health))
-        .with_state(AppState {})
+        .route("/session-info", get(get_session_info))
+        .with_state(AppState { data_provider })
 }
 
 #[derive(Debug, Serialize)]
-struct HealthStatus {
+struct HealthStatusResponse {
     status: String,
 }
 
-async fn get_health() -> Json<HealthStatus> {
-    Json(HealthStatus {
+async fn get_health() -> Json<HealthStatusResponse> {
+    Json(HealthStatusResponse {
         status: "healthy".to_string(),
     })
+}
+
+#[derive(Debug, Serialize)]
+struct SessionInfoResponse {
+    session_info: SessionInfo,
+}
+
+async fn get_session_info<P: DataProvider>(
+    State(state): State<AppState<P>>,
+) -> Json<SessionInfoResponse> {
+    let session_info = state.data_provider.get_session_info().await;
+
+    Json(SessionInfoResponse { session_info })
 }

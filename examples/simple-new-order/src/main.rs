@@ -8,6 +8,7 @@ use hotfix::config::Config;
 use hotfix::field_types::{Date, Timestamp};
 use hotfix::initiator::Initiator;
 use hotfix::message::fix44;
+use hotfix::session::SessionRef;
 use hotfix::store::mongodb::Client;
 use hotfix_status::build_router;
 use std::path::Path;
@@ -60,11 +61,11 @@ async fn main() {
 
     let db_config = args.database.unwrap_or(Database::Redb);
     let app = TestApplication::default();
-    let session = start_session(&args.config, &db_config, app).await;
+    let initiator = start_session(&args.config, &db_config, app).await;
 
-    tokio::spawn(start_status_service());
+    tokio::spawn(start_status_service(initiator.session_ref()));
 
-    user_loop(session).await;
+    user_loop(initiator).await;
 }
 
 async fn user_loop(session: Initiator<Message>) {
@@ -141,8 +142,8 @@ async fn start_session(
     }
 }
 
-async fn start_status_service() {
-    let status_router = build_router();
+async fn start_status_service(session_ref: SessionRef<Message>) {
+    let status_router = build_router(session_ref);
     let host_and_port = std::env::var("HOST_AND_PORT").unwrap_or("0.0.0.0:9881".to_string());
     let listener = tokio::net::TcpListener::bind(&host_and_port).await.unwrap();
 

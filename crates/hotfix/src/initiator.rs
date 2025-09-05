@@ -50,6 +50,10 @@ impl<M: FixMessage> Initiator<M> {
     pub fn is_interested(&self, sender_comp_id: &str, target_comp_id: &str) -> bool {
         self.config.sender_comp_id == sender_comp_id && self.config.target_comp_id == target_comp_id
     }
+
+    pub fn session_ref(&self) -> SessionRef<M> {
+        self.session.clone()
+    }
 }
 
 async fn establish_connection<M: FixMessage>(config: SessionConfig, session_ref: SessionRef<M>) {
