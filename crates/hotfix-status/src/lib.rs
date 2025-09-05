@@ -1,8 +1,10 @@
 mod assets;
 mod data_provider;
+mod ui;
 
 use crate::assets::static_handler;
 use crate::data_provider::{DataProvider, SessionDataProvider};
+use crate::ui::builder_ui_router;
 use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
@@ -19,6 +21,7 @@ pub fn build_router<M: FixMessage>(session_ref: SessionRef<M>) -> Router {
     let api_router = build_api_router(session_ref);
     Router::new()
         .route("/static/{*file}", get(static_handler))
+        .nest("/ui", builder_ui_router())
         .nest("/api", api_router)
 }
 

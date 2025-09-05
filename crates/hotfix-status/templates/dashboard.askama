@@ -2,5 +2,10 @@
 <html lang="en">
 <head>
     <title>{{ title }}</title>
-    <script src="{{ tailwind_js }}"></script>
+    <script src="/assets/tailwind.js"></script>
 </head>
+<body>
+<div class="bg-gray-500">
+    HotFIX dashboard
+</div>
+</body>
