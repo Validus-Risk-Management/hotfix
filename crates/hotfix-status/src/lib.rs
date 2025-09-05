@@ -1,16 +1,12 @@
-mod assets;
+mod api;
 mod data_provider;
 mod ui;
 
-use crate::assets::static_handler;
-use crate::data_provider::{DataProvider, SessionDataProvider};
+use crate::api::build_api_router;
 use crate::ui::builder_ui_router;
-use axum::extract::State;
-use axum::routing::get;
-use axum::{Json, Router};
+use axum::Router;
 use hotfix::message::FixMessage;
-use hotfix::session::{SessionInfo, SessionRef};
-use serde::Serialize;
+use hotfix::session::SessionRef;
 
 #[derive(Clone)]
 struct AppState<P> {
@@ -18,41 +14,7 @@ struct AppState<P> {
 }
 
 pub fn build_router<M: FixMessage>(session_ref: SessionRef<M>) -> Router {
-    let api_router = build_api_router(session_ref);
     Router::new()
-        .route("/static/{*file}", get(static_handler))
-        .nest("/ui", builder_ui_router())
-        .nest("/api", api_router)
-}
-
-pub fn build_api_router<M: FixMessage>(session_ref: SessionRef<M>) -> Router {
-    let data_provider = SessionDataProvider { session_ref };
-    Router::new()
-        .route("/health", get(get_health))
-        .route("/session-info", get(get_session_info))
-        .with_state(AppState { data_provider })
-}
-
-#[derive(Debug, Serialize)]
-struct HealthStatusResponse {
-    status: String,
-}
-
-async fn get_health() -> Json<HealthStatusResponse> {
-    Json(HealthStatusResponse {
-        status: "healthy".to_string(),
-    })
-}
-
-#[derive(Debug, Serialize)]
-struct SessionInfoResponse {
-    session_info: SessionInfo,
-}
-
-async fn get_session_info<P: DataProvider>(
-    State(state): State<AppState<P>>,
-) -> Json<SessionInfoResponse> {
-    let session_info = state.data_provider.get_session_info().await;
-
-    Json(SessionInfoResponse { session_info })
+        .nest("/api", build_api_router(session_ref))
+        .merge(builder_ui_router())
 }
