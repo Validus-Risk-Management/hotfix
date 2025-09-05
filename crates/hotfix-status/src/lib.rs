@@ -4,6 +4,7 @@ mod data_provider;
 mod ui;
 
 use crate::api::build_api_router;
+use crate::data_provider::SessionDataProvider;
 use axum::Router;
 use hotfix::message::FixMessage;
 use hotfix::session::SessionRef;
@@ -15,12 +16,17 @@ struct AppState<P> {
 
 #[cfg(feature = "ui")]
 pub fn build_router<M: FixMessage>(session_ref: SessionRef<M>) -> Router {
+    let data_provider = SessionDataProvider { session_ref };
+    let state = AppState { data_provider };
     Router::new()
-        .nest("/api", build_api_router(session_ref))
-        .merge(crate::ui::builder_ui_router())
+        .nest("/api", build_api_router())
+        .merge(ui::builder_ui_router())
+        .with_state(state)
 }
 
 #[cfg(not(feature = "ui"))]
 pub fn build_router<M: FixMessage>(session_ref: SessionRef<M>) -> Router {
-    Router::new().nest("/api", build_api_router(session_ref))
+    let data_provider = SessionDataProvider { session_ref };
+    let state = AppState { data_provider };
+    Router::new().nest("/api", build_api_router(state))
 }

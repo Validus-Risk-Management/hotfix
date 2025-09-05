@@ -8,4 +8,18 @@
 <div class="bg-gray-500">
     HotFIX dashboard
 </div>
+<div>
+    <h2>
+        Session info
+    </h2>
+    <p>
+        Status: {{ session_info.status | json }}
+    </p>
+    <p>
+        Next sender sequence number: {{ session_info.next_sender_seq_number }}
+    </p>
+    <p>
+        Next target sequence number: {{ session_info.next_target_seq_number }}
+    </p>
+</div>
 </body>
