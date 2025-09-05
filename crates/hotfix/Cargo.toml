@@ -14,7 +14,6 @@ categories.workspace = true
 [features]
 redb = ["dep:redb"]
 mongodb = ["dep:mongodb"]
-status = ["dep:hotfix-status"]
 
 [lints]
 workspace = true
@@ -26,7 +25,6 @@ chrono = { workspace = true, features = ["serde"] }
 chrono-tz = { workspace = true, features = ["serde"] }
 futures = "^0.3.28"
 hotfix-message = { version = "0.0.25", path = "../hotfix-message" }
-hotfix-status = { version = "0.0.25", path = "../hotfix-status", optional = true }
 mongodb = { version = "^3.2", optional = true }
 pki-types = { package = "rustls-pki-types", version = "^1" }
 redb = { version = "^2.6", optional = true }

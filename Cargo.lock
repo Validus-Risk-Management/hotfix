@@ -1069,7 +1069,6 @@ dependencies = [
  "chrono-tz",
  "futures",
  "hotfix-message",
- "hotfix-status",
  "mongodb",
  "redb",
  "rustls 0.23.28",
@@ -1138,6 +1137,7 @@ name = "hotfix-status"
 version = "0.0.25"
 dependencies = [
  "axum",
+ "hotfix",
  "serde",
 ]
 
@@ -2625,6 +2625,7 @@ dependencies = [
  "axum",
  "clap",
  "hotfix",
+ "hotfix-status",
  "tokio",
  "tracing",
  "tracing-subscriber",
