@@ -1,5 +1,7 @@
+mod assets;
 mod data_provider;
 
+use crate::assets::static_handler;
 use crate::data_provider::{DataProvider, SessionDataProvider};
 use axum::extract::State;
 use axum::routing::get;
@@ -14,6 +16,13 @@ struct AppState<P> {
 }
 
 pub fn build_router<M: FixMessage>(session_ref: SessionRef<M>) -> Router {
+    let api_router = build_api_router(session_ref);
+    Router::new()
+        .route("/static/{*file}", get(static_handler))
+        .nest("/api", api_router)
+}
+
+pub fn build_api_router<M: FixMessage>(session_ref: SessionRef<M>) -> Router {
     let data_provider = SessionDataProvider { session_ref };
     Router::new()
         .route("/health", get(get_health))

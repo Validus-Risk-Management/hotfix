@@ -20,4 +20,6 @@ ui = []
 [dependencies]
 axum = { workspace = true }
 hotfix = { version = "0.0.25", path = "../hotfix" }
+mime_guess = { workspace = true }
+rust-embed = { workspace = true, features = ["axum-ex"] }
 serde = { workspace = true, features = ["derive"] }

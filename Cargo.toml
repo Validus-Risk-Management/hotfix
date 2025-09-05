@@ -21,6 +21,8 @@ anyhow = "^1.0.75"
 axum = "^0.8"
 chrono = "^0.4"
 chrono-tz = "^0.10"
+mime_guess = "2.0.5"
+rust-embed = "8.7"
 serde = "^1.0.177"
 thiserror = "1"
 tokio = { version = "^1" }
