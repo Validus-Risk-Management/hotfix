@@ -1,5 +1,6 @@
 mod api;
 mod data_provider;
+#[cfg(feature = "ui")]
 mod error;
 #[cfg(feature = "ui")]
 mod ui;
@@ -29,5 +30,7 @@ pub fn build_router<M: FixMessage>(session_ref: SessionRef<M>) -> Router {
 pub fn build_router<M: FixMessage>(session_ref: SessionRef<M>) -> Router {
     let data_provider = SessionDataProvider { session_ref };
     let state = AppState { data_provider };
-    Router::new().nest("/api", build_api_router(state))
+    Router::new()
+        .nest("/api", build_api_router())
+        .with_state(state)
 }
