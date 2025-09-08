@@ -15,19 +15,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
-- Fix initial creation time setting in redb store
-- Add check for code formatting
-- Add code coverage badge
-- Update version to 0.0.21 to release DynamoDB stores
-- Prepare for 0.0.19 release
-- Update README with Test Requests
-- Update README with next steps
-- Process backlog of messages when a resend is completed
-- Update README
-- Nicer API for manipulating groups and example application using repeating groups
-- Add badges
-- Update crates in preparation for 0.0.11 release
-- Switch to internal fork of ferrumfix for message encoding and decoding
-- Use fix44 types for message generation
-- Prepare project for crates.io publishing
-- Initial commit
+- initial release
