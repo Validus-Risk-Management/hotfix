@@ -147,3 +147,23 @@ impl FixMessage for TestMessage {
         }
     }
 }
+
+/// Replaces the value of a field in a raw FIX message.
+pub fn replace_field_value(raw_message: &mut Vec<u8>, tag: u32, new_value: &[u8]) {
+    let tag_bytes = format!("{}=", tag).into_bytes();
+
+    if let Some(field_start) = raw_message
+        .windows(tag_bytes.len())
+        .position(|window| window == tag_bytes)
+    {
+        let value_start = field_start + tag_bytes.len();
+        if let Some(field_end) = raw_message[value_start..]
+            .iter()
+            .position(|&b| b == b'\x01')
+        {
+            let value_end = value_start + field_end;
+
+            raw_message.splice(value_start..value_end, new_value.iter().cloned());
+        }
+    }
+}

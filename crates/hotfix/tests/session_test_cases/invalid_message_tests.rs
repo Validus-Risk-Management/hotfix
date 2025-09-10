@@ -1,7 +1,7 @@
 use crate::common::actions::when;
 use crate::common::assertions::then;
 use crate::common::setup::given_an_active_session;
-use crate::common::test_messages::TestMessage;
+use crate::common::test_messages::{TestMessage, replace_field_value};
 use hotfix::message::{FixMessage, generate_message};
 use hotfix::session::Status;
 use hotfix_message::dict::{FieldLocation, FixDatatype};
@@ -126,23 +126,7 @@ fn build_execution_report_with_incorrect_body_length(
     let mut raw_message =
         generate_message(sender_comp_id, target_comp_id, msg_seq_num, report).unwrap();
 
-    let message_str = String::from_utf8(raw_message.clone()).unwrap();
-
-    let body_length_start = message_str.find("9=").unwrap();
-    let body_length_end =
-        body_length_start + message_str[body_length_start..].find('\x01').unwrap();
-
-    let original_body_length = &message_str[body_length_start + 2..body_length_end];
-
-    // parse the original body length and make it incorrect (add 10 to it)
-    if let Ok(original_length) = original_body_length.parse::<u32>() {
-        let incorrect_length = original_length + 10;
-        let corrupted_message = message_str.replace(
-            &format!("9={}", original_length),
-            &format!("9={}", incorrect_length),
-        );
-        raw_message = corrupted_message.into_bytes();
-    }
+    replace_field_value(&mut raw_message, 9, b"999");
 
     raw_message
 }
