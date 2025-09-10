@@ -1,7 +1,9 @@
 use crate::common::actions::when;
 use crate::common::assertions::then;
 use crate::common::setup::given_an_active_session;
-use hotfix::message::FixMessage;
+use crate::common::test_messages::TestMessage;
+use hotfix::message::{FixMessage, generate_message};
+use hotfix::session::Status;
 use hotfix_message::dict::{FieldLocation, FixDatatype};
 use hotfix_message::fix44::MSG_TYPE;
 use hotfix_message::message::Message;
@@ -16,6 +18,37 @@ async fn test_message_with_invalid_field_gets_rejected() {
         .await;
     then(&mut mock_counterparty)
         .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "3"))
+        .await;
+
+    when(&session).requests_disconnect().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
+}
+
+#[tokio::test]
+async fn test_garbled_message_with_invalid_target_comp_id_gets_ignored() {
+    let (session, mut mock_counterparty) = given_an_active_session().await;
+
+    // counterparty sends a message with an invalid target comp id
+    let garbled_message = build_execution_report_with_incorrect_body_length(
+        "dummy-acceptor",
+        "dummy-initiator",
+        mock_counterparty.next_target_sequence_number(),
+    );
+    when(&mut mock_counterparty)
+        .sends_raw_message(garbled_message)
+        .await;
+
+    // they then send a valid message
+    when(&mut mock_counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
+        .await;
+
+    // we then initiate a resend, having skipped the garbled message
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
+        .await;
+    then(&session)
+        .status_changes_to(Status::AwaitingResend)
         .await;
 
     when(&session).requests_disconnect().await;
@@ -83,3 +116,33 @@ pub const CUSTOM_FIELD: &HardCodedFixFieldDefinition = &HardCodedFixFieldDefinit
     data_type: FixDatatype::String,
     location: FieldLocation::Body,
 };
+
+fn build_execution_report_with_incorrect_body_length(
+    sender_comp_id: &str,
+    target_comp_id: &str,
+    msg_seq_num: usize,
+) -> Vec<u8> {
+    let report = TestMessage::dummy_execution_report();
+    let mut raw_message =
+        generate_message(sender_comp_id, target_comp_id, msg_seq_num, report).unwrap();
+
+    let message_str = String::from_utf8(raw_message.clone()).unwrap();
+
+    let body_length_start = message_str.find("9=").unwrap();
+    let body_length_end =
+        body_length_start + message_str[body_length_start..].find('\x01').unwrap();
+
+    let original_body_length = &message_str[body_length_start + 2..body_length_end];
+
+    // parse the original body length and make it incorrect (add 10 to it)
+    if let Ok(original_length) = original_body_length.parse::<u32>() {
+        let incorrect_length = original_length + 10;
+        let corrupted_message = message_str.replace(
+            &format!("9={}", original_length),
+            &format!("9={}", incorrect_length),
+        );
+        raw_message = corrupted_message.into_bytes();
+    }
+
+    raw_message
+}

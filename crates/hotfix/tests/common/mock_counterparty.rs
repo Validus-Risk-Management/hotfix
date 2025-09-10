@@ -96,10 +96,14 @@ where
         let raw_message = generate_message(
             &self.session_config.sender_comp_id,
             &self.session_config.target_comp_id,
-            self.sent_messages.len() + 1,
+            self.next_target_sequence_number(),
             message,
         )
         .expect("failed to generate message");
+        self.send_raw_message(raw_message).await;
+    }
+
+    pub async fn send_raw_message(&mut self, raw_message: Vec<u8>) {
         self.sent_messages.push(raw_message.clone());
         self.session_ref
             .new_fix_message_received(RawFixMessage::new(raw_message))
@@ -164,6 +168,10 @@ where
         {
             panic!("timeout expired before a disconnect occurred");
         }
+    }
+
+    pub fn next_target_sequence_number(&self) -> usize {
+        self.sent_messages.len() + 1
     }
 
     fn create_writer() -> (WriterRef, Receiver<WriterMessage>) {

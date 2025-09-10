@@ -37,6 +37,10 @@ impl When<&mut MockCounterparty<TestMessage>> {
         self.target.send_message(message).await;
     }
 
+    pub async fn sends_raw_message(&mut self, raw_message: Vec<u8>) {
+        self.target.send_raw_message(raw_message).await;
+    }
+
     pub async fn sends_gap_fill(&mut self, start_seq_no: u64, new_seq_no: u64) {
         self.target.send_gap_fill(start_seq_no, new_seq_no).await;
     }
