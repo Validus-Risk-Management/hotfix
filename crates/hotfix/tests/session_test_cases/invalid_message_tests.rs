@@ -9,6 +9,8 @@ use hotfix_message::fix44::MSG_TYPE;
 use hotfix_message::message::Message;
 use hotfix_message::{HardCodedFixFieldDefinition, Part, fix44};
 
+/// Tests that when a counterparty sends a message containing an invalid/unrecognised field,
+/// the session rejects the message by sending a Reject (MsgType=3) message back.
 #[tokio::test]
 async fn test_message_with_invalid_field_gets_rejected() {
     let (session, mut mock_counterparty) = given_an_active_session().await;
@@ -24,11 +26,13 @@ async fn test_message_with_invalid_field_gets_rejected() {
     then(&mut mock_counterparty).gets_disconnected().await;
 }
 
+/// Tests that when a counterparty sends a garbled message with an invalid body length,
+/// the session silently ignores it and detects a sequence gap when the next valid message arrives.
 #[tokio::test]
 async fn test_garbled_message_with_invalid_target_comp_id_gets_ignored() {
     let (session, mut mock_counterparty) = given_an_active_session().await;
 
-    // counterparty sends a message with an invalid target comp id
+    // counterparty sends a message with invalid body length, which constitutes a garbled message
     let garbled_message = build_execution_report_with_incorrect_body_length(
         "dummy-acceptor",
         "dummy-initiator",
