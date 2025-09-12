@@ -25,7 +25,7 @@ use crate::message::parser::RawFixMessage;
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
 
-use crate::error::MessageVerificationError;
+use crate::error::{CompIdType, MessageVerificationError};
 use crate::message::logout::Logout;
 use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
@@ -318,7 +318,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         &self,
         message: &Message,
     ) -> std::result::Result<(), MessageVerificationError> {
-        let begin_string: &str = message.header().get(fix44::BEGIN_STRING).unwrap();
+        let begin_string: &str = message.header().get(fix44::BEGIN_STRING).unwrap_or("");
         if begin_string != self.config.begin_string.as_str() {
             return Err(MessageVerificationError::IncorrectBeginString(
                 begin_string.to_string(),
@@ -326,7 +326,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         }
 
         let expected_seq_number = self.store.next_target_seq_number();
-        let actual_seq_number: u64 = message.header().get(fix44::MSG_SEQ_NUM).unwrap();
+        let actual_seq_number: u64 = message.header().get(fix44::MSG_SEQ_NUM).unwrap_or_default();
 
         match actual_seq_number.cmp(&expected_seq_number) {
             Ordering::Greater => {
@@ -342,6 +342,28 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 });
             }
             _ => {}
+        }
+
+        // our TargetCompId is always the same as the expected SenderCompId for them
+        let expected_sender_comp_id: &str = self.config.target_comp_id.as_str();
+        let actual_sender_comp_id: &str = message.header().get(fix44::SENDER_COMP_ID).unwrap_or("");
+        if expected_sender_comp_id != actual_sender_comp_id {
+            return Err(MessageVerificationError::IncorrectCompId {
+                comp_id: actual_sender_comp_id.to_string(),
+                comp_id_type: CompIdType::Sender,
+                msg_seq_num: actual_seq_number,
+            });
+        }
+
+        // our SenderCompId is always the same as the expected TargetCompId for them
+        let expected_target_comp_id: &str = self.config.sender_comp_id.as_str();
+        let actual_target_comp_id: &str = message.header().get(fix44::TARGET_COMP_ID).unwrap_or("");
+        if expected_target_comp_id != actual_target_comp_id {
+            return Err(MessageVerificationError::IncorrectCompId {
+                comp_id: actual_target_comp_id.to_string(),
+                comp_id_type: CompIdType::Target,
+                msg_seq_num: actual_seq_number,
+            });
         }
 
         Ok(())
@@ -508,8 +530,13 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             MessageVerificationError::IncorrectBeginString(begin_string) => {
                 self.handle_incorrect_begin_string(begin_string).await;
             }
-            MessageVerificationError::IncorrectCompId(comp_id) => {
-                self.handle_incorrect_comp_id(comp_id).await;
+            MessageVerificationError::IncorrectCompId {
+                comp_id,
+                comp_id_type,
+                msg_seq_num,
+            } => {
+                self.handle_incorrect_comp_id(comp_id, comp_id_type, msg_seq_num)
+                    .await;
             }
         }
     }
@@ -521,9 +548,22 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         .await;
     }
 
-    async fn handle_incorrect_comp_id(&mut self, received_comp_id: String) {
-        // TODO: this should also be a disconnect I think (and maybe a reject first?)
-        panic!("incorrect comp ID received: {received_comp_id}");
+    async fn handle_incorrect_comp_id(
+        &mut self,
+        received_comp_id: String,
+        comp_id_type: CompIdType,
+        msg_seq_num: u64,
+    ) {
+        error!(
+            "rejecting message with incorrect comp ID: {received_comp_id} (type: {comp_id_type:?})"
+        );
+        let reject = Reject::new(msg_seq_num)
+            .session_reject_reason(SessionRejectReason::ValueIsIncorrect)
+            .text(&format!("invalid comp ID {received_comp_id}"));
+        self.send_message(reject).await;
+
+        self.logout_and_terminate("incorrect comp ID received")
+            .await;
     }
 
     async fn handle_sequence_number_too_low(&mut self, actual: u64, expected: u64) {

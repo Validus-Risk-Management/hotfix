@@ -16,8 +16,18 @@ pub enum MessageVerificationError {
 
     /// The comp ID is different from our expectations.
     #[allow(dead_code)]
-    #[error("incorrect comp id {0}")]
-    IncorrectCompId(String),
+    #[error("incorrect comp id {comp_id} ({comp_id_type:?})")]
+    IncorrectCompId {
+        comp_id: String,
+        comp_id_type: CompIdType,
+        msg_seq_num: u64,
+    },
+}
+
+#[derive(Debug)]
+pub enum CompIdType {
+    Sender,
+    Target,
 }
 
 #[derive(Debug, Error)]

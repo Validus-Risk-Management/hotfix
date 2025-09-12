@@ -13,6 +13,9 @@ use hotfix_message::fix44::MSG_TYPE;
 pub const HEARTBEAT_INTERVAL: u64 = 30;
 pub const LOGON_TIMEOUT: u64 = 10;
 
+pub const COUNTERPARTY_COMP_ID: &str = "dummy-acceptor";
+pub const OUR_COMP_ID: &str = "dummy-initiator";
+
 pub async fn given_a_connected_session() -> (SessionRef<TestMessage>, MockCounterparty<TestMessage>)
 {
     let message_store = InMemoryMessageStore::default();
@@ -48,8 +51,8 @@ pub async fn given_an_active_session() -> (SessionRef<TestMessage>, MockCounterp
 pub fn create_session_config() -> SessionConfig {
     SessionConfig {
         begin_string: "FIX.4.4".to_string(),
-        sender_comp_id: "dummy-initiator".to_string(),
-        target_comp_id: "dummy-acceptor".to_string(),
+        sender_comp_id: OUR_COMP_ID.to_string(),
+        target_comp_id: COUNTERPARTY_COMP_ID.to_string(),
         data_dictionary_path: None,
         connection_host: "".to_string(),
         connection_port: 0,
