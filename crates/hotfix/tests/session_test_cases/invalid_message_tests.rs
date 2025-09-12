@@ -5,8 +5,9 @@ use crate::common::test_messages::{TestMessage, replace_field_value};
 use hotfix::message::{FixMessage, generate_message};
 use hotfix::session::Status;
 use hotfix_message::dict::{FieldLocation, FixDatatype};
+use hotfix_message::field_types::Timestamp;
 use hotfix_message::fix44::MSG_TYPE;
-use hotfix_message::message::Message;
+use hotfix_message::message::{Config, Message};
 use hotfix_message::{HardCodedFixFieldDefinition, Part, fix44};
 
 /// Tests that when a counterparty sends a message containing an invalid/unrecognised field,
@@ -56,6 +57,27 @@ async fn test_garbled_message_with_invalid_target_comp_id_gets_ignored() {
         .await;
 
     when(&session).requests_disconnect().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
+}
+
+#[tokio::test]
+async fn test_message_with_invalid_begin_string() {
+    let (_session, mut mock_counterparty) = given_an_active_session().await;
+
+    // a message with invalid BeginString is sent to the counterparty
+    let invalid_message = build_execution_report_with_incorrect_begin_string(
+        "dummy-acceptor",
+        "dummy-initiator",
+        mock_counterparty.next_target_sequence_number(),
+    );
+    when(&mut mock_counterparty)
+        .sends_raw_message(invalid_message)
+        .await;
+
+    // then we log out and disconnect
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "5"))
+        .await;
     then(&mut mock_counterparty).gets_disconnected().await;
 }
 
@@ -133,4 +155,23 @@ fn build_execution_report_with_incorrect_body_length(
     replace_field_value(&mut raw_message, 9, b"999");
 
     raw_message
+}
+
+fn build_execution_report_with_incorrect_begin_string(
+    sender_comp_id: &str,
+    target_comp_id: &str,
+    msg_seq_num: usize,
+) -> Vec<u8> {
+    let report = TestMessage::dummy_execution_report();
+
+    // we expect BeginString FIX.4.4 but this message contains FIX.4.2
+    let mut msg = Message::new("FIX.4.2", report.message_type());
+    msg.set(fix44::SENDER_COMP_ID, sender_comp_id);
+    msg.set(fix44::TARGET_COMP_ID, target_comp_id.as_bytes());
+    msg.set(fix44::MSG_SEQ_NUM, msg_seq_num);
+    msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
+
+    report.write(&mut msg);
+
+    msg.encode(&Config::default()).unwrap()
 }

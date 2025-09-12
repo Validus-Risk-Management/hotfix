@@ -515,9 +515,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     async fn handle_incorrect_begin_string(&mut self, received_begin_string: String) {
-        // TODO: this should be a disconnect (and maybe a reject first?)
-        // see: https://www.fixtrading.org/standards/fix-session-layer-online/#when-to-terminate-a-fix-connection-by-terminating-the-transport-layer-connection-instead-of-sending-a-logout355
-        panic!("incorrect begin string received: {received_begin_string}");
+        self.logout_and_terminate(&format!(
+            "beginString={received_begin_string} is not supported"
+        ))
+        .await;
     }
 
     async fn handle_incorrect_comp_id(&mut self, received_comp_id: String) {
