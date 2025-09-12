@@ -58,6 +58,8 @@ async fn test_garbled_message_with_invalid_target_comp_id_gets_ignored() {
     then(&mut mock_counterparty).gets_disconnected().await;
 }
 
+/// Tests that when a counterparty sends a message with an invalid BeginString,
+/// the session logs out and disconnects.
 #[tokio::test]
 async fn test_message_with_invalid_begin_string() {
     let (_session, mut mock_counterparty) = given_an_active_session().await;
@@ -77,13 +79,43 @@ async fn test_message_with_invalid_begin_string() {
     then(&mut mock_counterparty).gets_disconnected().await;
 }
 
+/// Tests that when a counterparty sends a message with an invalid TargetCompId,
+/// the session sends a Reject (MsgType=3) and logs out and disconnects.
 #[tokio::test]
 async fn test_message_with_invalid_target_comp_id() {
     let (_session, mut mock_counterparty) = given_an_active_session().await;
 
-    // a message with incorrect target comp ID is sent by the counterparty
-    let invalid_message = build_execution_report_with_incorrect_target_comp_id(
+    // a message with incorrect TargetCompId is sent by the counterparty
+    let invalid_message = build_execution_report_with_comp_id(
         mock_counterparty.next_target_sequence_number(),
+        COUNTERPARTY_COMP_ID,
+        "WRONG_COMP_ID",
+    );
+    when(&mut mock_counterparty)
+        .sends_raw_message(invalid_message)
+        .await;
+
+    // then we send a reject, log out and disconnect
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "3"))
+        .await;
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "5"))
+        .await;
+    then(&mut mock_counterparty).gets_disconnected().await;
+}
+
+/// Tests that when a counterparty sends a message with an invalid SenderCompId,
+/// the session sends a Reject (MsgType=3) and logs out and disconnects.
+#[tokio::test]
+async fn test_message_with_invalid_sender_comp_id() {
+    let (_session, mut mock_counterparty) = given_an_active_session().await;
+
+    // a message with incorrect SenderCompId is sent by the counterparty
+    let invalid_message = build_execution_report_with_comp_id(
+        mock_counterparty.next_target_sequence_number(),
+        "WRONG_COMP_ID",
+        OUR_COMP_ID,
     );
     when(&mut mock_counterparty)
         .sends_raw_message(invalid_message)
@@ -186,12 +218,16 @@ fn build_execution_report_with_incorrect_begin_string(msg_seq_num: usize) -> Vec
     msg.encode(&Config::default()).unwrap()
 }
 
-fn build_execution_report_with_incorrect_target_comp_id(msg_seq_num: usize) -> Vec<u8> {
+fn build_execution_report_with_comp_id(
+    msg_seq_num: usize,
+    sender_comp_id: &str,
+    target_comp_id: &str,
+) -> Vec<u8> {
     let report = TestMessage::dummy_execution_report();
 
     let mut msg = Message::new("FIX.4.4", report.message_type());
-    msg.set(fix44::SENDER_COMP_ID, COUNTERPARTY_COMP_ID);
-    msg.set(fix44::TARGET_COMP_ID, "incorrect-comp-id");
+    msg.set(fix44::SENDER_COMP_ID, sender_comp_id);
+    msg.set(fix44::TARGET_COMP_ID, target_comp_id);
     msg.set(fix44::MSG_SEQ_NUM, msg_seq_num);
     msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
 
