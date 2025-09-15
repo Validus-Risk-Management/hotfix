@@ -24,7 +24,7 @@ async-trait = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 chrono-tz = { workspace = true, features = ["serde"] }
 futures = "^0.3.28"
-hotfix-message = { version = "0.0.26", path = "../hotfix-message" }
+hotfix-message = { version = "0.1.0", path = "../hotfix-message" }
 mongodb = { version = "^3.2", optional = true }
 pki-types = { package = "rustls-pki-types", version = "^1" }
 redb = { version = "^2.6", optional = true }

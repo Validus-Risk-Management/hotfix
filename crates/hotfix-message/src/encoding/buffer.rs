@@ -23,6 +23,12 @@ pub trait Buffer {
         self.as_slice().len()
     }
 
+    /// Returns `true` if the buffer is empty.
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Returns the number of bytes that `self` can hold without reallocating.
     fn capacity(&self) -> usize;
 

@@ -8,7 +8,7 @@ mod parser;
 pub(crate) mod parts;
 mod tags;
 
-use encoding::Buffer;
+pub use encoding::Buffer;
 pub use encoding::HardCodedFixFieldDefinition;
 pub use encoding::field_access::FieldType;
 pub use encoding::field_types;
