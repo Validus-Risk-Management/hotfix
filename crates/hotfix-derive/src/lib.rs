@@ -1,4 +1,4 @@
-//! Derive macros for FerrumFIX.
+//! Derive macros for HotFIX.
 
 #![deny(missing_debug_implementations, clippy::useless_conversion)]
 

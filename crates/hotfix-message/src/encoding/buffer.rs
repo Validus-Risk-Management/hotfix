@@ -1,9 +1,9 @@
 /// Operations on a growable in-memory buffer.
 ///
-/// This trait is intented to be used as a thin compatibility layer between
+/// This trait is intended to be used as a thin compatibility layer between
 /// [`Vec<u8>`] and
 /// [`bytes::BytesMut`](https://docs.rs/bytes/1.1.0/bytes/struct.BytesMut.html).
-/// By writing generic code that operates on [`Buffer`], FerrumFIX users can
+/// By writing generic code that operates on [`Buffer`], HotFIX users can
 /// decide for themselves if they want to use `bytes` and still use most of the
 /// features.
 ///

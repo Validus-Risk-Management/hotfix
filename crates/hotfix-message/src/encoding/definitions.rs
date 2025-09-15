@@ -2,7 +2,7 @@
 //!
 //! # What is this and why is this necessary?
 //!
-//! FerrumFIX internals rely on [`Dictionary`](crate::Dictionary) for accessing
+//! HotFIX internals rely on [`Dictionary`](crate::Dictionary) for accessing
 //! details about fields, messages and other abstract entities defined in the
 //! FIX Dictionary specifications. Although this approach works quite well, it
 //! can become daunting to query a [`Dictionary`](crate::Dictionary) for even

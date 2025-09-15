@@ -4,7 +4,7 @@ use hotfix_dictionary::{self as dict, TagU32};
 use indoc::indoc;
 use std::marker::PhantomData;
 
-const FEFIX_VERSION: &str = env!("CARGO_PKG_VERSION");
+const HOTFIX_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Creates a [`String`] that contains a multiline Rust "Doc" comment explaining
 /// that all subsequent code was automatically generated.
@@ -14,7 +14,7 @@ const FEFIX_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// leading whitespace.
 ///
 /// ```text
-/// // Generated automatically by FerrumFIX. Do not modify manually.
+/// // Generated automatically by HotFIX. Do not modify manually.
 /// ```
 pub fn generated_code_notice() -> String {
     use chrono::prelude::*;
@@ -22,13 +22,13 @@ pub fn generated_code_notice() -> String {
     format!(
         indoc!(
             r#"
-            // Generated automatically by FerrumFIX {} on {}.
+            // Generated automatically by HotFIX {} on {}.
             //
             // DO NOT MODIFY MANUALLY.
             // DO NOT COMMIT TO VERSION CONTROL.
             // ALL CHANGES WILL BE OVERWRITTEN."#
         ),
-        FEFIX_VERSION,
+        HOTFIX_VERSION,
         Utc::now().to_rfc2822(),
     )
 }
@@ -102,8 +102,8 @@ pub struct Settings {
     pub indentation: String,
     /// The indentation level of all generated Rust code. Zero by default.
     pub indentation_depth: u32,
-    /// The name of the `fefix` crate for imports. `fefix` by default.
-    pub fefix_crate_name: String,
+    /// The name of the `hotfix` crate for imports. `hotfix` by default.
+    pub hotfix_crate_name: String,
     /// A list of derive macros on top of all generated FIX datatype `enum`s. E.g.:
     ///
     /// ```
@@ -147,7 +147,7 @@ impl Default for Settings {
                 "FieldType".to_string(),
             ],
             attributes_for_allowed_values: vec![],
-            fefix_crate_name: "hotfix".to_string(),
+            hotfix_crate_name: "hotfix".to_string(),
             phantom: PhantomData,
         }
     }
@@ -214,9 +214,9 @@ pub fn gen_definitions(fix_dictionary: &dict::Dictionary, settings: &Settings) -
 
             // {top_comment}
 
-            use {fefix_path}::dict::FieldLocation;
-            use {fefix_path}::dict::FixDatatype;
-            use {fefix_path}::{{FieldType, HardCodedFixFieldDefinition}};
+            use {hotfix_path}::dict::FieldLocation;
+            use {hotfix_path}::dict::FixDatatype;
+            use {hotfix_path}::{{FieldType, HardCodedFixFieldDefinition}};
 
             {enum_definitions}
 
@@ -226,7 +226,7 @@ pub fn gen_definitions(fix_dictionary: &dict::Dictionary, settings: &Settings) -
         top_comment = top_comment,
         enum_definitions = enums,
         field_defs = field_defs,
-        fefix_path = settings.fefix_crate_name,
+        hotfix_path = settings.hotfix_crate_name,
     );
     code
 }
