@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.27](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.0.26...hotfix-v0.0.27) - 2025-09-15
+
+### Added
+
+- expose Buffer type needed for codegen ([#184](https://github.com/Validus-Risk-Management/hotfix/pull/184))
+- handle messages with incorrect BeginString and comp ID ([#181](https://github.com/Validus-Risk-Management/hotfix/pull/181))
+
+### Other
+
+- test case for garbled message handling ([#180](https://github.com/Validus-Risk-Management/hotfix/pull/180))
+
 ## [0.0.26](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.0.25...hotfix-v0.0.26) - 2025-09-08
 
 ### Added
