@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-status-v0.1.2...hotfix-status-v0.1.3) - 2025-09-15
+
+### Added
+
+- make hotfix crate versions move independently ([#186](https://github.com/Validus-Risk-Management/hotfix/pull/186))
+
 ## [0.1.2](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-status-v0.1.1...hotfix-status-v0.1.2) - 2025-09-15
 
 ### Other
