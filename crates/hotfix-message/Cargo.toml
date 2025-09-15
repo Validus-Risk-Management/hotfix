@@ -20,17 +20,17 @@ workspace = true
 
 [dependencies]
 chrono = "0.4"
-hotfix-derive = { version = "0.0.27", path = "../hotfix-derive" }
-hotfix-dictionary = { version = "0.0.27", path = "../hotfix-dictionary" }
+hotfix-derive = { version = "0.1.0", path = "../hotfix-derive" }
+hotfix-dictionary = { version = "0.1.0", path = "../hotfix-dictionary" }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 anyhow = "1.0.75"
-hotfix-dictionary = { version = "0.0.27", path = "../hotfix-dictionary", features = ["fix42"] }
+hotfix-dictionary = { version = "0.1.0", path = "../hotfix-dictionary", features = ["fix42"] }
 quickcheck = "1"
 quickcheck_macros = "1"
 
 [build-dependencies]
 chrono = "0.4"
-hotfix-codegen = { version = "0.0.27", path = "../hotfix-codegen" }
-hotfix-dictionary = { version = "0.0.27", path = "../hotfix-dictionary", features = ["fix42"] }
+hotfix-codegen = { version = "0.1.0", path = "../hotfix-codegen" }
+hotfix-dictionary = { version = "0.1.0", path = "../hotfix-dictionary", features = ["fix42"] }

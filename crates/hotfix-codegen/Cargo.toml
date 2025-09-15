@@ -2,7 +2,7 @@
 name = "hotfix-codegen"
 description = "Code generation for HotFIX."
 readme = "./README.md"
-version.workspace = true
+version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,11 +16,11 @@ workspace = true
 
 [dependencies]
 chrono = "0.4"
-hotfix-dictionary = { version = "0.0.27", path = "../hotfix-dictionary" }
+hotfix-dictionary = { version = "0.1.0", path = "../hotfix-dictionary" }
 fnv = "1"
 heck = "0.5"
 indoc = "2"
 
 [dev-dependencies]
-hotfix-dictionary = { version = "0.0.27", path = "../hotfix-dictionary", features = ["fix40", "fix41", "fix42", "fix43", "fix50"] }
+hotfix-dictionary = { version = "0.1.0", path = "../hotfix-dictionary", features = ["fix40", "fix41", "fix42", "fix43", "fix50"] }
 syn = { version = "2", features = ["full", "parsing"] }
