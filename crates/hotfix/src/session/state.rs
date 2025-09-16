@@ -274,7 +274,16 @@ impl SessionState {
     pub fn as_status(&self) -> SessionInfoStatus {
         match self {
             SessionState::AwaitingLogon { .. } => SessionInfoStatus::AwaitingLogon,
-            SessionState::AwaitingResend(_) => SessionInfoStatus::AwaitingResend,
+            SessionState::AwaitingResend(AwaitingResendState {
+                begin_seq_number,
+                end_seq_number,
+                resend_attempts,
+                ..
+            }) => SessionInfoStatus::AwaitingResend {
+                begin: *begin_seq_number,
+                end: *end_seq_number,
+                attempts: *resend_attempts,
+            },
             SessionState::AwaitingLogout { .. } => SessionInfoStatus::AwaitingLogout,
             SessionState::Active(_) => SessionInfoStatus::Active,
             SessionState::LoggedOut { .. } => SessionInfoStatus::LoggedOut,

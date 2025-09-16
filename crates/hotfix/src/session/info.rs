@@ -18,7 +18,11 @@ pub struct SessionInfo {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum Status {
     AwaitingLogon,
-    AwaitingResend,
+    AwaitingResend {
+        begin: u64,
+        end: u64,
+        attempts: usize,
+    },
     AwaitingLogout,
     Active,
     LoggedOut,

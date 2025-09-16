@@ -116,7 +116,11 @@ async fn test_logon_response_with_sequence_number_too_high() {
     when(&mut mock_counterparty).sends_logon().await;
     // we then ask them to resend the message
     then(&session)
-        .status_changes_to(Status::AwaitingResend)
+        .status_changes_to(Status::AwaitingResend {
+            begin: 1,
+            end: 2,
+            attempts: 1,
+        })
         .await;
     then(&mut mock_counterparty)
         .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))

@@ -24,7 +24,11 @@ async fn test_message_sequence_number_too_high() {
 
     // we then ask them to resend the first message
     then(&session)
-        .status_changes_to(Status::AwaitingResend)
+        .status_changes_to(Status::AwaitingResend {
+            begin: 2,
+            end: 3,
+            attempts: 1,
+        })
         .await;
     then(&mut mock_counterparty)
         .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
@@ -61,16 +65,27 @@ async fn test_infinite_resend_requests_are_prevented() {
         .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
         .await;
     then(&session)
-        .status_changes_to(Status::AwaitingResend)
+        .status_changes_to(Status::AwaitingResend {
+            begin: garbled_message_seq_num as u64,
+            end: garbled_message_seq_num as u64 + 1,
+            attempts: 1,
+        })
         .await;
 
     // the counterparty attempts to resend twice more, but we are still unable to process the garbled message
-    for _ in 0..2 {
+    for attempts in 2..4 {
         when(&mut mock_counterparty)
             .resends_message(garbled_message_seq_num as u64)
             .await;
         when(&mut mock_counterparty)
             .resends_message(garbled_message_seq_num as u64 + 1)
+            .await;
+        then(&session)
+            .status_changes_to(Status::AwaitingResend {
+                begin: garbled_message_seq_num as u64,
+                end: garbled_message_seq_num as u64 + 1,
+                attempts,
+            })
             .await;
         then(&mut mock_counterparty)
             .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))

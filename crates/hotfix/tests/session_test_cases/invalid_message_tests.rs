@@ -34,9 +34,9 @@ async fn test_garbled_message_with_invalid_target_comp_id_gets_ignored() {
     let (session, mut mock_counterparty) = given_an_active_session().await;
 
     // counterparty sends a message with invalid body length, which constitutes a garbled message
-    let garbled_message = build_execution_report_with_incorrect_body_length(
-        mock_counterparty.next_target_sequence_number(),
-    );
+    let garbled_message_seq_num = mock_counterparty.next_target_sequence_number();
+    let garbled_message =
+        build_execution_report_with_incorrect_body_length(garbled_message_seq_num);
     when(&mut mock_counterparty)
         .sends_raw_message(garbled_message)
         .await;
@@ -51,7 +51,11 @@ async fn test_garbled_message_with_invalid_target_comp_id_gets_ignored() {
         .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
         .await;
     then(&session)
-        .status_changes_to(Status::AwaitingResend)
+        .status_changes_to(Status::AwaitingResend {
+            begin: garbled_message_seq_num as u64,
+            end: garbled_message_seq_num as u64 + 1,
+            attempts: 1,
+        })
         .await;
 
     when(&session).requests_disconnect().await;
