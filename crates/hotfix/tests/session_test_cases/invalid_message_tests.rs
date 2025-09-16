@@ -52,8 +52,8 @@ async fn test_garbled_message_with_invalid_target_comp_id_gets_ignored() {
         .await;
     then(&session)
         .status_changes_to(Status::AwaitingResend {
-            begin: garbled_message_seq_num as u64,
-            end: garbled_message_seq_num as u64 + 1,
+            begin: garbled_message_seq_num,
+            end: garbled_message_seq_num + 1,
             attempts: 1,
         })
         .await;

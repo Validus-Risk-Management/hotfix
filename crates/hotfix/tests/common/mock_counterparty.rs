@@ -53,7 +53,7 @@ where
         let raw_message = generate_message(
             &self.session_config.sender_comp_id,
             &self.session_config.target_comp_id,
-            self.sent_messages.len() + 1,
+            self.next_target_sequence_number(),
             message,
         )
         .expect("failed to generate message");
@@ -75,7 +75,7 @@ where
         let raw_message = generate_message(
             &self.session_config.sender_comp_id,
             &self.session_config.target_comp_id,
-            start_seq_no as usize,
+            start_seq_no,
             sequence_reset,
         )
         .expect("failed to generate message");
@@ -170,8 +170,8 @@ where
         }
     }
 
-    pub fn next_target_sequence_number(&self) -> usize {
-        self.sent_messages.len() + 1
+    pub fn next_target_sequence_number(&self) -> u64 {
+        self.sent_messages.len() as u64 + 1
     }
 
     fn create_writer() -> (WriterRef, Receiver<WriterMessage>) {

@@ -214,7 +214,7 @@ pub const CUSTOM_FIELD: &HardCodedFixFieldDefinition = &HardCodedFixFieldDefinit
     location: FieldLocation::Body,
 };
 
-pub fn build_execution_report_with_incorrect_body_length(msg_seq_num: usize) -> Vec<u8> {
+pub fn build_execution_report_with_incorrect_body_length(msg_seq_num: u64) -> Vec<u8> {
     let report = TestMessage::dummy_execution_report();
     let mut raw_message =
         generate_message(COUNTERPARTY_COMP_ID, OUR_COMP_ID, msg_seq_num, report).unwrap();
@@ -224,7 +224,7 @@ pub fn build_execution_report_with_incorrect_body_length(msg_seq_num: usize) -> 
     raw_message
 }
 
-pub fn build_execution_report_with_incorrect_begin_string(msg_seq_num: usize) -> Vec<u8> {
+pub fn build_execution_report_with_incorrect_begin_string(msg_seq_num: u64) -> Vec<u8> {
     let report = TestMessage::dummy_execution_report();
 
     // we expect BeginString FIX.4.4 but this message contains FIX.4.2
@@ -240,7 +240,7 @@ pub fn build_execution_report_with_incorrect_begin_string(msg_seq_num: usize) ->
 }
 
 pub fn build_execution_report_with_comp_id(
-    msg_seq_num: usize,
+    msg_seq_num: u64,
     sender_comp_id: &str,
     target_comp_id: &str,
 ) -> Vec<u8> {

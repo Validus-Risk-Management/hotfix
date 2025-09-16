@@ -43,6 +43,8 @@ async fn test_message_sequence_number_too_high() {
     then(&mut mock_counterparty).gets_disconnected().await;
 }
 
+/// Tests that when a counterparty repeatedly resends garbled messages that cannot be processed,
+/// the session eventually terminates the connection after exceeding the maximum resend attempts threshold.
 #[tokio::test]
 async fn test_infinite_resend_requests_are_prevented() {
     let (session, mut mock_counterparty) = given_an_active_session().await;
@@ -66,8 +68,8 @@ async fn test_infinite_resend_requests_are_prevented() {
         .await;
     then(&session)
         .status_changes_to(Status::AwaitingResend {
-            begin: garbled_message_seq_num as u64,
-            end: garbled_message_seq_num as u64 + 1,
+            begin: garbled_message_seq_num,
+            end: garbled_message_seq_num + 1,
             attempts: 1,
         })
         .await;
@@ -75,15 +77,15 @@ async fn test_infinite_resend_requests_are_prevented() {
     // the counterparty attempts to resend twice more, but we are still unable to process the garbled message
     for attempts in 2..4 {
         when(&mut mock_counterparty)
-            .resends_message(garbled_message_seq_num as u64)
+            .resends_message(garbled_message_seq_num)
             .await;
         when(&mut mock_counterparty)
-            .resends_message(garbled_message_seq_num as u64 + 1)
+            .resends_message(garbled_message_seq_num + 1)
             .await;
         then(&session)
             .status_changes_to(Status::AwaitingResend {
-                begin: garbled_message_seq_num as u64,
-                end: garbled_message_seq_num as u64 + 1,
+                begin: garbled_message_seq_num,
+                end: garbled_message_seq_num + 1,
                 attempts,
             })
             .await;
@@ -94,10 +96,10 @@ async fn test_infinite_resend_requests_are_prevented() {
 
     // they try a third time, which exceeds are attempts threshold, so the connection is terminated
     when(&mut mock_counterparty)
-        .resends_message(garbled_message_seq_num as u64)
+        .resends_message(garbled_message_seq_num)
         .await;
     when(&mut mock_counterparty)
-        .resends_message(garbled_message_seq_num as u64 + 1)
+        .resends_message(garbled_message_seq_num + 1)
         .await;
     then(&mut mock_counterparty).gets_disconnected().await;
 }

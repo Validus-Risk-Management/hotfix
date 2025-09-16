@@ -27,7 +27,7 @@ pub trait FixMessage: Clone + Send + 'static {
 pub fn generate_message(
     sender_comp_id: &str,
     target_comp_id: &str,
-    msg_seq_num: usize,
+    msg_seq_num: u64,
     message: impl FixMessage,
 ) -> Result<Vec<u8>, EncodeError> {
     let mut msg = Message::new("FIX.4.4", message.message_type());

@@ -680,7 +680,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         let msg = generate_message(
             &self.config.sender_comp_id,
             &self.config.target_comp_id,
-            seq_num as usize,
+            seq_num,
             message,
         )
         .unwrap();
@@ -703,7 +703,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         let raw_message = generate_message(
             &self.config.sender_comp_id,
             &self.config.target_comp_id,
-            begin as usize,
+            begin,
             sequence_reset,
         )
         .unwrap();
