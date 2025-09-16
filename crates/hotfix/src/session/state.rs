@@ -346,7 +346,7 @@ impl AwaitingResendState {
     }
 
     fn has_exceeded_allowed_attempts(&self) -> bool {
-        self.resend_attempts >= MAX_RESEND_ATTEMPTS
+        self.resend_attempts > MAX_RESEND_ATTEMPTS
     }
 }
 

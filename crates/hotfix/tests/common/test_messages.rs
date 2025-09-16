@@ -1,6 +1,10 @@
+use crate::common::setup::{COUNTERPARTY_COMP_ID, OUR_COMP_ID};
 use hotfix::Message as HotfixMessage;
-use hotfix::message::FixMessage;
-use hotfix_message::{Part, fix44};
+use hotfix::message::{FixMessage, generate_message};
+use hotfix_message::dict::{FieldLocation, FixDatatype};
+use hotfix_message::field_types::Timestamp;
+use hotfix_message::message::{Config, Message};
+use hotfix_message::{HardCodedFixFieldDefinition, Part, fix44};
 
 /// Business messages used for testing.
 #[derive(Debug, Clone)]
@@ -146,6 +150,111 @@ impl FixMessage for TestMessage {
             _ => panic!("Invalid message type: {msg_type}"),
         }
     }
+}
+
+/// A new order message with an extra, invalid field.
+#[derive(Clone, Debug)]
+pub struct ExecutionReportWithInvalidField {
+    order_id: String,
+    exec_id: String,
+    exec_type: fix44::ExecType,
+    ord_status: fix44::OrdStatus,
+    side: fix44::Side,
+    symbol: String,
+    order_qty: f64,
+    price: f64,
+    custom_field: String, // this field isn't recognised by our session
+}
+
+impl Default for ExecutionReportWithInvalidField {
+    fn default() -> Self {
+        Self {
+            order_id: "ORD123".to_string(),
+            exec_id: "EX123".to_string(),
+            exec_type: fix44::ExecType::New,
+            ord_status: fix44::OrdStatus::New,
+            side: fix44::Side::Buy,
+            symbol: "".to_string(),
+            order_qty: 100.0,
+            price: 100.0,
+            custom_field: "Hello world".to_string(),
+        }
+    }
+}
+
+impl FixMessage for ExecutionReportWithInvalidField {
+    fn write(&self, msg: &mut Message) {
+        msg.set(fix44::ORDER_ID, self.order_id.as_str());
+        msg.set(fix44::EXEC_ID, self.exec_id.as_str());
+        msg.set(fix44::EXEC_TYPE, self.exec_type);
+        msg.set(fix44::ORD_STATUS, self.ord_status);
+        msg.set(fix44::SIDE, self.side);
+        msg.set(fix44::SYMBOL, self.symbol.as_str());
+        msg.set(fix44::ORDER_QTY, self.order_qty);
+        msg.set(fix44::PRICE, self.price);
+
+        // this is the important bit, we use a custom tag
+        msg.set(CUSTOM_FIELD, self.custom_field.as_str());
+    }
+
+    fn message_type(&self) -> &str {
+        "D"
+    }
+
+    fn parse(_message: &Message) -> Self {
+        // we never parse this message
+        unimplemented!()
+    }
+}
+
+pub const CUSTOM_FIELD: &HardCodedFixFieldDefinition = &HardCodedFixFieldDefinition {
+    name: "Custom Field",
+    tag: 9999,
+    data_type: FixDatatype::String,
+    location: FieldLocation::Body,
+};
+
+pub fn build_execution_report_with_incorrect_body_length(msg_seq_num: usize) -> Vec<u8> {
+    let report = TestMessage::dummy_execution_report();
+    let mut raw_message =
+        generate_message(COUNTERPARTY_COMP_ID, OUR_COMP_ID, msg_seq_num, report).unwrap();
+
+    replace_field_value(&mut raw_message, 9, b"999");
+
+    raw_message
+}
+
+pub fn build_execution_report_with_incorrect_begin_string(msg_seq_num: usize) -> Vec<u8> {
+    let report = TestMessage::dummy_execution_report();
+
+    // we expect BeginString FIX.4.4 but this message contains FIX.4.2
+    let mut msg = Message::new("FIX.4.2", report.message_type());
+    msg.set(fix44::SENDER_COMP_ID, COUNTERPARTY_COMP_ID);
+    msg.set(fix44::TARGET_COMP_ID, OUR_COMP_ID);
+    msg.set(fix44::MSG_SEQ_NUM, msg_seq_num);
+    msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
+
+    report.write(&mut msg);
+
+    msg.encode(&Config::default()).unwrap()
+}
+
+pub fn build_execution_report_with_comp_id(
+    msg_seq_num: usize,
+    sender_comp_id: &str,
+    target_comp_id: &str,
+) -> Vec<u8> {
+    let report = TestMessage::dummy_execution_report();
+
+    let mut msg = Message::new("FIX.4.4", report.message_type());
+    msg.set(fix44::SENDER_COMP_ID, sender_comp_id);
+    msg.set(fix44::TARGET_COMP_ID, target_comp_id);
+    msg.set(fix44::MSG_SEQ_NUM, msg_seq_num);
+    msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
+
+    report.write(&mut msg);
+
+    msg.encode(&Config::default()).unwrap()
 }
 
 /// Replaces the value of a field in a raw FIX message.

@@ -1,7 +1,9 @@
 use crate::common::actions::when;
 use crate::common::assertions::then;
 use crate::common::setup::given_an_active_session;
-use crate::common::test_messages::TestMessage;
+use crate::common::test_messages::{
+    TestMessage, build_execution_report_with_incorrect_body_length,
+};
 use hotfix::session::Status;
 use hotfix_message::Part;
 use hotfix_message::fix44::MSG_TYPE;
@@ -34,5 +36,53 @@ async fn test_message_sequence_number_too_high() {
     then(&session).status_changes_to(Status::Active).await;
 
     when(&session).requests_disconnect().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
+}
+
+#[tokio::test]
+async fn test_infinite_resend_requests_are_prevented() {
+    let (session, mut mock_counterparty) = given_an_active_session().await;
+
+    // counterparty sends a message with invalid body length, which we skip as it's a garbled message
+    let garbled_message_seq_num = mock_counterparty.next_target_sequence_number();
+    let garbled_message =
+        build_execution_report_with_incorrect_body_length(garbled_message_seq_num);
+    when(&mut mock_counterparty)
+        .sends_raw_message(garbled_message)
+        .await;
+
+    // they then send a valid message
+    when(&mut mock_counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
+        .await;
+
+    // we then initiate a resend, having skipped the garbled message
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
+        .await;
+    then(&session)
+        .status_changes_to(Status::AwaitingResend)
+        .await;
+
+    // the counterparty attempts to resend twice more, but we are still unable to process the garbled message
+    for _ in 0..2 {
+        when(&mut mock_counterparty)
+            .resends_message(garbled_message_seq_num as u64)
+            .await;
+        when(&mut mock_counterparty)
+            .resends_message(garbled_message_seq_num as u64 + 1)
+            .await;
+        then(&mut mock_counterparty)
+            .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
+            .await;
+    }
+
+    // they try a third time, which exceeds are attempts threshold, so the connection is terminated
+    when(&mut mock_counterparty)
+        .resends_message(garbled_message_seq_num as u64)
+        .await;
+    when(&mut mock_counterparty)
+        .resends_message(garbled_message_seq_num as u64 + 1)
+        .await;
     then(&mut mock_counterparty).gets_disconnected().await;
 }
