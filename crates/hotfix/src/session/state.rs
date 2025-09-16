@@ -10,6 +10,7 @@ use tokio::time::Instant;
 use tracing::{debug, error};
 
 const TEST_REQUEST_THRESHOLD: f64 = 1.2;
+const MAX_RESEND_ATTEMPTS: usize = 3;
 
 pub(crate) type TestRequestId = String;
 
@@ -136,19 +137,36 @@ impl SessionState {
         }
     }
 
-    pub fn try_transition_to_awaiting_resend(&mut self, end_seq_number: u64) -> bool {
-        if matches!(self, SessionState::AwaitingLogout { .. }) {
-            error!("trying to request a resend while we are already logging out");
-            return false;
-        }
-
-        if let Some(writer) = self.get_writer() {
-            let awaiting_resend = AwaitingResendState::new(writer.to_owned(), end_seq_number);
-            *self = SessionState::AwaitingResend(awaiting_resend);
-            true
-        } else {
-            error!("trying to transition to awaiting resend without an established connection");
-            false
+    pub fn try_transition_to_awaiting_resend(
+        &mut self,
+        begin: u64,
+        end: u64,
+    ) -> AwaitingResendTransitionOutcome {
+        match self {
+            SessionState::AwaitingLogon { writer, .. }
+            | SessionState::Active(ActiveState { writer, .. }) => {
+                let awaiting_resend = AwaitingResendState::new(writer.to_owned(), begin, end);
+                *self = SessionState::AwaitingResend(awaiting_resend);
+                AwaitingResendTransitionOutcome::Success
+            }
+            SessionState::AwaitingResend(state) => {
+                let new_state = AwaitingResendState::from_awaiting_resend(state, begin, end);
+                if new_state.has_exceeded_allowed_attempts() {
+                    AwaitingResendTransitionOutcome::AttemptsExceeded
+                } else {
+                    *self = SessionState::AwaitingResend(new_state);
+                    AwaitingResendTransitionOutcome::Success
+                }
+            }
+            SessionState::AwaitingLogout { .. } => AwaitingResendTransitionOutcome::InvalidState(
+                "trying to request a resend while we are already logging out".to_string(),
+            ),
+            SessionState::LoggedOut { .. } | SessionState::Disconnected(_) => {
+                AwaitingResendTransitionOutcome::InvalidState(
+                    "trying to transition to awaiting resend without an established connection"
+                        .to_string(),
+                )
+            }
         }
     }
 
@@ -285,19 +303,50 @@ pub struct ActiveState {
 pub struct AwaitingResendState {
     /// The reference to the writer loop.
     pub(crate) writer: WriterRef,
+    /// The beginning of the gap we're waiting for the target to resend.
+    pub(crate) begin_seq_number: u64,
     /// The end of the gap we're waiting for the target to resend.
     pub(crate) end_seq_number: u64,
     /// Inbound messages we receive while processing the resend.
     pub(crate) inbound_queue: VecDeque<Message>,
+    /// The number of times we've attempted to ask the counterparty to resend the gap.
+    pub(crate) resend_attempts: usize,
 }
 
 impl AwaitingResendState {
-    pub fn new(writer: WriterRef, end_seq_number: u64) -> Self {
+    fn new(writer: WriterRef, begin_seq_number: u64, end_seq_number: u64) -> Self {
         Self {
             writer,
+            begin_seq_number,
             end_seq_number,
             inbound_queue: Default::default(),
+            resend_attempts: 1,
         }
+    }
+
+    fn from_awaiting_resend(
+        state: &mut AwaitingResendState,
+        begin_seq_number: u64,
+        end_seq_number: u64,
+    ) -> Self {
+        let resend_attempts = if state.begin_seq_number == begin_seq_number {
+            state.resend_attempts + 1
+        } else {
+            1
+        };
+        let inbound_queue = std::mem::take(&mut state.inbound_queue);
+
+        Self {
+            writer: state.writer.clone(),
+            begin_seq_number,
+            end_seq_number,
+            inbound_queue,
+            resend_attempts,
+        }
+    }
+
+    fn has_exceeded_allowed_attempts(&self) -> bool {
+        self.resend_attempts >= MAX_RESEND_ATTEMPTS
     }
 }
 
@@ -327,4 +376,10 @@ impl DisconnectedState {
     fn take_session_awaiter(&mut self) -> Option<oneshot::Sender<AwaitingActiveSessionResponse>> {
         self.session_awaiter.take()
     }
+}
+
+pub enum AwaitingResendTransitionOutcome {
+    Success,
+    InvalidState(String),
+    AttemptsExceeded,
 }

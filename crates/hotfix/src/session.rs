@@ -32,7 +32,7 @@ use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
 use crate::message_utils::is_admin;
 use crate::session::event::AwaitingActiveSessionResponse;
-use crate::session::state::TestRequestId;
+use crate::session::state::{AwaitingResendTransitionOutcome, TestRequestId};
 use crate::session_schedule::SessionSchedule;
 use event::SessionEvent;
 use hotfix_message::fix44::SessionRejectReason;
@@ -576,9 +576,26 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     async fn handle_sequence_number_too_high(&mut self, actual: u64, expected: u64) {
-        if self.state.try_transition_to_awaiting_resend(actual) {
-            debug!("we are behind target (ours: {expected}, theirs: {actual}), requesting resend.");
-            self.send_resend_request(expected, actual).await;
+        match self
+            .state
+            .try_transition_to_awaiting_resend(expected, actual)
+        {
+            AwaitingResendTransitionOutcome::Success => {
+                debug!(
+                    "we are behind target (ours: {expected}, theirs: {actual}), requesting resend."
+                );
+                self.send_resend_request(expected, actual).await;
+            }
+            AwaitingResendTransitionOutcome::InvalidState(reason) => {
+                error!("failed to request resend: {reason}");
+            }
+            AwaitingResendTransitionOutcome::AttemptsExceeded => {
+                self.state.disconnect().await;
+                self.state = SessionState::new_disconnected(
+                    false,
+                    "resend request attempts exceeded, manual intervention required",
+                );
+            }
         }
     }
 
