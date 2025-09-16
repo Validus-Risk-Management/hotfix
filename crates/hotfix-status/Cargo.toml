@@ -23,7 +23,7 @@ async-trait = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
 displaydoc = { workspace = true }
-hotfix = { version = "0.1.0", path = "../hotfix" }
+hotfix = { version = "0.1.1", path = "../hotfix" }
 mime_guess = { workspace = true, optional = true }
 rust-embed = { workspace = true, features = ["axum-ex"], optional = true }
 serde = { workspace = true, features = ["derive"] }
