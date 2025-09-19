@@ -383,3 +383,68 @@ pub enum AwaitingResendTransitionOutcome {
     BeginSeqNumberTooLow,
     AttemptsExceeded,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::mpsc;
+
+    #[test]
+    fn test_awaiting_resend_transition_begin_seq_number_too_low() {
+        let writer = create_writer_ref();
+        let mut state = SessionState::AwaitingResend(AwaitingResendState::new(writer, 1, 5));
+        let result = state.try_transition_to_awaiting_resend(0, 5);
+        assert!(matches!(
+            result,
+            AwaitingResendTransitionOutcome::BeginSeqNumberTooLow
+        ));
+    }
+
+    #[test]
+    fn test_awaiting_resend_transition_attempts_exceeded() {
+        let writer = create_writer_ref();
+        let mut state = SessionState::AwaitingResend(AwaitingResendState::new(writer, 1, 5));
+
+        // we can transition twice more without hitting the limit
+        let result = state.try_transition_to_awaiting_resend(1, 5);
+        assert!(matches!(result, AwaitingResendTransitionOutcome::Success));
+        let result = state.try_transition_to_awaiting_resend(1, 5);
+        assert!(matches!(result, AwaitingResendTransitionOutcome::Success));
+
+        // the fourth time we'd get into an AwaitingResendState with the same begin seq number, we get an error
+        let result = state.try_transition_to_awaiting_resend(1, 5);
+        assert!(matches!(
+            result,
+            AwaitingResendTransitionOutcome::AttemptsExceeded
+        ));
+    }
+
+    #[test]
+    fn test_awaiting_resend_transition_when_logged_out_is_prevented() {
+        let mut state = SessionState::LoggedOut { reconnect: false };
+
+        let result = state.try_transition_to_awaiting_resend(1, 5);
+        assert!(matches!(
+            result,
+            AwaitingResendTransitionOutcome::InvalidState(_)
+        ));
+    }
+
+    #[test]
+    fn test_awaiting_resend_transition_when_awaiting_logout_is_prevented() {
+        let mut state = SessionState::AwaitingLogout {
+            writer: create_writer_ref(),
+        };
+
+        let result = state.try_transition_to_awaiting_resend(1, 5);
+        assert!(matches!(
+            result,
+            AwaitingResendTransitionOutcome::InvalidState(_)
+        ));
+    }
+
+    fn create_writer_ref() -> WriterRef {
+        let (sender, _) = mpsc::channel(10);
+        WriterRef::new(sender)
+    }
+}
