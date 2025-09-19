@@ -331,14 +331,14 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         match actual_seq_number.cmp(&expected_seq_number) {
             Ordering::Greater => {
                 return Err(MessageVerificationError::SeqNumberTooHigh {
-                    actual: actual_seq_number,
                     expected: expected_seq_number,
+                    actual: actual_seq_number,
                 });
             }
             Ordering::Less => {
                 return Err(MessageVerificationError::SeqNumberTooLow {
-                    actual: actual_seq_number,
                     expected: expected_seq_number,
+                    actual: actual_seq_number,
                 });
             }
             _ => {}
@@ -521,11 +521,11 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     async fn handle_verification_error(&mut self, error: MessageVerificationError) {
         match error {
-            MessageVerificationError::SeqNumberTooLow { actual, expected } => {
-                self.handle_sequence_number_too_low(actual, expected).await;
+            MessageVerificationError::SeqNumberTooLow { expected, actual } => {
+                self.handle_sequence_number_too_low(expected, actual).await;
             }
-            MessageVerificationError::SeqNumberTooHigh { actual, expected } => {
-                self.handle_sequence_number_too_high(actual, expected).await;
+            MessageVerificationError::SeqNumberTooHigh { expected, actual } => {
+                self.handle_sequence_number_too_high(expected, actual).await;
             }
             MessageVerificationError::IncorrectBeginString(begin_string) => {
                 self.handle_incorrect_begin_string(begin_string).await;
@@ -566,7 +566,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             .await;
     }
 
-    async fn handle_sequence_number_too_low(&mut self, actual: u64, expected: u64) {
+    async fn handle_sequence_number_too_low(&mut self, expected: u64, actual: u64) {
         error!(
             "we expected {expected} sequence number, but target sent lower ({actual}), terminating..."
         );
@@ -575,7 +575,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         self.state = SessionState::LoggedOut { reconnect: false };
     }
 
-    async fn handle_sequence_number_too_high(&mut self, actual: u64, expected: u64) {
+    async fn handle_sequence_number_too_high(&mut self, expected: u64, actual: u64) {
         match self
             .state
             .try_transition_to_awaiting_resend(expected, actual)
