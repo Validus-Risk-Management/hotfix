@@ -149,15 +149,7 @@ impl SessionState {
                 *self = SessionState::AwaitingResend(awaiting_resend);
                 AwaitingResendTransitionOutcome::Success
             }
-            SessionState::AwaitingResend(state) => {
-                let new_state = AwaitingResendState::from_awaiting_resend(state, begin, end);
-                if new_state.has_exceeded_allowed_attempts() {
-                    AwaitingResendTransitionOutcome::AttemptsExceeded
-                } else {
-                    *self = SessionState::AwaitingResend(new_state);
-                    AwaitingResendTransitionOutcome::Success
-                }
-            }
+            SessionState::AwaitingResend(state) => state.update(begin, end),
             SessionState::AwaitingLogout { .. } => AwaitingResendTransitionOutcome::InvalidState(
                 "trying to request a resend while we are already logging out".to_string(),
             ),
@@ -333,29 +325,27 @@ impl AwaitingResendState {
         }
     }
 
-    fn from_awaiting_resend(
-        state: &mut AwaitingResendState,
+    fn update(
+        &mut self,
         begin_seq_number: u64,
         end_seq_number: u64,
-    ) -> Self {
-        let resend_attempts = if state.begin_seq_number == begin_seq_number {
-            state.resend_attempts + 1
+    ) -> AwaitingResendTransitionOutcome {
+        let resend_attempts = if self.begin_seq_number == begin_seq_number {
+            if self.resend_attempts + 1 > MAX_RESEND_ATTEMPTS {
+                return AwaitingResendTransitionOutcome::AttemptsExceeded;
+            }
+            self.resend_attempts + 1
+        } else if begin_seq_number < self.begin_seq_number {
+            return AwaitingResendTransitionOutcome::BeginSeqNumberTooLow;
         } else {
             1
         };
-        let inbound_queue = std::mem::take(&mut state.inbound_queue);
 
-        Self {
-            writer: state.writer.clone(),
-            begin_seq_number,
-            end_seq_number,
-            inbound_queue,
-            resend_attempts,
-        }
-    }
+        self.resend_attempts = resend_attempts;
+        self.begin_seq_number = begin_seq_number;
+        self.end_seq_number = end_seq_number;
 
-    fn has_exceeded_allowed_attempts(&self) -> bool {
-        self.resend_attempts > MAX_RESEND_ATTEMPTS
+        AwaitingResendTransitionOutcome::Success
     }
 }
 
@@ -390,5 +380,6 @@ impl DisconnectedState {
 pub enum AwaitingResendTransitionOutcome {
     Success,
     InvalidState(String),
+    BeginSeqNumberTooLow,
     AttemptsExceeded,
 }

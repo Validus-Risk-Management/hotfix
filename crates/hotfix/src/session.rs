@@ -589,6 +589,13 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             AwaitingResendTransitionOutcome::InvalidState(reason) => {
                 error!("failed to request resend: {reason}");
             }
+            AwaitingResendTransitionOutcome::BeginSeqNumberTooLow => {
+                self.state.disconnect().await;
+                self.state = SessionState::new_disconnected(
+                    false,
+                    "awaiting resend begin seq number unexpectedly lower than the previous resend request's",
+                );
+            }
             AwaitingResendTransitionOutcome::AttemptsExceeded => {
                 self.state.disconnect().await;
                 self.state = SessionState::new_disconnected(
