@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.1.1...hotfix-v0.2.0) - 2025-09-22
+
+### Added
+
+- resolve begin string for new messages from config ([#192](https://github.com/Validus-Risk-Management/hotfix/pull/192))
+- handle infinite resend request loops ([#191](https://github.com/Validus-Risk-Management/hotfix/pull/191))
+
 ## [0.1.1](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.1.0...hotfix-v0.1.1) - 2025-09-16
 
 ### Other
