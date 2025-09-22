@@ -51,6 +51,7 @@ where
 
     pub async fn push_previously_sent_message(&mut self, message: impl FixMessage) {
         let raw_message = generate_message(
+            &self.session_config.begin_string,
             &self.session_config.sender_comp_id,
             &self.session_config.target_comp_id,
             self.next_target_sequence_number(),
@@ -73,6 +74,7 @@ where
             new_seq_no,
         };
         let raw_message = generate_message(
+            &self.session_config.begin_string,
             &self.session_config.sender_comp_id,
             &self.session_config.target_comp_id,
             start_seq_no,
@@ -94,6 +96,7 @@ where
 
     pub async fn send_message(&mut self, message: impl FixMessage) {
         let raw_message = generate_message(
+            &self.session_config.begin_string,
             &self.session_config.sender_comp_id,
             &self.session_config.target_comp_id,
             self.next_target_sequence_number(),

@@ -216,8 +216,14 @@ pub const CUSTOM_FIELD: &HardCodedFixFieldDefinition = &HardCodedFixFieldDefinit
 
 pub fn build_execution_report_with_incorrect_body_length(msg_seq_num: u64) -> Vec<u8> {
     let report = TestMessage::dummy_execution_report();
-    let mut raw_message =
-        generate_message(COUNTERPARTY_COMP_ID, OUR_COMP_ID, msg_seq_num, report).unwrap();
+    let mut raw_message = generate_message(
+        "FIX.4.4",
+        COUNTERPARTY_COMP_ID,
+        OUR_COMP_ID,
+        msg_seq_num,
+        report,
+    )
+    .unwrap();
 
     replace_field_value(&mut raw_message, 9, b"999");
 

@@ -1,6 +1,6 @@
 [package]
 name = "hotfix-status"
-description = "Status endpoints and an option web-based dashboard for the HotFIX engine"
+description = "Status endpoints and an optional web-based dashboard for the HotFIX engine"
 version = "0.1.4"
 authors.workspace = true
 edition.workspace = true

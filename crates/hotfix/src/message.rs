@@ -25,12 +25,13 @@ pub trait FixMessage: Clone + Send + 'static {
 }
 
 pub fn generate_message(
+    begin_string: &str,
     sender_comp_id: &str,
     target_comp_id: &str,
     msg_seq_num: u64,
     message: impl FixMessage,
 ) -> Result<Vec<u8>, EncodeError> {
-    let mut msg = Message::new("FIX.4.4", message.message_type());
+    let mut msg = Message::new(begin_string, message.message_type());
     msg.set(fix44::SENDER_COMP_ID, sender_comp_id);
     msg.set(fix44::TARGET_COMP_ID, target_comp_id.as_bytes());
     msg.set(fix44::MSG_SEQ_NUM, msg_seq_num);

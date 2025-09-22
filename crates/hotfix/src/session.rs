@@ -685,6 +685,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
         let msg_type = message.message_type().as_bytes().to_vec();
         let msg = generate_message(
+            &self.config.begin_string,
             &self.config.sender_comp_id,
             &self.config.target_comp_id,
             seq_num,
@@ -708,6 +709,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             new_seq_no: end,
         };
         let raw_message = generate_message(
+            &self.config.begin_string,
             &self.config.sender_comp_id,
             &self.config.target_comp_id,
             begin,
