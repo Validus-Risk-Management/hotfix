@@ -73,7 +73,10 @@ async fn main() {
 
     user_loop(&initiator).await;
     status_service_token.cancel();
-    initiator.shutdown().await.expect("shutdown to succeed");
+    initiator
+        .shutdown()
+        .await
+        .expect("graceful shutdown to succeed");
 }
 
 async fn user_loop(session: &Initiator<Message>) {
