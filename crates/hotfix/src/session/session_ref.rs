@@ -83,4 +83,11 @@ impl<M: FixMessage> SessionRef<M> {
             .unwrap();
         receiver.await.expect("to receive a response")
     }
+
+    pub async fn shutdown(&self) {
+        self.sender
+            .send(SessionEvent::ShutdownRequested)
+            .await
+            .unwrap();
+    }
 }

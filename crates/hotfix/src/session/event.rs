@@ -20,6 +20,8 @@ pub enum SessionEvent<M> {
     AwaitingActiveSession(oneshot::Sender<AwaitingActiveSessionResponse>),
     /// Ask the session for a report on its state
     SessionInfoRequested(oneshot::Sender<SessionInfo>),
+    /// Ask the session to shut down.
+    ShutdownRequested,
 }
 
 /// The response sent by the session to AwaitingActiveSession messages.

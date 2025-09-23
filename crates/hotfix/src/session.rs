@@ -713,6 +713,9 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                     error!("failed to respond to session info request");
                 }
             }
+            SessionEvent::ShutdownRequested => {
+                self.logout_and_terminate("shutdown requested").await;
+            }
         }
     }
 
