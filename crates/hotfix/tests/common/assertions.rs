@@ -1,6 +1,7 @@
 use crate::common::mock_counterparty::MockCounterparty;
 use crate::common::test_messages::TestMessage;
-use hotfix::session::{SessionRef, Status};
+use hotfix::session::SessionRef;
+use hotfix::session::Status;
 use hotfix_message::message::Message;
 use std::time::Duration;
 

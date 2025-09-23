@@ -6,10 +6,10 @@ pub mod tls;
 use std::io;
 use tokio::io::{AsyncRead, AsyncWrite};
 
+use crate::session::SessionRef;
 use crate::{
     config::SessionConfig,
     message::FixMessage,
-    session::SessionRef,
     transport::{
         FixConnection, socket_reader::spawn_socket_reader, socket_writer::spawn_socket_writer,
         tcp::create_tcp_connection, tls::create_tcp_over_tls_connection,
