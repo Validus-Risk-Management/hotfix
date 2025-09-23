@@ -714,7 +714,9 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 }
             }
             SessionEvent::ShutdownRequested => {
+                // TODO: revisit logout & shutdown flows once logout timeouts are implemented
                 self.logout_and_terminate("shutdown requested").await;
+                self.state = SessionState::new_disconnected(false, "shutdown requested");
             }
         }
     }

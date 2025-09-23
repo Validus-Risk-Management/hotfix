@@ -2750,6 +2750,7 @@ dependencies = [
  "hotfix",
  "hotfix-status",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
  "uuid",
