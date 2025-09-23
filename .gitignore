@@ -1,4 +1,5 @@
 /target
 /.idea
+/docs
 **/.DS_Store
 session.db

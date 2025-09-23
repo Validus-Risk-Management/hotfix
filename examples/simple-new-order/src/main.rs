@@ -126,7 +126,7 @@ async fn start_session(
         Database::Redb => {
             let store = hotfix::store::redb::RedbMessageStore::new("session.db")
                 .expect("be able to create store");
-            Initiator::new(session_config, app, store).await
+            Initiator::start(session_config, app, store).await
         }
         Database::Mongodb => {
             let uri = "mongodb://localhost:30001";
@@ -137,7 +137,7 @@ async fn start_session(
                 hotfix::store::mongodb::MongoDbMessageStore::new(client.database("hotfix"), None)
                     .await
                     .expect("be able to create store");
-            Initiator::new(session_config, app, store).await
+            Initiator::start(session_config, app, store).await
         }
     }
 }

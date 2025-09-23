@@ -23,7 +23,7 @@ pub struct Initiator<M> {
 }
 
 impl<M: FixMessage> Initiator<M> {
-    pub async fn new(
+    pub async fn start(
         config: SessionConfig,
         application: impl Application<M>,
         store: impl MessageStore + Send + Sync + 'static,
