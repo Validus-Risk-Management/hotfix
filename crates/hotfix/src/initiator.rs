@@ -20,6 +20,7 @@ use crate::transport::connect;
 pub struct Initiator<M> {
     pub config: SessionConfig,
     session: SessionRef<M>,
+    connection_loop_handle: tokio::task::JoinHandle<()>,
 }
 
 impl<M: FixMessage> Initiator<M> {
@@ -31,7 +32,7 @@ impl<M: FixMessage> Initiator<M> {
         let application_ref = ApplicationRef::new(application);
         let session_ref = SessionRef::new(config.clone(), application_ref, store);
 
-        tokio::spawn({
+        let connection_loop_handle = tokio::spawn({
             let config = config.clone();
             let session_ref = session_ref.clone();
             establish_connection(config, session_ref)
@@ -40,6 +41,7 @@ impl<M: FixMessage> Initiator<M> {
         Self {
             config,
             session: session_ref,
+            connection_loop_handle,
         }
     }
 
@@ -53,6 +55,11 @@ impl<M: FixMessage> Initiator<M> {
 
     pub fn session_ref(&self) -> SessionRef<M> {
         self.session.clone()
+    }
+
+    pub async fn shutdown(self) -> Result<(), tokio::task::JoinError> {
+        self.session.shutdown().await;
+        self.connection_loop_handle.await
     }
 }
 

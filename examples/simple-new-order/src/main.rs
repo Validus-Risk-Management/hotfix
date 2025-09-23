@@ -71,11 +71,12 @@ async fn main() {
         status_service_token.clone(),
     ));
 
-    user_loop(initiator).await;
+    user_loop(&initiator).await;
     status_service_token.cancel();
+    initiator.shutdown().await.expect("shutdown to succeed");
 }
 
-async fn user_loop(session: Initiator<Message>) {
+async fn user_loop(session: &Initiator<Message>) {
     loop {
         println!("(q) to quit, (s) to send message");
 
@@ -92,7 +93,7 @@ async fn user_loop(session: Initiator<Message>) {
                 return;
             }
             "s" => {
-                send_message(&session).await;
+                send_message(session).await;
             }
             _ => {
                 println!("Unrecognised command");
