@@ -1,4 +1,4 @@
-//! Derive macros for HotFIX.
+//! Derive macros for [HotFIX](https://crates.io/crates/hotfix).
 
 #![deny(missing_debug_implementations, clippy::useless_conversion)]
 

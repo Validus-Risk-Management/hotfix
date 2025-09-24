@@ -1,3 +1,5 @@
+//! Code generation for [HotFIX](https://crates.io/crates/hotfix).
+
 use fnv::FnvHashSet;
 use heck::{ToPascalCase, ToShoutySnakeCase};
 use hotfix_dictionary::{self as dict, TagU32};
