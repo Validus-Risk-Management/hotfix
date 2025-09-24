@@ -1,7 +1,7 @@
 [package]
 name = "hotfix-status"
 description = "Status endpoints and an optional web-based dashboard for the HotFIX engine"
-version = "0.1.5"
+version = "0.1.6"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -23,7 +23,7 @@ async-trait = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
 displaydoc = { workspace = true }
-hotfix = { version = "0.2.0", path = "../hotfix" }
+hotfix = { version = "0.2.1", path = "../hotfix" }
 mime_guess = { workspace = true, optional = true }
 rust-embed = { workspace = true, features = ["axum-ex"], optional = true }
 serde = { workspace = true, features = ["derive"] }
