@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-derive-v0.1.0...hotfix-derive-v0.1.1) - 2025-09-24
+
+### Other
+
+- Update README and doc comments ([#199](https://github.com/Validus-Risk-Management/hotfix/pull/199))
+
 ## [0.0.27](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-derive-v0.0.26...hotfix-derive-v0.0.27) - 2025-09-15
 
 ### Added

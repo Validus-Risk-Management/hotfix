@@ -1137,7 +1137,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-codegen"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "fnv",
@@ -1149,7 +1149,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-derive"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "darling 0.21.0",
  "proc-macro-crate",
@@ -1171,7 +1171,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-message"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "chrono",
