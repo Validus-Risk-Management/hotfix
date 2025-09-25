@@ -25,6 +25,7 @@ pub enum InvalidReason {
     InvalidField(u32),
     InvalidGroup(u32),
     InvalidComponent(String),
+    InvalidMsgType(String),
 }
 
 #[derive(Debug)]

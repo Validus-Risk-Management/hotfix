@@ -52,6 +52,7 @@ impl<'a> MessageParser<'a> {
             Ok((header, trailer)) => (header, trailer),
             Err(err) => return err.into(),
         };
+
         let next = match self.build_header(&mut header) {
             Ok(next_field) => next_field,
             Err(err) => {
@@ -73,6 +74,7 @@ impl<'a> MessageParser<'a> {
             body,
             trailer,
         };
+
         ParsedMessage::Valid(msg)
     }
 
@@ -118,7 +120,6 @@ impl<'a> MessageParser<'a> {
 
         Ok((header, trailer))
     }
-
     fn parse_begin_string(&mut self) -> Result<Field, MessageIntegrityError> {
         if let Some(begin_string) = self.next_field()
             && begin_string.tag.get() == BEGIN_STRING.tag
@@ -161,6 +162,14 @@ impl<'a> MessageParser<'a> {
 
     fn build_header(&mut self, header: &mut Header) -> ParserResult<Field> {
         // we have already added the first 3 mandatory fields, build the rest
+
+        let msg_type = header
+            .get::<&str>(MSG_TYPE)
+            .expect("this should never fail as we've verified the integrity of the header");
+        if self.dict.message_by_msgtype(msg_type).is_none() {
+            return Err(ParserError::InvalidMsgType(msg_type.to_string()));
+        }
+
         loop {
             let field = self.next_field().ok_or(ParserError::Malformed(
                 "message ended within header".to_string(),
@@ -363,6 +372,10 @@ fn parser_error_to_parsed_message(err: ParserError, header: Header) -> ParsedMes
         },
         ParserError::InvalidComponent(tag) => ParsedMessage::Invalid {
             reason: InvalidReason::InvalidComponent(tag),
+            message: Message::with_header(header),
+        },
+        ParserError::InvalidMsgType(msg_type) => ParsedMessage::Invalid {
+            reason: InvalidReason::InvalidMsgType(msg_type),
             message: Message::with_header(header),
         },
         ParserError::Malformed(_) => ParsedMessage::Garbled(GarbledReason::Malformed),

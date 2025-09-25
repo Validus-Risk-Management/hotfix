@@ -19,6 +19,8 @@ pub enum ParserError {
     InvalidGroup(u32),
     #[error("component (name = {0}) is missing from FIX dictionary")]
     InvalidComponent(String),
+    #[error("MsgType {0} is not a valid message type")]
+    InvalidMsgType(String),
     #[error("malformed message: {0}")]
     Malformed(String),
 }

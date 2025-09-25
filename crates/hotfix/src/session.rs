@@ -96,7 +96,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         debug!("received message: {}", raw_message);
         if !self.state.is_expecting_test_response() {
             // if we are not awaiting a specific test response, any message can reset the timer
-            // otherwise, only a heartbeat with the corresponding TestReqID can
+            // otherwise only a heartbeat with the corresponding TestReqID can
             self.reset_peer_timer(None);
         }
 
@@ -132,6 +132,19 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 InvalidReason::InvalidComponent(_component_name) => {
                     // TODO: what's the correct way to handle this?
                     warn!("received invalid component");
+                }
+                InvalidReason::InvalidMsgType(msg_type) => {
+                    match message.header().get(fix44::MSG_SEQ_NUM) {
+                        Ok(msg_seq_num) => {
+                            let reject = Reject::new(msg_seq_num)
+                                .session_reject_reason(SessionRejectReason::InvalidMsgtype)
+                                .text(&format!("invalid message type {msg_type}"));
+                            self.send_message(reject).await;
+                        }
+                        Err(err) => {
+                            error!("failed to get message seq num: {:?}", err);
+                        }
+                    }
                 }
             },
             ParsedMessage::UnexpectedError(err) => {
