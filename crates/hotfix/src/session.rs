@@ -134,17 +134,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                     warn!("received invalid component");
                 }
                 InvalidReason::InvalidMsgType(msg_type) => {
-                    match message.header().get(fix44::MSG_SEQ_NUM) {
-                        Ok(msg_seq_num) => {
-                            let reject = Reject::new(msg_seq_num)
-                                .session_reject_reason(SessionRejectReason::InvalidMsgtype)
-                                .text(&format!("invalid message type {msg_type}"));
-                            self.send_message(reject).await;
-                        }
-                        Err(err) => {
-                            error!("failed to get message seq num: {:?}", err);
-                        }
-                    }
+                    self.handle_invalid_msg_type(message, &msg_type).await;
                 }
             },
             ParsedMessage::UnexpectedError(err) => {
@@ -540,6 +530,29 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                     false,
                     "resend request attempts exceeded, manual intervention required",
                 );
+            }
+        }
+    }
+
+    async fn handle_invalid_msg_type(&mut self, message: Message, msg_type: &str) {
+        match message.header().get(fix44::MSG_SEQ_NUM) {
+            Ok(msg_seq_num) => {
+                let reject = Reject::new(msg_seq_num)
+                    .session_reject_reason(SessionRejectReason::InvalidMsgtype)
+                    .text(&format!("invalid message type {msg_type}"));
+                self.send_message(reject).await;
+
+                #[allow(clippy::collapsible_if)]
+                if let Ok(seq_num) = message.header().get::<u64>(fix44::MSG_SEQ_NUM)
+                    && self.store.next_target_seq_number() == seq_num
+                {
+                    if let Err(err) = self.store.increment_target_seq_number().await {
+                        error!("failed to increment target seq number: {:?}", err);
+                    };
+                }
+            }
+            Err(err) => {
+                error!("failed to get message seq num: {:?}", err);
             }
         }
     }

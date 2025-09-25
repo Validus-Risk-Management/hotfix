@@ -16,6 +16,26 @@ pub fn then<T>(target: T) -> Then<T> {
 }
 
 impl Then<&SessionRef<TestMessage>> {
+    pub async fn target_sequence_number_reaches(self, expected_target_sequence_number: u64) {
+        let timeout = DEFAULT_TIMEOUT;
+        let deadline = tokio::time::Instant::now() + timeout;
+        let retry_interval = Duration::from_millis(1);
+
+        let mut session_info = self.target.get_session_info().await;
+        while tokio::time::Instant::now() < deadline {
+            if session_info.next_target_seq_number - 1 == expected_target_sequence_number {
+                return;
+            }
+            tokio::time::sleep(retry_interval).await;
+            session_info = self.target.get_session_info().await;
+        }
+
+        let actual_target_seq_number = session_info.next_target_seq_number - 1;
+        panic!(
+            "session did not reach target sequence number within timeout. Expected: {expected_target_sequence_number}, Actual: {actual_target_seq_number}"
+        );
+    }
+
     pub async fn status_changes_to(self, expected_status: Status) {
         self.status_changes_within_time(expected_status, DEFAULT_TIMEOUT)
             .await;

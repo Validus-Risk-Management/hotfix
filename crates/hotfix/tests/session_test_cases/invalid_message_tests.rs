@@ -143,10 +143,8 @@ async fn test_message_with_invalid_msg_type() {
     let (session, mut mock_counterparty) = given_an_active_session().await;
 
     // a message with invalid MsgType is sent by the counterparty
-    let invalid_message = build_execution_report_with_custom_msg_type(
-        mock_counterparty.next_target_sequence_number(),
-        "ZZ",
-    );
+    let sequence_number = mock_counterparty.next_target_sequence_number();
+    let invalid_message = build_execution_report_with_custom_msg_type(sequence_number, "ZZ");
     when(&mut mock_counterparty)
         .sends_raw_message(invalid_message)
         .await;
@@ -157,6 +155,10 @@ async fn test_message_with_invalid_msg_type() {
             assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "3");
             assert_eq!(msg.get::<u32>(SESSION_REJECT_REASON).unwrap(), 11);
         })
+        .await;
+    // our target sequence number should be incremented
+    then(&session)
+        .target_sequence_number_reaches(sequence_number)
         .await;
 
     when(&session).requests_disconnect().await;
