@@ -163,13 +163,6 @@ impl<'a> MessageParser<'a> {
     fn build_header(&mut self, header: &mut Header) -> ParserResult<Field> {
         // we have already added the first 3 mandatory fields, build the rest
 
-        let msg_type = header
-            .get::<&str>(MSG_TYPE)
-            .expect("this should never fail as we've verified the integrity of the header");
-        if self.dict.message_by_msgtype(msg_type).is_none() {
-            return Err(ParserError::InvalidMsgType(msg_type.to_string()));
-        }
-
         loop {
             let field = self.next_field().ok_or(ParserError::Malformed(
                 "message ended within header".to_string(),
@@ -178,6 +171,15 @@ impl<'a> MessageParser<'a> {
             if self.header_tags.contains(&field.tag) {
                 header.fields.insert(field);
             } else {
+                // check the message type once all other header fields have been parsed
+                // we delay it until after parsing so our rejection has access to fields like the sequence number
+                let msg_type = header
+                    .get::<&str>(MSG_TYPE)
+                    .expect("this should never fail as we've verified the integrity of the header");
+                if self.dict.message_by_msgtype(msg_type).is_none() {
+                    return Err(ParserError::InvalidMsgType(msg_type.to_string()));
+                }
+
                 return Ok(field);
             }
         }

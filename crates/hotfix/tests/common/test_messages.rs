@@ -263,6 +263,20 @@ pub fn build_execution_report_with_comp_id(
     msg.encode(&Config::default()).unwrap()
 }
 
+pub fn build_execution_report_with_custom_msg_type(msg_seq_num: u64, msg_type: &str) -> Vec<u8> {
+    let report = TestMessage::dummy_execution_report();
+
+    let mut msg = Message::new("FIX.4.4", msg_type);
+    msg.set(fix44::SENDER_COMP_ID, COUNTERPARTY_COMP_ID);
+    msg.set(fix44::TARGET_COMP_ID, OUR_COMP_ID);
+    msg.set(fix44::MSG_SEQ_NUM, msg_seq_num);
+    msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
+
+    report.write(&mut msg);
+
+    msg.encode(&Config::default()).unwrap()
+}
+
 /// Replaces the value of a field in a raw FIX message.
 pub fn replace_field_value(raw_message: &mut Vec<u8>, tag: u32, new_value: &[u8]) {
     let tag_bytes = format!("{}=", tag).into_bytes();

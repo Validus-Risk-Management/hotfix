@@ -3,12 +3,13 @@ use crate::common::assertions::then;
 use crate::common::setup::{COUNTERPARTY_COMP_ID, OUR_COMP_ID, given_an_active_session};
 use crate::common::test_messages::{
     ExecutionReportWithInvalidField, TestMessage, build_execution_report_with_comp_id,
+    build_execution_report_with_custom_msg_type,
     build_execution_report_with_incorrect_begin_string,
     build_execution_report_with_incorrect_body_length,
 };
 use hotfix::session::Status;
 use hotfix_message::Part;
-use hotfix_message::fix44::MSG_TYPE;
+use hotfix_message::fix44::{MSG_TYPE, SESSION_REJECT_REASON};
 
 /// Tests that when a counterparty sends a message containing an invalid/unrecognised field,
 /// the session rejects the message by sending a Reject (MsgType=3) message back.
@@ -132,5 +133,32 @@ async fn test_message_with_invalid_sender_comp_id() {
     then(&mut mock_counterparty)
         .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "5"))
         .await;
+    then(&mut mock_counterparty).gets_disconnected().await;
+}
+
+/// Tests that when the counterparty sends a message with an invalid MsgType,
+/// the session sends a Reject (MsgType=3) with the appropriate reject reason.
+#[tokio::test]
+async fn test_message_with_invalid_msg_type() {
+    let (session, mut mock_counterparty) = given_an_active_session().await;
+
+    // a message with invalid MsgType is sent by the counterparty
+    let invalid_message = build_execution_report_with_custom_msg_type(
+        mock_counterparty.next_target_sequence_number(),
+        "ZZ",
+    );
+    when(&mut mock_counterparty)
+        .sends_raw_message(invalid_message)
+        .await;
+
+    // then we send a reject
+    then(&mut mock_counterparty)
+        .receives(|msg| {
+            assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "3");
+            assert_eq!(msg.get::<u32>(SESSION_REJECT_REASON).unwrap(), 11);
+        })
+        .await;
+
+    when(&session).requests_disconnect().await;
     then(&mut mock_counterparty).gets_disconnected().await;
 }

@@ -68,7 +68,7 @@ async fn main() {
     let status_service_token = CancellationToken::new();
     tokio::spawn(start_status_service(
         initiator.session_ref(),
-        status_service_token.clone(),
+        status_service_token.child_token(),
     ));
 
     user_loop(&initiator).await;
