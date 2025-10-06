@@ -61,13 +61,20 @@ where
         self.sent_messages.push(raw_message);
     }
 
-    pub async fn resend_message(&mut self, sequence_number: u64) {
+    pub async fn resend_message(&mut self, sequence_number: u64, skip_updates: bool) {
         let index = sequence_number as usize - 1;
         assert!(
             index < self.sent_messages.len(),
             "attempted to resend unknown sequence number {sequence_number}"
         );
         let original_raw = self.sent_messages[index].clone();
+
+        if skip_updates {
+            self.session_ref
+                .new_fix_message_received(RawFixMessage::new(original_raw))
+                .await;
+            return;
+        }
 
         let parsed = Message::from_bytes(&self.message_config, &self.dictionary, &original_raw);
         let mut message = match parsed {

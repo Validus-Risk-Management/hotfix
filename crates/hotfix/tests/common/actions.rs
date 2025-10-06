@@ -30,7 +30,11 @@ impl When<&mut MockCounterparty<TestMessage>> {
     }
 
     pub async fn resends_message(&mut self, sequence_number: u64) {
-        self.target.resend_message(sequence_number).await;
+        self.target.resend_message(sequence_number, false).await;
+    }
+
+    pub async fn resends_message_without_modification(&mut self, sequence_number: u64) {
+        self.target.resend_message(sequence_number, true).await;
     }
 
     pub async fn sends_message(&mut self, message: impl FixMessage) {

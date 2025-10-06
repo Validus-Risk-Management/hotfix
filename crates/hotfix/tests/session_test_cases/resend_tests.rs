@@ -77,7 +77,7 @@ async fn test_infinite_resend_requests_are_prevented() {
     // the counterparty attempts to resend twice more, but we are still unable to process the garbled message
     for attempts in 2..4 {
         when(&mut mock_counterparty)
-            .resends_message(garbled_message_seq_num)
+            .resends_message_without_modification(garbled_message_seq_num)
             .await;
         when(&mut mock_counterparty)
             .resends_message(garbled_message_seq_num + 1)
@@ -96,7 +96,7 @@ async fn test_infinite_resend_requests_are_prevented() {
 
     // they try a third time, which exceeds are attempts threshold, so the connection is terminated
     when(&mut mock_counterparty)
-        .resends_message(garbled_message_seq_num)
+        .resends_message_without_modification(garbled_message_seq_num)
         .await;
     when(&mut mock_counterparty)
         .resends_message(garbled_message_seq_num + 1)
