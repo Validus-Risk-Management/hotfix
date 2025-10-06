@@ -3,8 +3,14 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum MessageVerificationError {
     /// The message's sequence number is lower than we expected.
-    #[error("sequence number too low (expected {expected:?}, actual {actual:?})")]
-    SeqNumberTooLow { expected: u64, actual: u64 },
+    #[error(
+        "sequence number too low (expected {expected:?}, actual {actual:?}, possible duplicate: {possible_duplicate})"
+    )]
+    SeqNumberTooLow {
+        expected: u64,
+        actual: u64,
+        possible_duplicate: bool,
+    },
 
     /// The message's sequence number is higher than we expected.
     #[error("sequence number too high (expected {expected:?}, actual {actual:?})")]

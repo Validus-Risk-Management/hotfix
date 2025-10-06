@@ -35,7 +35,7 @@ use crate::message_utils::is_admin;
 use crate::session::state::{AwaitingResendTransitionOutcome, TestRequestId};
 use crate::session_schedule::SessionSchedule;
 use event::SessionEvent;
-use hotfix_message::fix44::SessionRejectReason;
+use hotfix_message::fix44::{POSS_DUP_FLAG, SessionRejectReason};
 use hotfix_message::parsed_message::{InvalidReason, ParsedMessage};
 use state::SessionState;
 
@@ -264,9 +264,12 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 });
             }
             Ordering::Less => {
+                let possible_duplicate =
+                    message.header().get::<bool>(POSS_DUP_FLAG).unwrap_or(false);
                 return Err(MessageVerificationError::SeqNumberTooLow {
                     expected: expected_seq_number,
                     actual: actual_seq_number,
+                    possible_duplicate,
                 });
             }
             _ => {}
@@ -449,8 +452,13 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
 
     async fn handle_verification_error(&mut self, error: MessageVerificationError) {
         match error {
-            MessageVerificationError::SeqNumberTooLow { expected, actual } => {
-                self.handle_sequence_number_too_low(expected, actual).await;
+            MessageVerificationError::SeqNumberTooLow {
+                expected,
+                actual,
+                possible_duplicate,
+            } => {
+                self.handle_sequence_number_too_low(expected, actual, possible_duplicate)
+                    .await;
             }
             MessageVerificationError::SeqNumberTooHigh { expected, actual } => {
                 self.handle_sequence_number_too_high(expected, actual).await;
@@ -494,7 +502,18 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             .await;
     }
 
-    async fn handle_sequence_number_too_low(&mut self, expected: u64, actual: u64) {
+    async fn handle_sequence_number_too_low(
+        &mut self,
+        expected: u64,
+        actual: u64,
+        possible_duplicate: bool,
+    ) {
+        if possible_duplicate {
+            warn!(
+                "sequence number too low (expected {expected}, actual {actual}, but counterparty indicated it's poss duplicate, ignoring"
+            );
+            return;
+        }
         error!(
             "we expected {expected} sequence number, but target sent lower ({actual}), terminating..."
         );
