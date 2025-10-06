@@ -164,3 +164,66 @@ async fn test_message_with_invalid_msg_type() {
     when(&session).requests_disconnect().await;
     then(&mut mock_counterparty).gets_disconnected().await;
 }
+
+/// Tests that a message with a sequence number lower than the expected one
+/// causes the session to log out and disconnect the counterparty.
+#[tokio::test]
+async fn test_message_with_sequence_number_too_low() {
+    let (session, mut mock_counterparty) = given_an_active_session().await;
+
+    let sequence_number = mock_counterparty.next_target_sequence_number();
+    when(&mut mock_counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
+        .await;
+    then(&session)
+        .target_sequence_number_reaches(sequence_number)
+        .await;
+
+    // another message is sent, but due to a failure in the message store, it gets assigned the same sequence number
+    mock_counterparty.delete_last_message_from_store();
+    when(&mut mock_counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
+        .await;
+    then(&mut mock_counterparty)
+        .receives(|msg| {
+            // we log them out
+            assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "5");
+        })
+        .await;
+    then(&mut mock_counterparty).gets_disconnected().await;
+}
+
+/// Tests that a duplicate sequence number (too low) carrying PossDupFlag=Y is
+/// treated as a safe retransmission and therefore ignored (no logout / reject),
+/// and that subsequent in-sequence messages continue processing normally.
+#[tokio::test]
+async fn test_message_with_sequence_number_too_low_possdup_ignored() {
+    let (session, mut mock_counterparty) = given_an_active_session().await;
+
+    // A valid execution report is sent and processed normally
+    let first_seq = mock_counterparty.next_target_sequence_number();
+    when(&mut mock_counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
+        .await;
+    then(&session)
+        .target_sequence_number_reaches(first_seq)
+        .await;
+
+    // The message is resent with PossDupFlag=Y
+    // We expect the session to ignore this duplicate (no logout / no reject)
+    when(&mut mock_counterparty)
+        .resends_message(first_seq)
+        .await;
+
+    // A second message is sent, which should be accepted normally
+    let second_seq = mock_counterparty.next_target_sequence_number();
+    when(&mut mock_counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
+        .await;
+    then(&session)
+        .target_sequence_number_reaches(second_seq)
+        .await;
+
+    when(&session).requests_disconnect().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
+}

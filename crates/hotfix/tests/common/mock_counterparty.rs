@@ -143,6 +143,10 @@ where
             .await;
     }
 
+    pub fn delete_last_message_from_store(&mut self) -> bool {
+        self.sent_messages.pop().is_some()
+    }
+
     /// Waits for and returns the next message received from the session.
     ///
     /// A `None` response indicates we have been disconnected, either through the channel
