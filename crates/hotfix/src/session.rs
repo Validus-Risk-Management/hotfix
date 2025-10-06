@@ -6,9 +6,8 @@ mod state;
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 use hotfix_message::dict::Dictionary;
-use hotfix_message::field_types::Timestamp;
 use hotfix_message::message::{Config as MessageConfig, Message};
-use hotfix_message::{FieldType, Part, fix44};
+use hotfix_message::{Part, fix44};
 use std::cmp::Ordering;
 use std::pin::Pin;
 use tokio::select;
@@ -31,7 +30,7 @@ use crate::message::logout::Logout;
 use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
-use crate::message_utils::is_admin;
+use crate::message_utils::{is_admin, prepare_message_for_resend};
 use crate::session::state::{AwaitingResendTransitionOutcome, TestRequestId};
 use crate::session_schedule::SessionSchedule;
 use event::SessionEvent;
@@ -614,7 +613,12 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 reset_start = None;
             }
 
-            Self::prepare_message_for_resend(&mut message);
+            if let Err(e) = prepare_message_for_resend(&mut message) {
+                error!(
+                    error = e,
+                    "failed to prepare message for resend, sending original"
+                );
+            }
             self.send_raw(
                 message_type.as_bytes(),
                 message.encode(&self.message_config).unwrap(),
@@ -628,15 +632,6 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             let end = sequence_number;
             self.send_sequence_reset(begin, end).await;
         }
-    }
-
-    fn prepare_message_for_resend(msg: &mut Message) {
-        let header = msg.header_mut();
-        let raw_sending_time = header.pop(fix44::SENDING_TIME).unwrap();
-        let original_sending_time = Timestamp::deserialize(&raw_sending_time.data).unwrap();
-        header.set(fix44::ORIG_SENDING_TIME, original_sending_time);
-        header.set(fix44::SENDING_TIME, Timestamp::utc_now());
-        header.set(fix44::POSS_DUP_FLAG, true);
     }
 
     fn reset_heartbeat_timer(&mut self) {
