@@ -2,7 +2,7 @@ use crate::encoding::{Buffer, FieldType};
 use crate::field_types::{Date, Time};
 
 /// Representation for `UtcTimestamp`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Timestamp {
     date: Date,
     time: Time,
