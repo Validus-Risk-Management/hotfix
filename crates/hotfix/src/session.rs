@@ -809,7 +809,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                     self.logout_and_terminate("internal error").await;
                 }
             }
-        } else {
+        } else if self.state.is_connected() {
             // we are currently outside scheduled session time
             self.initiate_graceful_logout("End of session time").await;
         }

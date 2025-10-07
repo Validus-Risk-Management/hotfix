@@ -120,6 +120,10 @@ impl SessionState {
         }
     }
 
+    pub fn is_connected(&self) -> bool {
+        self.get_writer().is_some()
+    }
+
     pub fn try_transition_to_awaiting_logout(&mut self) -> bool {
         if matches!(self, SessionState::AwaitingLogout { .. }) {
             debug!("already in awaiting logout state");
