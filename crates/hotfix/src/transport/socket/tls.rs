@@ -2,9 +2,9 @@ use std::io::BufReader;
 use std::sync::Arc;
 use std::{fs, io};
 
-use pki_types::{CertificateDer, ServerName};
 use rustls::ClientConfig;
 use rustls::RootCertStore;
+use rustls_pki_types::{CertificateDer, ServerName};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio_rustls::{TlsConnector, client::TlsStream};
