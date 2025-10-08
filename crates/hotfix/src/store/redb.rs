@@ -1,7 +1,7 @@
 use crate::store::MessageStore;
 use anyhow::{Result, bail};
 use chrono::{DateTime, Utc};
-use redb::{Database, ReadOnlyTable, TableDefinition, TableError};
+use redb::{Database, ReadOnlyTable, ReadableDatabase, TableDefinition, TableError};
 use std::path::Path;
 
 const MESSAGES_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("messages");
