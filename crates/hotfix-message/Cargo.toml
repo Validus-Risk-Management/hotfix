@@ -19,18 +19,21 @@ utils-chrono = []
 workspace = true
 
 [dependencies]
-chrono = "0.4"
 hotfix-derive = { version = "0.1.1", path = "../hotfix-derive" }
 hotfix-dictionary = { version = "0.1.0", path = "../hotfix-dictionary" }
+
+chrono.workspace = true
 thiserror = { workspace = true }
 
 [dev-dependencies]
-anyhow = "1.0.75"
 hotfix-dictionary = { version = "0.1.0", path = "../hotfix-dictionary", features = ["fix42"] }
-quickcheck = "1"
-quickcheck_macros = "1"
+
+anyhow.workspace = true
+quickcheck.workspace = true
+quickcheck_macros.workspace = true
 
 [build-dependencies]
-chrono = "0.4"
 hotfix-codegen = { version = "0.1.1", path = "../hotfix-codegen" }
 hotfix-dictionary = { version = "0.1.0", path = "../hotfix-dictionary", features = ["fix42"] }
+
+chrono.workspace = true

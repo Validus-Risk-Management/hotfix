@@ -26,8 +26,8 @@ fixt11 = []
 workspace = true
 
 [dependencies]
-fnv = "1"
-roxmltree = "0.20"
-smartstring = "1"
-strum = "0.27"
-strum_macros = "0.27"
+fnv.workspace = true
+roxmltree.workspace = true
+smartstring.workspace = true
+strum.workspace = true
+strum_macros.workspace = true

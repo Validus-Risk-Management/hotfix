@@ -1,6 +1,6 @@
 [package]
 name = "hotfix"
-description = "An experimental FIX engine"
+description = "Buy-side FIX engine written in pure Rust"
 version = "0.2.2"
 authors.workspace = true
 edition.workspace = true

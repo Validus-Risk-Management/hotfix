@@ -15,12 +15,14 @@ categories.workspace = true
 workspace = true
 
 [dependencies]
-chrono = "0.4"
 hotfix-dictionary = { version = "0.1.0", path = "../hotfix-dictionary" }
-fnv = "1"
-heck = "0.5"
-indoc = "2"
+
+chrono.workspace = true
+fnv.workspace = true
+heck.workspace = true
+indoc.workspace = true
 
 [dev-dependencies]
 hotfix-dictionary = { version = "0.1.0", path = "../hotfix-dictionary", features = ["fix40", "fix41", "fix42", "fix43", "fix50"] }
-syn = { version = "2", features = ["full", "parsing"] }
+
+syn = { workspace = true, features = ["full", "parsing"] }
