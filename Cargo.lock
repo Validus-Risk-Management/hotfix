@@ -1200,7 +1200,7 @@ dependencies = [
  "rustls-pki-types",
  "serde",
  "testcontainers",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-rustls",
  "toml",
@@ -1253,7 +1253,7 @@ dependencies = [
  "hotfix-dictionary",
  "quickcheck",
  "quickcheck_macros",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -1270,7 +1270,7 @@ dependencies = [
  "rust-embed",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "tokio",
  "tower",
 ]
