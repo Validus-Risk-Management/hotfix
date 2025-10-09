@@ -1,3 +1,4 @@
+use hotfix_message::field_types::Timestamp;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -21,12 +22,23 @@ pub enum MessageVerificationError {
     IncorrectBeginString(String),
 
     /// The comp ID is different from our expectations.
-    #[allow(dead_code)]
     #[error("incorrect comp id {comp_id} ({comp_id_type:?})")]
     IncorrectCompId {
         comp_id: String,
         comp_id_type: CompIdType,
         msg_seq_num: u64,
+    },
+    /// Original sending time is not provided despite PossDupFlag being set.
+    #[error("original sending time missing")]
+    OriginalSendingTimeMissing { msg_seq_num: u64 },
+    /// The original sending time is after the sending time of the message.
+    #[error(
+        "original sending time {original_sending_time:?} is after sending time {sending_time:?}"
+    )]
+    OriginalSendingTimeAfterSendingTime {
+        msg_seq_num: u64,
+        original_sending_time: Timestamp,
+        sending_time: Timestamp,
     },
 }
 
