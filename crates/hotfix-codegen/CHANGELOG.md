@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-codegen-v0.1.1...hotfix-codegen-v0.1.2) - 2025-10-09
+
+### Other
+
+- upgrade dependencies to latest version ([#209](https://github.com/Validus-Risk-Management/hotfix/pull/209))
+
 ## [0.1.1](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-codegen-v0.1.0...hotfix-codegen-v0.1.1) - 2025-09-24
 
 ### Other

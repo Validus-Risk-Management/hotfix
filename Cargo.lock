@@ -1185,7 +1185,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1210,7 +1210,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-codegen"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "fnv",
@@ -1222,7 +1222,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-derive"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "darling 0.21.0",
  "proc-macro-crate",
@@ -1233,7 +1233,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-dictionary"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "fnv",
  "roxmltree",
@@ -1244,7 +1244,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-message"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1258,7 +1258,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-status"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "askama",
  "async-trait",
