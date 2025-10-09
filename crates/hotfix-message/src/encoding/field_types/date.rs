@@ -1,4 +1,6 @@
 use crate::encoding::{Buffer, FieldType};
+#[cfg(feature = "utils-chrono")]
+use chrono::Datelike;
 use std::convert::{TryFrom, TryInto};
 
 const LEN_IN_BYTES: usize = 8;
@@ -109,6 +111,17 @@ impl Date {
     #[cfg_attr(doc_cfg, doc(cfg(feature = "utils-chrono")))]
     pub fn to_chrono_naive(&self) -> Option<chrono::NaiveDate> {
         chrono::NaiveDate::from_ymd_opt(self.year() as i32, self.month(), self.day())
+    }
+}
+
+#[cfg(feature = "utils-chrono")]
+impl From<chrono::NaiveDate> for Date {
+    fn from(chrono_date: chrono::NaiveDate) -> Self {
+        Self {
+            year: chrono_date.year() as u32,
+            month: chrono_date.month(),
+            day: chrono_date.day(),
+        }
     }
 }
 

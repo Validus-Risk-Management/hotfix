@@ -40,5 +40,7 @@ tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
+hotfix-message = { version = "0.2.1", path = "../hotfix-message", features = ["utils-chrono"] }
+
 testcontainers = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }

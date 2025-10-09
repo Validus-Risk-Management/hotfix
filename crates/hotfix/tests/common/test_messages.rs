@@ -1,10 +1,12 @@
 use crate::common::setup::{COUNTERPARTY_COMP_ID, OUR_COMP_ID};
+use chrono::TimeDelta;
 use hotfix::Message as HotfixMessage;
 use hotfix::message::{FixMessage, generate_message};
 use hotfix_message::dict::{FieldLocation, FixDatatype};
 use hotfix_message::field_types::Timestamp;
 use hotfix_message::message::{Config, Message};
 use hotfix_message::{HardCodedFixFieldDefinition, Part, fix44};
+use std::ops::Add;
 
 /// Business messages used for testing.
 #[derive(Debug, Clone)]
@@ -271,6 +273,29 @@ pub fn build_execution_report_with_custom_msg_type(msg_seq_num: u64, msg_type: &
     msg.set(fix44::TARGET_COMP_ID, OUR_COMP_ID);
     msg.set(fix44::MSG_SEQ_NUM, msg_seq_num);
     msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
+
+    report.write(&mut msg);
+
+    msg.encode(&Config::default()).unwrap()
+}
+
+pub fn build_execution_report_with_incorrect_orig_sending_time(msg_seq_num: u64) -> Vec<u8> {
+    let report = TestMessage::dummy_execution_report();
+
+    let mut msg = Message::new("FIX.4.4", "8");
+    msg.set(fix44::SENDER_COMP_ID, COUNTERPARTY_COMP_ID);
+    msg.set(fix44::TARGET_COMP_ID, OUR_COMP_ID);
+    msg.set(fix44::MSG_SEQ_NUM, msg_seq_num);
+
+    let sending_time = Timestamp::utc_now();
+    let original_sending_time: Timestamp = sending_time
+        .to_chrono_naive()
+        .unwrap()
+        .add(TimeDelta::seconds(1))
+        .into();
+    msg.set(fix44::SENDING_TIME, sending_time);
+    msg.set(fix44::ORIG_SENDING_TIME, original_sending_time);
+    msg.set(fix44::POSS_DUP_FLAG, "Y");
 
     report.write(&mut msg);
 

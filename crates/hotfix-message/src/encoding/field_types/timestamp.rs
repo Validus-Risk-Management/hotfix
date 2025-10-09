@@ -74,6 +74,16 @@ impl Timestamp {
     }
 }
 
+#[cfg(feature = "utils-chrono")]
+impl From<chrono::NaiveDateTime> for Timestamp {
+    fn from(chrono_datetime: chrono::NaiveDateTime) -> Self {
+        Self {
+            date: chrono_datetime.date().into(),
+            time: chrono_datetime.time().into(),
+        }
+    }
+}
+
 impl<'a> FieldType<'a> for Timestamp {
     type Error = &'static str;
     type SerializeSettings = ();

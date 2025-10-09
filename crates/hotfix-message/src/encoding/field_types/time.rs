@@ -1,4 +1,6 @@
 use crate::encoding::{Buffer, FieldType};
+#[cfg(feature = "utils-chrono")]
+use chrono::Timelike;
 
 const ERR_INVALID: &str = "Invalid time.";
 
@@ -139,6 +141,18 @@ impl Time {
             self.second(),
             self.milli(),
         )
+    }
+}
+
+#[cfg(feature = "utils-chrono")]
+impl From<chrono::NaiveTime> for Time {
+    fn from(chrono_time: chrono::NaiveTime) -> Self {
+        Self {
+            hour: chrono_time.hour(),
+            minute: chrono_time.minute(),
+            second: chrono_time.second(),
+            milli: chrono_time.nanosecond() / 1_000_000,
+        }
     }
 }
 

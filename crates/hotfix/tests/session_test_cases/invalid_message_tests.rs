@@ -6,10 +6,11 @@ use crate::common::test_messages::{
     build_execution_report_with_custom_msg_type,
     build_execution_report_with_incorrect_begin_string,
     build_execution_report_with_incorrect_body_length,
+    build_execution_report_with_incorrect_orig_sending_time,
 };
 use hotfix::session::Status;
 use hotfix_message::Part;
-use hotfix_message::fix44::{MSG_TYPE, SESSION_REJECT_REASON};
+use hotfix_message::fix44::{MSG_TYPE, SESSION_REJECT_REASON, SessionRejectReason};
 
 /// Tests that when a counterparty sends a message containing an invalid/unrecognised field,
 /// the session rejects the message by sending a Reject (MsgType=3) message back.
@@ -222,6 +223,42 @@ async fn test_message_with_sequence_number_too_low_possdup_ignored() {
         .await;
     then(&session)
         .target_sequence_number_reaches(second_seq)
+        .await;
+
+    when(&session).requests_disconnect().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
+}
+
+/// Tests that a message with OrigSendingTime after SendingTime is rejected
+/// with an appropriate rejection reason.
+#[tokio::test]
+async fn test_message_with_missing_orig_sending_time_is_rejected() {
+    let (session, mut mock_counterparty) = given_an_active_session().await;
+
+    // A valid execution report is sent and processed normally
+    let seq_number = mock_counterparty.next_target_sequence_number();
+    when(&mut mock_counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
+        .await;
+    then(&session)
+        .target_sequence_number_reaches(seq_number)
+        .await;
+
+    // the same is resent with PossDupFlag=Y, but with OriginalSendingTime after SendingTime
+    when(&mut mock_counterparty)
+        .sends_raw_message(build_execution_report_with_incorrect_orig_sending_time(
+            seq_number,
+        ))
+        .await;
+    then(&mut mock_counterparty)
+        .receives(|msg| {
+            assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "3");
+            assert_eq!(
+                msg.get::<SessionRejectReason>(SESSION_REJECT_REASON)
+                    .unwrap(),
+                SessionRejectReason::SendingtimeAccuracyProblem
+            );
+        })
         .await;
 
     when(&session).requests_disconnect().await;
