@@ -302,6 +302,21 @@ pub fn build_execution_report_with_incorrect_orig_sending_time(msg_seq_num: u64)
     msg.encode(&Config::default()).unwrap()
 }
 
+pub fn build_execution_report_with_missing_orig_sending_time(msg_seq_num: u64) -> Vec<u8> {
+    let report = TestMessage::dummy_execution_report();
+
+    let mut msg = Message::new("FIX.4.4", "8");
+    msg.set(fix44::SENDER_COMP_ID, COUNTERPARTY_COMP_ID);
+    msg.set(fix44::TARGET_COMP_ID, OUR_COMP_ID);
+    msg.set(fix44::MSG_SEQ_NUM, msg_seq_num);
+    msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
+    msg.set(fix44::POSS_DUP_FLAG, "Y");
+
+    report.write(&mut msg);
+
+    msg.encode(&Config::default()).unwrap()
+}
+
 /// Replaces the value of a field in a raw FIX message.
 pub fn replace_field_value(raw_message: &mut Vec<u8>, tag: u32, new_value: &[u8]) {
     let tag_bytes = format!("{}=", tag).into_bytes();
