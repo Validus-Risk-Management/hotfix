@@ -3,7 +3,7 @@ mod messages;
 
 use crate::application::LoadTestingApplication;
 use crate::messages::{ExecutionReport, Message, NewOrderSingle};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use hotfix::config::SessionConfig;
 use hotfix::field_types::{Date, Timestamp};
 use hotfix::initiator::Initiator;
@@ -16,13 +16,22 @@ use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
+#[derive(ValueEnum, Clone, Debug)]
+#[clap(rename_all = "lower")]
+enum Database {
+    Memory,
+    Redb,
+}
+
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value = "10000")]
+    #[arg(short, long, default_value = "1000")]
     message_count: u32,
     #[arg(short, long, default_value = "2")]
     worker_threads: usize,
+    #[arg(short, long)]
+    database: Option<Database>,
 }
 
 const WAIT_SECONDS: u64 = 3;
@@ -37,24 +46,23 @@ fn main() {
         .build()
         .expect("runtime creation to succeed");
 
-    runtime.block_on(run_load_test(args.message_count));
+    runtime.block_on(run_load_test(
+        args.message_count,
+        args.database.unwrap_or(Database::Memory),
+    ));
 }
 
-async fn run_load_test(message_count: u32) {
+async fn run_load_test(message_count: u32, database: Database) {
     tracing_subscriber::fmt()
         .pretty()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
     let config = get_config();
-    // let store = hotfix::store::redb::RedbMessageStore::new("perf-session.db")
-    //.expect("be able to create store");
-    let store = hotfix::store::in_memory::InMemoryMessageStore::default();
 
     let (tx, rx) = unbounded_channel();
     let application = LoadTestingApplication::new(tx);
-
-    let initiator = Initiator::start(config, application, store).await;
+    let initiator = start_session(config, database, application).await;
 
     for s in 0..WAIT_SECONDS {
         info!("starting in {} seconds", WAIT_SECONDS - s);
@@ -76,6 +84,24 @@ async fn run_load_test(message_count: u32) {
         .shutdown()
         .await
         .expect("graceful shutdown to succeed");
+}
+
+async fn start_session(
+    session_config: SessionConfig,
+    db_config: Database,
+    app: LoadTestingApplication,
+) -> Initiator<Message> {
+    match db_config {
+        Database::Redb => {
+            let store = hotfix::store::redb::RedbMessageStore::new("perf-session.db")
+                .expect("be able to create store");
+            Initiator::start(session_config, app, store).await
+        }
+        Database::Memory => {
+            let store = hotfix::store::in_memory::InMemoryMessageStore::default();
+            Initiator::start(session_config, app, store).await
+        }
+    }
 }
 
 async fn submit_messages(session_ref: SessionRef<Message>, message_count: u32) {
