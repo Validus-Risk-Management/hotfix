@@ -11,6 +11,7 @@ use hotfix::message::fix44;
 use hotfix::session::SessionRef;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tracing::info;
+use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -19,9 +20,16 @@ struct Args {
     message_count: u32,
 }
 
+const WAIT_SECONDS: u64 = 5;
+
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+
+    tracing_subscriber::fmt()
+        .pretty()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
 
     let config = get_config();
     let store = hotfix::store::redb::RedbMessageStore::new("perf-session.db")
@@ -31,6 +39,11 @@ async fn main() {
     let application = LoadTestingApplication::new(tx);
 
     let initiator = Initiator::start(config, application, store).await;
+
+    for s in 0..WAIT_SECONDS {
+        info!("starting in {} seconds", WAIT_SECONDS - s);
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    }
 
     let messages_handler =
         tokio::spawn(submit_messages(initiator.session_ref(), args.message_count));
