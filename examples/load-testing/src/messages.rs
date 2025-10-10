@@ -1,6 +1,6 @@
 use hotfix::Message as HotfixMessage;
 use hotfix::field_types::{Date, Timestamp};
-use hotfix::message::fix44::{ExecType, ORDER_ID, OrdStatus, OrdType, Side};
+use hotfix::message::fix44::{ORDER_ID, OrdStatus, OrdType, Side};
 use hotfix::message::{FixMessage, Part, RepeatingGroup, fix44};
 
 #[derive(Debug, Clone)]
@@ -9,7 +9,7 @@ pub struct ExecutionReport {
     order_id: String,
     cl_ord_id: String,
     exec_id: String,
-    exec_type: ExecType,
+    exec_type: u32,
     ord_status: OrdStatus,
     side: Side,
     symbol: String,
@@ -49,7 +49,7 @@ impl Message {
             order_id: message.get::<&str>(ORDER_ID).unwrap().to_string(),
             cl_ord_id: message.get::<&str>(fix44::CL_ORD_ID).unwrap().to_string(),
             exec_id: message.get::<&str>(fix44::EXEC_ID).unwrap().to_string(),
-            exec_type: message.get::<ExecType>(fix44::EXEC_TYPE).unwrap(),
+            exec_type: message.get::<u32>(fix44::EXEC_TYPE).unwrap(),
             ord_status: message.get::<OrdStatus>(fix44::ORD_STATUS).unwrap(),
             side: message.get::<Side>(fix44::SIDE).unwrap(),
             symbol: message.get::<&str>(fix44::SYMBOL).unwrap().to_string(),
@@ -71,6 +71,7 @@ impl FixMessage for Message {
                 msg.set(fix44::CL_ORD_ID, order.cl_ord_id.as_str());
                 msg.set(fix44::SIDE, order.side);
                 msg.set(fix44::ORDER_QTY, order.order_qty);
+                msg.set(fix44::ORD_TYPE, order.order_type);
                 msg.set(fix44::SETTL_DATE, order.settlement_date);
                 msg.set(fix44::CURRENCY, order.currency.as_str());
 

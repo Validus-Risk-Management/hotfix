@@ -17,11 +17,11 @@ use tracing_subscriber::EnvFilter;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value = "10000")]
+    #[arg(short, long, default_value = "1000")]
     message_count: u32,
 }
 
-const WAIT_SECONDS: u64 = 5;
+const WAIT_SECONDS: u64 = 3;
 
 #[tokio::main]
 async fn main() {
