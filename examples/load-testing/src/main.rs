@@ -8,6 +8,7 @@ use hotfix::config::SessionConfig;
 use hotfix::field_types::{Date, Timestamp};
 use hotfix::initiator::Initiator;
 use hotfix::message::fix44;
+use hotfix::message::fix44::OrdType;
 use hotfix::session::SessionRef;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tracing::info;
@@ -16,7 +17,7 @@ use tracing_subscriber::EnvFilter;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value = "100")]
+    #[arg(short, long, default_value = "10000")]
     message_count: u32,
 }
 
@@ -75,6 +76,7 @@ async fn submit_message(session_ref: &SessionRef<Message>) {
         cl_ord_id: order_id,
         side: fix44::Side::Buy,
         order_qty: 230,
+        order_type: OrdType::Market,
         settlement_date: Date::new(2023, 9, 19).unwrap(),
         currency: "USD".to_string(),
         number_of_allocations: 1,

@@ -1,6 +1,6 @@
 use hotfix::Message as HotfixMessage;
 use hotfix::field_types::{Date, Timestamp};
-use hotfix::message::fix44::{ExecType, ORDER_ID, OrdStatus, Side};
+use hotfix::message::fix44::{ExecType, ORDER_ID, OrdStatus, OrdType, Side};
 use hotfix::message::{FixMessage, Part, RepeatingGroup, fix44};
 
 #[derive(Debug, Clone)]
@@ -26,6 +26,7 @@ pub struct NewOrderSingle {
     pub cl_ord_id: String, // unique order ID assigned by the customer
     pub side: Side,
     pub order_qty: u32,
+    pub order_type: OrdType,
     pub settlement_date: Date,
     pub currency: String, // the dealt currency
 
