@@ -11,6 +11,7 @@ use hotfix::message::fix44;
 use hotfix::message::fix44::OrdType;
 use hotfix::session::SessionRef;
 use std::time::Instant;
+use tokio::runtime::Builder;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -18,24 +19,37 @@ use tracing_subscriber::EnvFilter;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value = "1000")]
+    #[arg(short, long, default_value = "10000")]
     message_count: u32,
+    #[arg(short, long, default_value = "2")]
+    worker_threads: usize,
 }
 
 const WAIT_SECONDS: u64 = 3;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let args = Args::parse();
 
+    let runtime = Builder::new_multi_thread()
+        .worker_threads(args.worker_threads)
+        .thread_name("hotfix-worker")
+        .enable_all()
+        .build()
+        .expect("runtime creation to succeed");
+
+    runtime.block_on(run_load_test(args.message_count));
+}
+
+async fn run_load_test(message_count: u32) {
     tracing_subscriber::fmt()
         .pretty()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
     let config = get_config();
-    let store = hotfix::store::redb::RedbMessageStore::new("perf-session.db")
-        .expect("be able to create store");
+    // let store = hotfix::store::redb::RedbMessageStore::new("perf-session.db")
+    //.expect("be able to create store");
+    let store = hotfix::store::in_memory::InMemoryMessageStore::default();
 
     let (tx, rx) = unbounded_channel();
     let application = LoadTestingApplication::new(tx);
@@ -48,9 +62,8 @@ async fn main() {
     }
 
     let start = Instant::now();
-    let messages_handler =
-        tokio::spawn(submit_messages(initiator.session_ref(), args.message_count));
-    let report_handler = tokio::spawn(listen_for_reports(rx, args.message_count));
+    let messages_handler = tokio::spawn(submit_messages(initiator.session_ref(), message_count));
+    let report_handler = tokio::spawn(listen_for_reports(rx, message_count));
 
     messages_handler.await.unwrap();
     info!("sent all messages, awaiting responses");
@@ -101,6 +114,8 @@ async fn listen_for_reports(mut rx: UnboundedReceiver<ExecutionReport>, message_
             break;
         }
     }
+
+    info!("received {} reports", count);
 }
 
 fn get_config() -> SessionConfig {
