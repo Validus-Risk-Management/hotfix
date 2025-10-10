@@ -10,6 +10,7 @@ use hotfix::initiator::Initiator;
 use hotfix::message::fix44;
 use hotfix::message::fix44::OrdType;
 use hotfix::session::SessionRef;
+use std::time::Instant;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -46,6 +47,7 @@ async fn main() {
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     }
 
+    let start = Instant::now();
     let messages_handler =
         tokio::spawn(submit_messages(initiator.session_ref(), args.message_count));
     let report_handler = tokio::spawn(listen_for_reports(rx, args.message_count));
@@ -53,7 +55,9 @@ async fn main() {
     messages_handler.await.unwrap();
     info!("sent all messages, awaiting responses");
     report_handler.await.unwrap();
-    info!("received all reports");
+
+    let duration = start.elapsed();
+    info!("completed run in {duration:?} seconds");
 
     initiator
         .shutdown()
@@ -97,8 +101,6 @@ async fn listen_for_reports(mut rx: UnboundedReceiver<ExecutionReport>, message_
             break;
         }
     }
-
-    info!("received all reports");
 }
 
 fn get_config() -> SessionConfig {
