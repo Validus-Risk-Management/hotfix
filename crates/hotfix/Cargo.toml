@@ -1,7 +1,7 @@
 [package]
 name = "hotfix"
 description = "Buy-side FIX engine written in pure Rust"
-version = "0.2.3"
+version = "0.2.4"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -19,7 +19,7 @@ mongodb = ["dep:mongodb"]
 workspace = true
 
 [dependencies]
-hotfix-message = { version = "0.2.1", path = "../hotfix-message" }
+hotfix-message = { version = "0.2.2", path = "../hotfix-message" }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -40,7 +40,7 @@ tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
-hotfix-message = { version = "0.2.1", path = "../hotfix-message", features = ["utils-chrono"] }
+hotfix-message = { version = "0.2.2", path = "../hotfix-message", features = ["utils-chrono"] }
 
 testcontainers = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
