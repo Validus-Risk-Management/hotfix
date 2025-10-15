@@ -20,6 +20,7 @@ use tracing_subscriber::EnvFilter;
 #[clap(rename_all = "lower")]
 enum Database {
     Memory,
+    File,
     Redb,
 }
 
@@ -92,13 +93,18 @@ async fn start_session(
     app: LoadTestingApplication,
 ) -> Initiator<Message> {
     match db_config {
-        Database::Redb => {
-            let store = hotfix::store::redb::RedbMessageStore::new("perf-session.db")
+        Database::Memory => {
+            let store = hotfix::store::in_memory::InMemoryMessageStore::default();
+            Initiator::start(session_config, app, store).await
+        }
+        Database::File => {
+            let store = hotfix::store::file::FileStore::new("data/load-testing-store")
                 .expect("be able to create store");
             Initiator::start(session_config, app, store).await
         }
-        Database::Memory => {
-            let store = hotfix::store::in_memory::InMemoryMessageStore::default();
+        Database::Redb => {
+            let store = hotfix::store::redb::RedbMessageStore::new("perf-session.db")
+                .expect("be able to create store");
             Initiator::start(session_config, app, store).await
         }
     }
