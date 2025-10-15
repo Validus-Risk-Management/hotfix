@@ -1,0 +1,336 @@
+use crate::store::MessageStore;
+use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
+use std::collections::HashMap;
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
+
+/// Metadata for a stored message, tracking its position and size in the body file
+#[derive(Debug, Clone)]
+struct MessageDef {
+    offset: u64,
+    size: usize,
+}
+
+/// File-based message store implementation.
+///
+/// Uses multiple files for storage:
+/// - `.body`: Append-only file containing raw message data
+/// - `.header`: Index file mapping sequence numbers to message positions
+/// - `.seqnums`: Stores sender and target sequence numbers
+/// - `.session`: Stores session creation time
+pub struct FileStore {
+    base_path: PathBuf,
+    body_file: BufWriter<File>,
+    header_file: BufWriter<File>,
+    seqnums_file: File,
+    sender_seq_number: u64,
+    target_seq_number: u64,
+    creation_time: DateTime<Utc>,
+    message_index: HashMap<u64, MessageDef>,
+    current_body_offset: u64,
+}
+
+impl FileStore {
+    pub fn new(path: impl AsRef<Path>) -> Result<Self> {
+        let base_path = path.as_ref().to_path_buf();
+
+        // Create directory if it doesn't exist
+        if let Some(parent) = base_path.parent() {
+            std::fs::create_dir_all(parent).context("Failed to create store directory")?;
+        }
+
+        let body_path = base_path.with_extension("body");
+        let header_path = base_path.with_extension("header");
+        let seqnums_path = base_path.with_extension("seqnums");
+        let session_path = base_path.with_extension("session");
+
+        // Read or create session creation time
+        let creation_time = if session_path.exists() {
+            let content =
+                std::fs::read_to_string(&session_path).context("Failed to read session file")?;
+            content
+                .trim()
+                .parse::<DateTime<Utc>>()
+                .context("Failed to parse session creation time")?
+        } else {
+            let now = Utc::now();
+            std::fs::write(&session_path, now.to_rfc3339())
+                .context("Failed to write session file")?;
+            now
+        };
+
+        // Read or create sequence numbers
+        let (sender_seq_number, target_seq_number) = if seqnums_path.exists() {
+            let content =
+                std::fs::read_to_string(&seqnums_path).context("Failed to read seqnums file")?;
+            if content.trim().is_empty() {
+                (0u64, 0u64)
+            } else {
+                Self::parse_seqnums(&content)?
+            }
+        } else {
+            (0u64, 0u64)
+        };
+
+        // Open or create body and header files
+        let body_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&body_path)
+            .context("Failed to open body file")?;
+
+        let current_body_offset = body_file.metadata()?.len();
+        let body_file = BufWriter::new(body_file);
+
+        let header_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&header_path)
+            .context("Failed to open header file")?;
+        let header_file = BufWriter::new(header_file);
+
+        let seqnums_file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .read(true)
+            .write(true)
+            .open(&seqnums_path)
+            .context("Failed to open seqnums file")?;
+
+        // Load existing message index from header file
+        let message_index = Self::load_message_index(&header_path)?;
+
+        Ok(Self {
+            base_path,
+            body_file,
+            header_file,
+            seqnums_file,
+            sender_seq_number,
+            target_seq_number,
+            creation_time,
+            message_index,
+            current_body_offset,
+        })
+    }
+
+    fn parse_seqnums(content: &str) -> Result<(u64, u64)> {
+        let parts: Vec<&str> = content.trim().split(':').map(|s| s.trim()).collect();
+        if parts.len() != 2 {
+            anyhow::bail!("Invalid seqnums format");
+        }
+        let sender = parts[0]
+            .parse::<u64>()
+            .context("Failed to parse sender sequence number")?;
+        let target = parts[1]
+            .parse::<u64>()
+            .context("Failed to parse target sequence number")?;
+        Ok((sender, target))
+    }
+
+    fn load_message_index(header_path: &Path) -> Result<HashMap<u64, MessageDef>> {
+        let mut index = HashMap::new();
+
+        if !header_path.exists() {
+            return Ok(index);
+        }
+
+        let file = File::open(header_path).context("Failed to open header file for reading")?;
+        let reader = BufReader::new(file);
+
+        for line in reader.lines() {
+            let line = line.context("Failed to read header line")?;
+            let parts: Vec<&str> = line.trim().split(',').collect();
+            if parts.len() != 3 {
+                continue;
+            }
+
+            if let (Ok(seq_num), Ok(offset), Ok(size)) = (
+                parts[0].parse::<u64>(),
+                parts[1].parse::<u64>(),
+                parts[2].parse::<usize>(),
+            ) {
+                index.insert(seq_num, MessageDef { offset, size });
+            }
+        }
+
+        Ok(index)
+    }
+
+    fn write_seqnums(&mut self) -> Result<()> {
+        self.seqnums_file.seek(SeekFrom::Start(0))?;
+        self.seqnums_file.set_len(0)?;
+        write!(
+            self.seqnums_file,
+            "{:020} : {:020}",
+            self.sender_seq_number, self.target_seq_number
+        )?;
+        self.seqnums_file.flush()?;
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl MessageStore for FileStore {
+    async fn add(&mut self, sequence_number: u64, message: &[u8]) -> anyhow::Result<()> {
+        let msg_size = message.len();
+        let offset = self.current_body_offset;
+
+        // Write message to body file
+        self.body_file
+            .write_all(message)
+            .context("Failed to write message to body file")?;
+        self.body_file
+            .flush()
+            .context("Failed to flush body file")?;
+
+        // Write header entry: sequence_number,offset,size
+        writeln!(
+            self.header_file,
+            "{},{},{}",
+            sequence_number, offset, msg_size
+        )
+        .context("Failed to write header entry")?;
+        self.header_file
+            .flush()
+            .context("Failed to flush header file")?;
+
+        // Update in-memory index
+        self.message_index.insert(
+            sequence_number,
+            MessageDef {
+                offset,
+                size: msg_size,
+            },
+        );
+
+        // Update current offset
+        self.current_body_offset += msg_size as u64;
+
+        Ok(())
+    }
+
+    async fn get_slice(&self, begin: usize, end: usize) -> anyhow::Result<Vec<Vec<u8>>> {
+        let mut messages = Vec::with_capacity(end - begin + 1);
+
+        // Open body file for reading
+        let body_path = self.base_path.with_extension("body");
+        let mut body_file =
+            File::open(body_path).context("Failed to open body file for reading")?;
+
+        for seq_num in begin..=end {
+            if let Some(msg_def) = self.message_index.get(&(seq_num as u64)) {
+                // Seek to message position
+                body_file
+                    .seek(SeekFrom::Start(msg_def.offset))
+                    .context("Failed to seek to message position")?;
+
+                // Read message
+                let mut buffer = vec![0u8; msg_def.size];
+                body_file
+                    .read_exact(&mut buffer)
+                    .context("Failed to read message from body file")?;
+
+                messages.push(buffer);
+            }
+        }
+
+        Ok(messages)
+    }
+
+    fn next_sender_seq_number(&self) -> u64 {
+        self.sender_seq_number + 1
+    }
+
+    fn next_target_seq_number(&self) -> u64 {
+        self.target_seq_number + 1
+    }
+
+    async fn increment_sender_seq_number(&mut self) -> anyhow::Result<()> {
+        self.sender_seq_number += 1;
+        self.write_seqnums()
+            .context("Failed to persist sender sequence number")?;
+        Ok(())
+    }
+
+    async fn increment_target_seq_number(&mut self) -> anyhow::Result<()> {
+        self.target_seq_number += 1;
+        self.write_seqnums()
+            .context("Failed to persist target sequence number")?;
+        Ok(())
+    }
+
+    async fn set_target_seq_number(&mut self, seq_number: u64) -> anyhow::Result<()> {
+        self.target_seq_number = seq_number;
+        self.write_seqnums()
+            .context("Failed to persist target sequence number")?;
+        Ok(())
+    }
+
+    async fn reset(&mut self) -> anyhow::Result<()> {
+        // Close and flush current files
+        self.body_file.flush()?;
+        self.header_file.flush()?;
+
+        // Remove all files
+        let body_path = self.base_path.with_extension("body");
+        let header_path = self.base_path.with_extension("header");
+        let seqnums_path = self.base_path.with_extension("seqnums");
+        let session_path = self.base_path.with_extension("session");
+
+        if body_path.exists() {
+            std::fs::remove_file(&body_path).context("Failed to remove body file")?;
+        }
+        if header_path.exists() {
+            std::fs::remove_file(&header_path).context("Failed to remove header file")?;
+        }
+        if seqnums_path.exists() {
+            std::fs::remove_file(&seqnums_path).context("Failed to remove seqnums file")?;
+        }
+        if session_path.exists() {
+            std::fs::remove_file(&session_path).context("Failed to remove session file")?;
+        }
+
+        // Reset in-memory state
+        self.sender_seq_number = 0;
+        self.target_seq_number = 0;
+        self.creation_time = Utc::now();
+        self.message_index.clear();
+        self.current_body_offset = 0;
+
+        // Recreate files
+        let now = Utc::now();
+        std::fs::write(&session_path, now.to_rfc3339()).context("Failed to write session file")?;
+
+        let body_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&body_path)
+            .context("Failed to recreate body file")?;
+        self.body_file = BufWriter::new(body_file);
+
+        let header_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&header_path)
+            .context("Failed to recreate header file")?;
+        self.header_file = BufWriter::new(header_file);
+
+        self.seqnums_file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .read(true)
+            .write(true)
+            .open(&seqnums_path)
+            .context("Failed to recreate seqnums file")?;
+
+        self.creation_time = now;
+
+        Ok(())
+    }
+
+    fn creation_time(&self) -> DateTime<Utc> {
+        self.creation_time
+    }
+}
