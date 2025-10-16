@@ -29,6 +29,7 @@ thiserror = { workspace = true }
 hotfix-dictionary = { version = "0.1.1", path = "../hotfix-dictionary", features = ["fix42"] }
 
 anyhow.workspace = true
+criterion.workspace = true
 quickcheck.workspace = true
 quickcheck_macros.workspace = true
 
@@ -37,3 +38,8 @@ hotfix-codegen = { version = "0.1.2", path = "../hotfix-codegen" }
 hotfix-dictionary = { version = "0.1.1", path = "../hotfix-dictionary", features = ["fix42"] }
 
 chrono.workspace = true
+
+[[bench]]
+name = "message-parsing-benches"
+harness = false
+path = "benches/message_parsing.rs"
