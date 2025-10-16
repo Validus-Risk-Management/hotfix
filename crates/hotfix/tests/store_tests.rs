@@ -1,3 +1,6 @@
+use std::path::PathBuf;
+use std::{env, fs};
+
 use chrono::Utc;
 use hotfix::store::MessageStore;
 use hotfix::store::file::FileStore;
@@ -341,8 +344,7 @@ async fn create_test_store_factories() -> Vec<Box<dyn TestStoreFactory>> {
     stores.push(Box::new(InMemoryMessageStoreTestFactory {}) as Box<dyn TestStoreFactory>);
 
     // Add file store factory
-    stores
-        .push(Box::new(file_test_utils::FileStoreTestFactory::new()) as Box<dyn TestStoreFactory>);
+    stores.push(Box::new(FileStoreTestFactory::new()) as Box<dyn TestStoreFactory>);
 
     // Add redb store factory if the feature is enabled
     #[cfg(feature = "redb")]
@@ -376,40 +378,32 @@ impl TestStoreFactory for InMemoryMessageStoreTestFactory {
     }
 }
 
-mod file_test_utils {
-    use super::*;
-    use std::path::PathBuf;
-    use std::{env, fs};
+pub(crate) struct FileStoreTestFactory {
+    directory: PathBuf,
+    name: String,
+}
 
-    pub(crate) struct FileStoreTestFactory {
-        directory: PathBuf,
-        name: String,
-    }
-
-    impl FileStoreTestFactory {
-        pub(crate) fn new() -> Self {
-            Self {
-                directory: env::temp_dir(),
-                name: format!("file_store_test_{}", uuid::Uuid::new_v4()),
-            }
+impl FileStoreTestFactory {
+    pub(crate) fn new() -> Self {
+        Self {
+            directory: env::temp_dir(),
+            name: format!("file_store_test_{}", uuid::Uuid::new_v4()),
         }
     }
+}
 
-    #[async_trait::async_trait]
-    impl TestStoreFactory for FileStoreTestFactory {
-        async fn create_store(&self) -> Box<dyn MessageStore> {
-            Box::new(
-                FileStore::new(&self.directory, &self.name).expect("Failed to create file store"),
-            )
-        }
+#[async_trait::async_trait]
+impl TestStoreFactory for FileStoreTestFactory {
+    async fn create_store(&self) -> Box<dyn MessageStore> {
+        Box::new(FileStore::new(&self.directory, &self.name).expect("Failed to create file store"))
     }
+}
 
-    impl Drop for FileStoreTestFactory {
-        fn drop(&mut self) {
-            let base_path = self.directory.join(&self.name);
-            for ext in ["header", "body", "seqnums", "session"] {
-                let _ = fs::remove_file(base_path.with_extension(ext));
-            }
+impl Drop for FileStoreTestFactory {
+    fn drop(&mut self) {
+        let base_path = self.directory.join(&self.name);
+        for ext in ["header", "body", "seqnums", "session"] {
+            let _ = fs::remove_file(base_path.with_extension(ext));
         }
     }
 }
