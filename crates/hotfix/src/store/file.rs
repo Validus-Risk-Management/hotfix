@@ -33,62 +33,29 @@ pub struct FileStore {
 }
 
 impl FileStore {
-    pub fn new(path: impl AsRef<Path>) -> Result<Self> {
-        let base_path = path.as_ref().to_path_buf();
-
-        // Create directory if it doesn't exist
-        if let Some(parent) = base_path.parent() {
-            std::fs::create_dir_all(parent).context("Failed to create store directory")?;
-        }
+    pub fn new(directory: impl AsRef<Path>, name: &str) -> Result<Self> {
+        let base_path = directory.as_ref().join(name);
+        std::fs::create_dir_all(directory)?;
 
         let body_path = base_path.with_extension("body");
         let header_path = base_path.with_extension("header");
         let seqnums_path = base_path.with_extension("seqnums");
-        let session_path = base_path.with_extension("session");
 
-        // Read or create session creation time
-        let creation_time = if session_path.exists() {
-            let content =
-                std::fs::read_to_string(&session_path).context("Failed to read session file")?;
-            content
-                .trim()
-                .parse::<DateTime<Utc>>()
-                .context("Failed to parse session creation time")?
-        } else {
-            let now = Utc::now();
-            std::fs::write(&session_path, now.to_rfc3339())
-                .context("Failed to write session file")?;
-            now
-        };
+        let creation_time = Self::get_or_create_session_time(&base_path)?;
+        let (sender_seq_number, target_seq_number) = Self::read_initial_seqnums(&base_path)?;
 
-        // Read or create sequence numbers
-        let (sender_seq_number, target_seq_number) = if seqnums_path.exists() {
-            let content =
-                std::fs::read_to_string(&seqnums_path).context("Failed to read seqnums file")?;
-            if content.trim().is_empty() {
-                (0u64, 0u64)
-            } else {
-                Self::parse_seqnums(&content)?
-            }
-        } else {
-            (0u64, 0u64)
-        };
-
-        // Open or create body and header files
+        // open or create body and header files
         let body_file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&body_path)
-            .context("Failed to open body file")?;
-
+            .open(&body_path)?;
         let current_body_offset = body_file.metadata()?.len();
         let body_file = BufWriter::new(body_file);
 
         let header_file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&header_path)
-            .context("Failed to open header file")?;
+            .open(&header_path)?;
         let header_file = BufWriter::new(header_file);
 
         let seqnums_file = OpenOptions::new()
@@ -96,10 +63,9 @@ impl FileStore {
             .truncate(true)
             .read(true)
             .write(true)
-            .open(&seqnums_path)
-            .context("Failed to open seqnums file")?;
+            .open(&seqnums_path)?;
 
-        // Load existing message index from header file
+        // load existing message index from header file
         let message_index = Self::load_message_index(&header_path)?;
 
         Ok(Self {
@@ -115,17 +81,54 @@ impl FileStore {
         })
     }
 
+    /// Retrieves the session creation time from the session file.
+    ///
+    /// It initialises the session file if it doesn't exist.
+    fn get_or_create_session_time(base_path: &Path) -> Result<DateTime<Utc>> {
+        let session_path = base_path.with_extension("session");
+        let session_time = if session_path.exists() {
+            let content = std::fs::read_to_string(&session_path)?;
+            content.trim().parse::<DateTime<Utc>>()?
+        } else {
+            let now = Utc::now();
+            std::fs::write(&session_path, now.to_rfc3339())?;
+            now
+        };
+
+        Ok(session_time)
+    }
+
+    /// Retrieves the sequence numbers from the seqnums file.
+    ///
+    /// It defaults to `(0, 0)` if the file doesn't exist or if it's empty.
+    fn read_initial_seqnums(base_path: &Path) -> Result<(u64, u64)> {
+        let seqnums_path = base_path.with_extension("seqnums");
+        let (sender_seq_number, target_seq_number) = if seqnums_path.exists() {
+            let content =
+                std::fs::read_to_string(&seqnums_path).context("failed to read seqnums file")?;
+            if content.trim().is_empty() {
+                (0u64, 0u64)
+            } else {
+                Self::parse_seqnums(&content)?
+            }
+        } else {
+            (0u64, 0u64)
+        };
+
+        Ok((sender_seq_number, target_seq_number))
+    }
+
     fn parse_seqnums(content: &str) -> Result<(u64, u64)> {
         let parts: Vec<&str> = content.trim().split(':').map(|s| s.trim()).collect();
         if parts.len() != 2 {
-            anyhow::bail!("Invalid seqnums format");
+            anyhow::bail!("invalid seqnums format");
         }
         let sender = parts[0]
             .parse::<u64>()
-            .context("Failed to parse sender sequence number")?;
+            .context("failed to parse sender sequence number")?;
         let target = parts[1]
             .parse::<u64>()
-            .context("Failed to parse target sequence number")?;
+            .context("failed to parse target sequence number")?;
         Ok((sender, target))
     }
 
@@ -136,11 +139,11 @@ impl FileStore {
             return Ok(index);
         }
 
-        let file = File::open(header_path).context("Failed to open header file for reading")?;
+        let file = File::open(header_path).context("failed to open header file for reading")?;
         let reader = BufReader::new(file);
 
         for line in reader.lines() {
-            let line = line.context("Failed to read header line")?;
+            let line = line.context("failed to read header line")?;
             let parts: Vec<&str> = line.trim().split(',').collect();
             if parts.len() != 3 {
                 continue;
@@ -177,26 +180,18 @@ impl MessageStore for FileStore {
         let msg_size = message.len();
         let offset = self.current_body_offset;
 
-        // Write message to body file
-        self.body_file
-            .write_all(message)
-            .context("Failed to write message to body file")?;
-        self.body_file
-            .flush()
-            .context("Failed to flush body file")?;
+        // write the message itself
+        self.body_file.write_all(message)?;
+        self.body_file.flush()?;
 
-        // Write header entry: sequence_number,offset,size
+        // write the offset to the header file
         writeln!(
             self.header_file,
             "{},{},{}",
             sequence_number, offset, msg_size
-        )
-        .context("Failed to write header entry")?;
-        self.header_file
-            .flush()
-            .context("Failed to flush header file")?;
+        )?;
+        self.header_file.flush()?;
 
-        // Update in-memory index
         self.message_index.insert(
             sequence_number,
             MessageDef {
@@ -204,33 +199,26 @@ impl MessageStore for FileStore {
                 size: msg_size,
             },
         );
-
-        // Update current offset
         self.current_body_offset += msg_size as u64;
 
         Ok(())
     }
 
-    async fn get_slice(&self, begin: usize, end: usize) -> anyhow::Result<Vec<Vec<u8>>> {
+    async fn get_slice(&self, begin: usize, end: usize) -> Result<Vec<Vec<u8>>> {
         let mut messages = Vec::with_capacity(end - begin + 1);
 
-        // Open body file for reading
         let body_path = self.base_path.with_extension("body");
         let mut body_file =
-            File::open(body_path).context("Failed to open body file for reading")?;
+            File::open(body_path).context("failed to open body file for reading")?;
 
         for seq_num in begin..=end {
             if let Some(msg_def) = self.message_index.get(&(seq_num as u64)) {
-                // Seek to message position
-                body_file
-                    .seek(SeekFrom::Start(msg_def.offset))
-                    .context("Failed to seek to message position")?;
+                body_file.seek(SeekFrom::Start(msg_def.offset))?;
 
-                // Read message
                 let mut buffer = vec![0u8; msg_def.size];
                 body_file
                     .read_exact(&mut buffer)
-                    .context("Failed to read message from body file")?;
+                    .context("failed to read message from body file")?;
 
                 messages.push(buffer);
             }
@@ -247,74 +235,70 @@ impl MessageStore for FileStore {
         self.target_seq_number + 1
     }
 
-    async fn increment_sender_seq_number(&mut self) -> anyhow::Result<()> {
+    async fn increment_sender_seq_number(&mut self) -> Result<()> {
         self.sender_seq_number += 1;
-        self.write_seqnums()
-            .context("Failed to persist sender sequence number")?;
+        self.write_seqnums()?;
+
         Ok(())
     }
 
-    async fn increment_target_seq_number(&mut self) -> anyhow::Result<()> {
+    async fn increment_target_seq_number(&mut self) -> Result<()> {
         self.target_seq_number += 1;
-        self.write_seqnums()
-            .context("Failed to persist target sequence number")?;
+        self.write_seqnums()?;
+
         Ok(())
     }
 
-    async fn set_target_seq_number(&mut self, seq_number: u64) -> anyhow::Result<()> {
+    async fn set_target_seq_number(&mut self, seq_number: u64) -> Result<()> {
         self.target_seq_number = seq_number;
-        self.write_seqnums()
-            .context("Failed to persist target sequence number")?;
+        self.write_seqnums()?;
         Ok(())
     }
 
-    async fn reset(&mut self) -> anyhow::Result<()> {
-        // Close and flush current files
+    async fn reset(&mut self) -> Result<()> {
         self.body_file.flush()?;
         self.header_file.flush()?;
 
-        // Remove all files
+        // remove all files
         let body_path = self.base_path.with_extension("body");
         let header_path = self.base_path.with_extension("header");
         let seqnums_path = self.base_path.with_extension("seqnums");
         let session_path = self.base_path.with_extension("session");
 
         if body_path.exists() {
-            std::fs::remove_file(&body_path).context("Failed to remove body file")?;
+            std::fs::remove_file(&body_path)?;
         }
         if header_path.exists() {
-            std::fs::remove_file(&header_path).context("Failed to remove header file")?;
+            std::fs::remove_file(&header_path)?;
         }
         if seqnums_path.exists() {
-            std::fs::remove_file(&seqnums_path).context("Failed to remove seqnums file")?;
+            std::fs::remove_file(&seqnums_path)?;
         }
         if session_path.exists() {
-            std::fs::remove_file(&session_path).context("Failed to remove session file")?;
+            std::fs::remove_file(&session_path)?;
         }
 
-        // Reset in-memory state
+        // reset in-memory state
         self.sender_seq_number = 0;
         self.target_seq_number = 0;
         self.creation_time = Utc::now();
         self.message_index.clear();
         self.current_body_offset = 0;
 
-        // Recreate files
+        // recreate files
         let now = Utc::now();
-        std::fs::write(&session_path, now.to_rfc3339()).context("Failed to write session file")?;
+        std::fs::write(&session_path, now.to_rfc3339())?;
 
         let body_file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&body_path)
-            .context("Failed to recreate body file")?;
+            .open(&body_path)?;
         self.body_file = BufWriter::new(body_file);
 
         let header_file = OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&header_path)
-            .context("Failed to recreate header file")?;
+            .open(&header_path)?;
         self.header_file = BufWriter::new(header_file);
 
         self.seqnums_file = OpenOptions::new()
@@ -322,8 +306,7 @@ impl MessageStore for FileStore {
             .truncate(true)
             .read(true)
             .write(true)
-            .open(&seqnums_path)
-            .context("Failed to recreate seqnums file")?;
+            .open(&seqnums_path)?;
 
         self.creation_time = now;
 

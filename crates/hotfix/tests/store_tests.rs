@@ -382,16 +382,15 @@ mod file_test_utils {
     use std::{env, fs};
 
     pub(crate) struct FileStoreTestFactory {
-        store_path: PathBuf,
+        directory: PathBuf,
+        name: String,
     }
 
     impl FileStoreTestFactory {
         pub(crate) fn new() -> Self {
-            let mut temp_path = env::temp_dir();
-            temp_path.push(format!("file_store_test_{}", uuid::Uuid::new_v4()));
-
             Self {
-                store_path: temp_path,
+                directory: env::temp_dir(),
+                name: format!("file_store_test_{}", uuid::Uuid::new_v4()),
             }
         }
     }
@@ -399,17 +398,18 @@ mod file_test_utils {
     #[async_trait::async_trait]
     impl TestStoreFactory for FileStoreTestFactory {
         async fn create_store(&self) -> Box<dyn MessageStore> {
-            Box::new(FileStore::new(&self.store_path).expect("Failed to create file store"))
+            Box::new(
+                FileStore::new(&self.directory, &self.name).expect("Failed to create file store"),
+            )
         }
     }
 
     impl Drop for FileStoreTestFactory {
         fn drop(&mut self) {
-            // Clean up all store files when the test store is dropped
-            let _ = fs::remove_file(self.store_path.with_extension("body"));
-            let _ = fs::remove_file(self.store_path.with_extension("header"));
-            let _ = fs::remove_file(self.store_path.with_extension("seqnums"));
-            let _ = fs::remove_file(self.store_path.with_extension("session"));
+            let base_path = self.directory.join(&self.name);
+            for ext in ["header", "body", "seqnums", "session"] {
+                let _ = fs::remove_file(base_path.with_extension(ext));
+            }
         }
     }
 }
