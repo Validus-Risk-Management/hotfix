@@ -1,9 +1,8 @@
 use crate::FieldType;
 use crate::Part;
-use hotfix_dictionary::TagU32;
-use std::collections::BTreeMap;
-
 use crate::parts::RepeatingGroup;
+use hotfix_dictionary::TagU32;
+use indexmap::IndexMap;
 
 pub struct Field {
     pub(crate) tag: TagU32,
@@ -22,8 +21,8 @@ impl Field {
 
 #[derive(Default)]
 pub struct FieldMap {
-    pub fields: BTreeMap<TagU32, Field>,
-    pub groups: BTreeMap<TagU32, Vec<RepeatingGroup>>,
+    pub fields: IndexMap<TagU32, Field>,
+    pub groups: IndexMap<TagU32, Vec<RepeatingGroup>>,
 }
 
 impl FieldMap {

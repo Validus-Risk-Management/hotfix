@@ -55,7 +55,7 @@ pub trait Part {
     }
 
     fn pop(&mut self, field: &HardCodedFixFieldDefinition) -> Option<Field> {
-        self.get_field_map_mut().fields.remove(&field.tag())
+        self.get_field_map_mut().fields.shift_remove(&field.tag())
     }
 
     fn set_groups(&mut self, groups: Vec<RepeatingGroup>) {

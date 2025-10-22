@@ -23,7 +23,8 @@ hotfix-derive = { version = "0.1.2", path = "../hotfix-derive" }
 hotfix-dictionary = { version = "0.1.1", path = "../hotfix-dictionary" }
 
 chrono.workspace = true
-thiserror = { workspace = true }
+indexmap.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 hotfix-dictionary = { version = "0.1.1", path = "../hotfix-dictionary", features = ["fix42"] }
