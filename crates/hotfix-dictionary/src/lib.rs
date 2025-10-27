@@ -1272,26 +1272,6 @@ impl<'a> Message<'a> {
         &self.1.description
     }
 
-    pub fn group_info(&self, num_in_group_tag: TagU32) -> Option<TagU32> {
-        self.layout().find_map(|layout_item| {
-            if let LayoutItemKind::Group(field, items) = layout_item.kind() {
-                if field.tag() == num_in_group_tag {
-                    if let LayoutItemKind::Field(f) = items[0].kind() {
-                        Some(f.tag())
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            } else if let LayoutItemKind::Component(_component) = layout_item.kind() {
-                None
-            } else {
-                None
-            }
-        })
-    }
-
     /// Returns the component ID of `self`.
     pub fn component_id(&self) -> u32 {
         self.1.component_id
