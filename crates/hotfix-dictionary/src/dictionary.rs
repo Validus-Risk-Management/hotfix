@@ -254,7 +254,9 @@ impl Dictionary {
     /// assert_eq!(field1.name(), field2.name());
     /// ```
     pub fn field_by_tag(&self, tag: u32) -> Option<Field<'_>> {
-        self.fields_by_tags.get(&tag).map(|data| Field(self, data))
+        self.fields_by_tags
+            .get(&tag)
+            .map(|data| Field::new(self, data))
     }
 
     /// Returns the [`Field`] named `name`, if any.
@@ -319,7 +321,7 @@ impl Dictionary {
     pub fn fields(&self) -> Vec<Field<'_>> {
         self.fields_by_tags
             .values()
-            .map(|data| Field(self, data))
+            .map(|data| Field::new(self, data))
             .collect()
     }
 
