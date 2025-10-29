@@ -1,6 +1,12 @@
-use super::*;
+use smartstring::alias::String as SmartString;
+
 use crate::builder::DictionaryBuilder;
+use crate::component::{ComponentData, FixmlComponentAttributes};
 use crate::message_definition::MessageData;
+use crate::{
+    DatatypeData, Dictionary, FieldData, FieldEnumData, FixDatatype, LayoutItemData,
+    LayoutItemKindData, LayoutItems,
+};
 
 pub struct QuickFixReader<'a> {
     node_with_header: roxmltree::Node<'a, 'a>,
