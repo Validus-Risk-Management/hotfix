@@ -1,4 +1,5 @@
-use crate::{Datatype, Dictionary, FieldData, FieldEnum, FixDatatype, TagU32};
+use crate::{Datatype, Dictionary, FixDatatype, TagU32};
+use smartstring::alias::String as SmartString;
 
 pub trait IsFieldDefinition {
     /// Returns the FIX tag associated with `self`.
@@ -17,6 +18,50 @@ pub trait IsFieldDefinition {
 /// enumeration.
 #[derive(Debug, Copy, Clone)]
 pub struct Field<'a>(&'a Dictionary, &'a FieldData);
+
+/// A field is identified by a unique tag number and a name. Each field in a
+/// message is associated with a value.
+#[derive(Clone, Debug)]
+pub struct FieldData {
+    /// A human readable string representing the name of the field.
+    pub(crate) name: SmartString,
+    /// **Primary key.** A positive integer representing the unique
+    /// identifier for this field type.
+    pub(crate) tag: u32,
+    /// The datatype of the field.
+    pub(crate) data_type_name: SmartString,
+    /// The associated data field. If given, this field represents the length of
+    /// the referenced data field
+    pub(crate) associated_data_tag: Option<usize>,
+    pub(crate) value_restrictions: Option<Vec<FieldEnumData>>,
+    /// Indicates whether the field is required in an XML message.
+    pub(crate) required: bool,
+    pub(crate) description: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct FieldEnumData {
+    pub(crate) value: String,
+    pub(crate) description: String,
+}
+
+/// A limitation imposed on the value of a specific FIX [`Field`].  Also known as
+/// "code set".
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct FieldEnum<'a>(&'a Dictionary, &'a FieldEnumData);
+
+impl<'a> FieldEnum<'a> {
+    /// Returns the string representation of this field variant.
+    pub fn value(&self) -> &str {
+        &self.1.value[..]
+    }
+
+    /// Returns the documentation description for `self`.
+    pub fn description(&self) -> &str {
+        &self.1.description[..]
+    }
+}
 
 impl<'a> Field<'a> {
     pub fn new(dictionary: &'a Dictionary, field_data: &'a FieldData) -> Self {

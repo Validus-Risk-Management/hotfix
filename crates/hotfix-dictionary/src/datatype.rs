@@ -1,9 +1,23 @@
-use crate::{DatatypeData, Dictionary};
+use strum::IntoEnumIterator;
+use strum_macros::{EnumIter, IntoStaticStr};
+
+use crate::Dictionary;
 
 /// A FIX data type defined as part of a [`Dictionary`].
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct Datatype<'a>(pub(crate) &'a Dictionary, pub(crate) &'a DatatypeData);
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct DatatypeData {
+    /// **Primary key.** Identifier of the datatype.
+    pub(crate) datatype: FixDatatype,
+    /// Human readable description of this Datatype.
+    pub(crate) description: String,
+    /// A string that contains examples values for a datatype
+    pub(crate) examples: Vec<String>,
+    // TODO: 'XML'.
+}
 
 impl<'a> Datatype<'a> {
     /// Returns the name of `self`.  This is also guaranteed to be a valid Rust
@@ -17,9 +31,6 @@ impl<'a> Datatype<'a> {
         self.1.datatype
     }
 }
-
-use strum::IntoEnumIterator;
-use strum_macros::{EnumIter, IntoStaticStr};
 
 /// Sum type for all possible FIX data types ever defined across all FIX
 /// application versions.
