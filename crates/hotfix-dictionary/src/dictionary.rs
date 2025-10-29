@@ -24,17 +24,17 @@ use smartstring::alias::String as SmartString;
 /// session layer.
 #[derive(Debug, Clone)]
 pub struct Dictionary {
-    version: String,
+    pub(crate) version: String,
 
-    data_types_by_name: FnvHashMap<SmartString, DatatypeData>,
+    pub(crate) data_types_by_name: FnvHashMap<SmartString, DatatypeData>,
 
-    fields_by_tags: FnvHashMap<u32, FieldData>,
-    field_tags_by_name: FnvHashMap<SmartString, u32>,
+    pub(crate) fields_by_tags: FnvHashMap<u32, FieldData>,
+    pub(crate) field_tags_by_name: FnvHashMap<SmartString, u32>,
 
-    components_by_name: FnvHashMap<SmartString, ComponentData>,
+    pub(crate) components_by_name: FnvHashMap<SmartString, ComponentData>,
 
-    messages_by_msgtype: FnvHashMap<SmartString, MessageData>,
-    message_msgtypes_by_name: FnvHashMap<SmartString, SmartString>,
+    pub(crate) messages_by_msgtype: FnvHashMap<SmartString, MessageData>,
+    pub(crate) message_msgtypes_by_name: FnvHashMap<SmartString, SmartString>,
 }
 
 impl Dictionary {
@@ -300,28 +300,5 @@ impl Dictionary {
             .values()
             .map(|data| Component(self, data))
             .collect()
-    }
-
-    pub(crate) fn add_field(&mut self, field: FieldData) {
-        self.field_tags_by_name
-            .insert(field.name.clone(), field.tag);
-        self.fields_by_tags.insert(field.tag, field);
-    }
-
-    pub(crate) fn add_message(&mut self, message: MessageData) {
-        self.message_msgtypes_by_name
-            .insert(message.name.clone(), message.msg_type.clone());
-        self.messages_by_msgtype
-            .insert(message.msg_type.clone(), message);
-    }
-
-    pub(crate) fn add_component(&mut self, component: ComponentData) {
-        self.components_by_name
-            .insert(component.name.clone(), component);
-    }
-
-    pub(crate) fn add_datatype(&mut self, datatype: DatatypeData) {
-        self.data_types_by_name
-            .insert(datatype.datatype.name().into(), datatype);
     }
 }

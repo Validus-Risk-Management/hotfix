@@ -1,5 +1,6 @@
 //! Access to FIX Dictionary reference and message specifications.
 
+mod builder;
 mod dictionary;
 mod field;
 mod quickfix;
