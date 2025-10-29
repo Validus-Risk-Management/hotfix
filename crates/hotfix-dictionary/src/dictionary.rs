@@ -1,6 +1,5 @@
 use crate::{
-    Abbreviation, AbbreviationData, Category, CategoryData, Component, ComponentData, Datatype,
-    DatatypeData, Field, FieldData, Message, MessageData,
+    Component, ComponentData, Datatype, DatatypeData, Field, FieldData, Message, MessageData,
 };
 
 use crate::quickfix::{ParseDictionaryError, QuickFixReader};
@@ -27,8 +26,6 @@ use smartstring::alias::String as SmartString;
 pub struct Dictionary {
     version: String,
 
-    abbreviation_definitions: FnvHashMap<SmartString, AbbreviationData>,
-
     data_types_by_name: FnvHashMap<SmartString, DatatypeData>,
 
     fields_by_tags: FnvHashMap<u32, FieldData>,
@@ -38,9 +35,6 @@ pub struct Dictionary {
 
     messages_by_msgtype: FnvHashMap<SmartString, MessageData>,
     message_msgtypes_by_name: FnvHashMap<SmartString, SmartString>,
-
-    //layout_items: Vec<LayoutItemData>,
-    categories_by_name: FnvHashMap<SmartString, CategoryData>,
 }
 
 impl Dictionary {
@@ -48,14 +42,12 @@ impl Dictionary {
     pub fn new<S: ToString>(version: S) -> Self {
         Dictionary {
             version: version.to_string(),
-            abbreviation_definitions: FnvHashMap::default(),
             data_types_by_name: FnvHashMap::default(),
             fields_by_tags: FnvHashMap::default(),
             field_tags_by_name: FnvHashMap::default(),
             components_by_name: FnvHashMap::default(),
             messages_by_msgtype: FnvHashMap::default(),
             message_msgtypes_by_name: FnvHashMap::default(),
-            categories_by_name: FnvHashMap::default(),
         }
     }
 
@@ -180,14 +172,6 @@ impl Dictionary {
         ]
     }
 
-    /// Return the known abbreviation for `term` -if any- according to the
-    /// documentation of this FIX Dictionary.
-    pub fn abbreviation_for(&self, term: &str) -> Option<Abbreviation<'_>> {
-        self.abbreviation_definitions
-            .get(term)
-            .map(|data| Abbreviation(self, data))
-    }
-
     /// Returns the [`Message`] associated with `name`, if any.
     ///
     /// ```
@@ -265,13 +249,6 @@ impl Dictionary {
         self.field_by_tag(*tag)
     }
 
-    /// Returns the [`Category`] named `name`, if any.
-    pub(crate) fn category_by_name(&self, name: &str) -> Option<Category<'_>> {
-        self.categories_by_name
-            .get(name)
-            .map(|data| Category(self, data))
-    }
-
     /// Returns a [`Vec`] of all [`Datatype`]'s in this [`Dictionary`]. The ordering
     /// of items is not specified.
     ///
@@ -304,15 +281,6 @@ impl Dictionary {
         self.messages_by_msgtype
             .values()
             .map(|data| Message(self, data))
-            .collect()
-    }
-
-    /// Returns a [`Vec`] of all [`Category`]'s in this [`Dictionary`]. The ordering
-    /// of items is not specified.
-    pub fn categories(&self) -> Vec<Category<'_>> {
-        self.categories_by_name
-            .values()
-            .map(|data| Category(self, data))
             .collect()
     }
 
@@ -355,10 +323,5 @@ impl Dictionary {
     pub(crate) fn add_datatype(&mut self, datatype: DatatypeData) {
         self.data_types_by_name
             .insert(datatype.datatype.name().into(), datatype);
-    }
-
-    pub(crate) fn add_category(&mut self, category: CategoryData) {
-        self.categories_by_name
-            .insert(category.name.clone().into(), category);
     }
 }

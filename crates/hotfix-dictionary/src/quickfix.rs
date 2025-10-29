@@ -120,7 +120,6 @@ fn import_field(builder: &mut Dictionary, node: roxmltree::Node) -> ParseResult<
 
 fn import_message(dict: &mut Dictionary, node: roxmltree::Node) -> ParseResult<()> {
     debug_assert_eq!(node.tag_name().name(), "message");
-    import_category(dict, node)?;
     let mut layout_items = LayoutItems::new();
     for child in node.children() {
         if child.is_element() {
@@ -169,7 +168,6 @@ fn import_component(dict: &mut Dictionary, node: roxmltree::Node, name: &str) ->
             is_optimized: false,
         },
         layout_items,
-        category_name: "".into(), // FIXME
         name: name.into(),
     };
     dict.add_component(component);
@@ -279,19 +277,6 @@ fn import_layout_item(dict: &mut Dictionary, node: roxmltree::Node) -> ParseResu
     };
     let item = LayoutItemData { required, kind };
     Ok(item)
-}
-
-fn import_category(dict: &mut Dictionary, node: roxmltree::Node) -> ParseResult<()> {
-    debug_assert_eq!(node.tag_name().name(), "message");
-    let name = node.attribute("msgcat").ok_or(ParseError::InvalidFormat)?;
-
-    if dict.category_by_name(name).is_none() {
-        dict.add_category(CategoryData {
-            name: name.to_string(),
-        });
-    }
-
-    Ok(())
 }
 
 fn panic_missing_tag_in_element(elem: roxmltree::Node, tag: &str) -> ! {

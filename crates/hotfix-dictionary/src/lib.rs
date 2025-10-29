@@ -19,34 +19,6 @@ pub type Dictionaries = FnvHashMap<String, Arc<Dictionary>>;
 /// Type alias for FIX tags: 32-bit unsigned integers, strictly positive.
 pub type TagU32 = std::num::NonZeroU32;
 
-pub trait DataFieldLookup<F> {
-    fn field_is_data(&self, field: F) -> bool;
-}
-
-pub trait NumInGroupLookup<F> {
-    fn field_is_num_in_group(&self, field: F) -> bool;
-}
-
-impl DataFieldLookup<u32> for Dictionary {
-    fn field_is_data(&self, tag: u32) -> bool {
-        if let Some(field) = self.field_by_tag(tag) {
-            field.data_type().basetype() == FixDatatype::Data
-        } else {
-            false
-        }
-    }
-}
-
-impl NumInGroupLookup<u32> for Dictionary {
-    fn field_is_num_in_group(&self, tag: u32) -> bool {
-        if let Some(field) = self.field_by_tag(tag) {
-            field.data_type().basetype() == FixDatatype::NumInGroup
-        } else {
-            false
-        }
-    }
-}
-
 /// The expected location of a field within a FIX message (i.e. header, body, or
 /// trailer).
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -96,45 +68,12 @@ fn display_layout_item(indent: u32, item: LayoutItem, f: &mut fmt::Formatter) ->
 }
 
 #[derive(Clone, Debug)]
-struct AbbreviationData {
-    abbreviation: SmartString,
-}
-
-/// An [`Abbreviation`] is a standardized abbreviated form for a specific word,
-/// pattern, or name. Abbreviation data is mostly meant for documentation
-/// purposes, but in general it can have other uses as well, e.g. FIXML field
-/// naming.
-#[allow(dead_code)]
-#[derive(Debug)]
-pub struct Abbreviation<'a>(&'a Dictionary, &'a AbbreviationData);
-
-impl<'a> Abbreviation<'a> {
-    /// Returns the full term (non-abbreviated) associated with `self`.
-    pub fn term(&self) -> &str {
-        self.1.abbreviation.as_str()
-    }
-}
-
-#[derive(Clone, Debug)]
-struct CategoryData {
-    /// **Primary key**. A string uniquely identifying this category.
-    name: String,
-}
-
-/// A [`Category`] is a collection of loosely related FIX messages or components
-/// all belonging to the same [`Section`].
-#[derive(Clone, Debug)]
-#[allow(dead_code)]
-pub struct Category<'a>(&'a Dictionary, &'a CategoryData);
-
-#[derive(Clone, Debug)]
 struct ComponentData {
     /// **Primary key.** The unique integer identifier of this component
     /// type.
     id: usize,
     component_type: FixmlComponentAttributes,
     layout_items: Vec<LayoutItemData>,
-    category_name: SmartString,
     /// The human readable name of the component.
     name: SmartString,
 }
@@ -168,13 +107,6 @@ impl<'a> Component<'a> {
             FixmlComponentAttributes::Block { is_repeating, .. } => is_repeating,
             _ => false,
         }
-    }
-
-    /// Returns the [`Category`] to which `self` belongs.
-    pub fn category(&self) -> Category<'_> {
-        self.0
-            .category_by_name(self.1.category_name.as_str())
-            .unwrap()
     }
 
     /// Returns an [`Iterator`] over all items that are part of `self`.
