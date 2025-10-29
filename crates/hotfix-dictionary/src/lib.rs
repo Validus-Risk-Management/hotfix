@@ -10,7 +10,7 @@ mod quickfix;
 
 use crate::component::{Component, ComponentData};
 pub use crate::dictionary::Dictionary;
-pub use crate::field::{Field, IsFieldDefinition};
+pub use crate::field::{Field, FieldLocation, IsFieldDefinition};
 pub use datatype::{Datatype, FixDatatype};
 use fnv::FnvHashMap;
 use smartstring::alias::String as SmartString;
@@ -22,17 +22,6 @@ pub type Dictionaries = FnvHashMap<String, Arc<Dictionary>>;
 
 /// Type alias for FIX tags: 32-bit unsigned integers, strictly positive.
 pub type TagU32 = std::num::NonZeroU32;
-
-/// The expected location of a field within a FIX message (i.e. header, body, or trailer).
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum FieldLocation {
-    /// The field is located inside the "Standard Header".
-    Header,
-    /// This field is located inside the body of the FIX message.
-    Body,
-    /// This field is located inside the "Standard Trailer".
-    Trailer,
-}
 
 #[allow(dead_code)]
 fn display_layout_item(indent: u32, item: LayoutItem, f: &mut fmt::Formatter) -> fmt::Result {

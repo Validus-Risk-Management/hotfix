@@ -1,4 +1,4 @@
-use crate::{Datatype, Dictionary, FieldData, FieldEnum, FieldLocation, FixDatatype, TagU32};
+use crate::{Datatype, Dictionary, FieldData, FieldEnum, FixDatatype, TagU32};
 
 pub trait IsFieldDefinition {
     /// Returns the FIX tag associated with `self`.
@@ -113,4 +113,15 @@ impl<'a> IsFieldDefinition for Field<'a> {
     fn location(&self) -> FieldLocation {
         FieldLocation::Body // FIXME
     }
+}
+
+/// The expected location of a field within a FIX message (i.e. header, body, or trailer).
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum FieldLocation {
+    /// The field is located inside the "Standard Header".
+    Header,
+    /// This field is located inside the body of the FIX message.
+    Body,
+    /// This field is located inside the "Standard Trailer".
+    Trailer,
 }
