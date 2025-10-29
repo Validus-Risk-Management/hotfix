@@ -3,6 +3,7 @@
 mod builder;
 mod dictionary;
 mod field;
+mod message_definition;
 mod quickfix;
 
 pub use datatype::FixDatatype;
@@ -20,8 +21,7 @@ pub type Dictionaries = FnvHashMap<String, Arc<Dictionary>>;
 /// Type alias for FIX tags: 32-bit unsigned integers, strictly positive.
 pub type TagU32 = std::num::NonZeroU32;
 
-/// The expected location of a field within a FIX message (i.e. header, body, or
-/// trailer).
+/// The expected location of a field within a FIX message (i.e. header, body, or trailer).
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum FieldLocation {
     /// The field is located inside the "Standard Header".
@@ -704,61 +704,6 @@ impl<'a> LayoutItem<'a> {
 }
 
 type LayoutItems = Vec<LayoutItemData>;
-
-#[derive(Clone, Debug)]
-struct MessageData {
-    /// The unique integer identifier of this message type.
-    component_id: u32,
-    /// **Primary key**. The unique character identifier of this message
-    /// type; used literally in FIX messages.
-    msg_type: SmartString,
-    /// The name of this message type.
-    name: SmartString,
-    layout_items: LayoutItems,
-    /// A boolean used to indicate if the message is to be generated as part
-    /// of FIXML.
-    required: bool,
-    description: String,
-}
-
-/// A [`Message`] is a unit of information sent on the wire between
-/// counterparties. Every [`Message`] is composed of fields and/or components.
-#[derive(Debug)]
-pub struct Message<'a>(&'a Dictionary, &'a MessageData);
-
-impl<'a> Message<'a> {
-    /// Returns the human-readable name of `self`.
-    pub fn name(&self) -> &str {
-        self.1.name.as_str()
-    }
-
-    /// Returns the message type of `self`.
-    pub fn msg_type(&self) -> &str {
-        self.1.msg_type.as_str()
-    }
-
-    /// Returns the description associated with `self`.
-    pub fn description(&self) -> &str {
-        &self.1.description
-    }
-
-    /// Returns the component ID of `self`.
-    pub fn component_id(&self) -> u32 {
-        self.1.component_id
-    }
-
-    pub fn layout(&self) -> impl Iterator<Item = LayoutItem<'_>> {
-        self.1
-            .layout_items
-            .iter()
-            .map(move |data| LayoutItem(self.0, data))
-    }
-
-    pub fn fixml_required(&self) -> bool {
-        self.1.required
-    }
-}
-
 /// A [`Section`] is a collection of many [`Component`]-s. It has no practical
 /// effect on encoding and decoding of FIX data and it's only used for
 /// documentation and human readability.

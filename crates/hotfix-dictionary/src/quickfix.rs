@@ -1,5 +1,6 @@
 use super::*;
 use crate::builder::DictionaryBuilder;
+use crate::message_definition::MessageData;
 
 pub struct QuickFixReader<'a> {
     node_with_header: roxmltree::Node<'a, 'a>,

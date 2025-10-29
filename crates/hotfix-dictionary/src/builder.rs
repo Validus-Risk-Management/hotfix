@@ -1,4 +1,5 @@
-use crate::{ComponentData, DatatypeData, Dictionary, FieldData, MessageData};
+use crate::message_definition::MessageData;
+use crate::{ComponentData, DatatypeData, Dictionary, FieldData};
 
 pub struct DictionaryBuilder {
     dict: Dictionary,

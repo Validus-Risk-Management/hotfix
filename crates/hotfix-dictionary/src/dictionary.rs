@@ -1,7 +1,6 @@
-use crate::{
-    Component, ComponentData, Datatype, DatatypeData, Field, FieldData, Message, MessageData,
-};
+use crate::{Component, ComponentData, Datatype, DatatypeData, Field, FieldData};
 
+use crate::message_definition::{MessageData, MessageDefinition};
 use crate::quickfix::{ParseDictionaryError, QuickFixReader};
 use fnv::FnvHashMap;
 use smartstring::alias::String as SmartString;
@@ -183,7 +182,7 @@ impl Dictionary {
     /// let msg2 = dict.message_by_msgtype("0").unwrap();
     /// assert_eq!(msg1.name(), msg2.name());
     /// ```
-    pub fn message_by_name(&self, name: &str) -> Option<Message<'_>> {
+    pub fn message_by_name(&self, name: &str) -> Option<MessageDefinition<'_>> {
         let msg_type = self.message_msgtypes_by_name.get(name)?;
         self.message_by_msgtype(msg_type)
     }
@@ -199,10 +198,10 @@ impl Dictionary {
     /// let msg2 = dict.message_by_name("Heartbeat").unwrap();
     /// assert_eq!(msg1.name(), msg2.name());
     /// ```
-    pub fn message_by_msgtype(&self, msgtype: &str) -> Option<Message<'_>> {
+    pub fn message_by_msgtype(&self, msgtype: &str) -> Option<MessageDefinition<'_>> {
         self.messages_by_msgtype
             .get(msgtype)
-            .map(|data| Message(self, data))
+            .map(|data| MessageDefinition(self, data))
     }
 
     /// Returns the [`Component`] named `name`, if any.
@@ -277,10 +276,10 @@ impl Dictionary {
     /// let msg = msgs.iter().find(|m| m.name() == "MarketDataRequest");
     /// assert_eq!(msg.unwrap().msg_type(), "V");
     /// ```
-    pub fn messages(&self) -> Vec<Message<'_>> {
+    pub fn messages(&self) -> Vec<MessageDefinition<'_>> {
         self.messages_by_msgtype
             .values()
-            .map(|data| Message(self, data))
+            .map(|data| MessageDefinition(self, data))
             .collect()
     }
 
