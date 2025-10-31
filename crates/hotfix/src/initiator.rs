@@ -77,6 +77,10 @@ impl<M: FixMessage> Initiator<M> {
             };
         }
     }
+
+    pub fn is_shutdown(&self) -> bool {
+        *self.completion_rx.borrow()
+    }
 }
 
 async fn establish_connection<M: FixMessage>(
