@@ -63,10 +63,10 @@ impl<M: FixMessage> Initiator<M> {
 
     pub async fn shutdown(self) -> Result<(), Elapsed> {
         self.session.shutdown().await;
-        tokio::time::timeout(Duration::from_secs(5), self.await_shutdown()).await
+        tokio::time::timeout(Duration::from_secs(5), self.wait_for_shutdown()).await
     }
 
-    pub async fn await_shutdown(&self) {
+    pub async fn wait_for_shutdown(&self) {
         let mut rx = self.completion_rx.clone();
         loop {
             if *rx.borrow_and_update() {
