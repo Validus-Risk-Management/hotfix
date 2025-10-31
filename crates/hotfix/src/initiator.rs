@@ -7,6 +7,8 @@
 //! the peer, and sends the initial Logon (35=A) message. For transport,
 //! `HotFIX` supports plain TCP and encrypted TLS over TCP connections.
 use std::time::Duration;
+use tokio::sync::watch;
+use tokio::time::error::Elapsed;
 use tokio::time::sleep;
 use tracing::{debug, warn};
 
@@ -17,10 +19,11 @@ use crate::session::SessionRef;
 use crate::store::MessageStore;
 use crate::transport::connect;
 
+#[derive(Clone)]
 pub struct Initiator<M> {
     pub config: SessionConfig,
     session: SessionRef<M>,
-    connection_loop_handle: tokio::task::JoinHandle<()>,
+    completion_rx: watch::Receiver<bool>,
 }
 
 impl<M: FixMessage> Initiator<M> {
@@ -31,17 +34,18 @@ impl<M: FixMessage> Initiator<M> {
     ) -> Self {
         let application_ref = ApplicationRef::new(application);
         let session_ref = SessionRef::new(config.clone(), application_ref, store);
+        let (completion_tx, completion_rx) = watch::channel(false);
 
-        let connection_loop_handle = tokio::spawn({
+        tokio::spawn({
             let config = config.clone();
             let session_ref = session_ref.clone();
-            establish_connection(config, session_ref)
+            establish_connection(config, session_ref, completion_tx)
         });
 
         Self {
             config,
             session: session_ref,
-            connection_loop_handle,
+            completion_rx,
         }
     }
 
@@ -57,13 +61,29 @@ impl<M: FixMessage> Initiator<M> {
         self.session.clone()
     }
 
-    pub async fn shutdown(self) -> Result<(), tokio::task::JoinError> {
+    pub async fn shutdown(self) -> Result<(), Elapsed> {
         self.session.shutdown().await;
-        self.connection_loop_handle.await
+        tokio::time::timeout(Duration::from_secs(5), self.await_shutdown()).await
+    }
+
+    pub async fn await_shutdown(&self) {
+        let mut rx = self.completion_rx.clone();
+        loop {
+            if *rx.borrow_and_update() {
+                break;
+            } else if let Err(err) = rx.changed().await {
+                warn!("connection loop has exited but completion signal was not sent: {err}");
+                break;
+            };
+        }
     }
 }
 
-async fn establish_connection<M: FixMessage>(config: SessionConfig, session_ref: SessionRef<M>) {
+async fn establish_connection<M: FixMessage>(
+    config: SessionConfig,
+    session_ref: SessionRef<M>,
+    completion_tx: watch::Sender<bool>,
+) {
     loop {
         session_ref.await_active_session_time().await;
 
@@ -87,4 +107,6 @@ async fn establish_connection<M: FixMessage>(config: SessionConfig, session_ref:
         debug!("waiting for {reconnect_interval} seconds before attempting to reconnect");
         sleep(Duration::from_secs(reconnect_interval)).await;
     }
+
+    completion_tx.send_replace(true);
 }
