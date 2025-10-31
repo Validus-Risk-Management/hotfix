@@ -132,7 +132,6 @@ fn import_field(builder: &mut DictionaryBuilder, node: roxmltree::Node) -> Parse
 }
 
 fn import_message(builder: &mut DictionaryBuilder, node: roxmltree::Node) -> ParseResult<()> {
-    debug_assert_eq!(node.tag_name().name(), "message");
     let mut layout_items = LayoutItems::new();
     for child in node.children() {
         if child.is_element() {
@@ -193,7 +192,6 @@ fn import_component(
 
 fn import_datatype(builder: &mut DictionaryBuilder, node: roxmltree::Node) -> SmartString {
     // References should only happen at <field> tags.
-    debug_assert_eq!(node.tag_name().name(), "field");
     let datatype = {
         // The idenfier that QuickFIX uses for this type.
         let quickfix_name = node.attribute("type").unwrap();
@@ -249,7 +247,6 @@ fn import_layout_item(
 ) -> ParseResult<LayoutItemData> {
     // This processing step requires on fields being already present in
     // the dictionary.
-    debug_assert_ne!(builder.dict().fields().len(), 0);
     let name = node
         .attribute("name")
         .unwrap_or_else(|| panic_missing_tag_in_element(node, "name"));

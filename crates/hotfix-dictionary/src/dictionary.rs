@@ -72,7 +72,8 @@ impl Dictionary {
     }
 
     pub fn load_from_file(path: &str) -> Result<Self, ParseDictionaryError> {
-        let spec = std::fs::read_to_string(path).unwrap();
+        let spec = std::fs::read_to_string(path)
+            .unwrap_or_else(|_| panic!("unable to read FIX dictionary file at {path}"));
         Dictionary::from_quickfix_spec(&spec)
     }
 

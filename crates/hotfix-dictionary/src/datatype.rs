@@ -344,7 +344,7 @@ impl FixDatatype {
     /// assert_eq!(FixDatatype::Price.base_type(), FixDatatype::Float);
     /// ```
     pub fn base_type(&self) -> Self {
-        let dt = match self {
+        match self {
             Self::Char | Self::Boolean => Self::Char,
             Self::Float
             | Self::Amt
@@ -359,9 +359,7 @@ impl FixDatatype {
             | Self::SeqNum
             | Self::TagNum => Self::Int,
             _ => Self::String,
-        };
-        debug_assert!(dt.is_base_type());
-        dt
+        }
     }
 
     /// Returns an [`Iterator`] over all variants of

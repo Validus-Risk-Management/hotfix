@@ -16,7 +16,7 @@ pub use dictionary::Dictionary;
 pub use field::{Field, FieldEnum, FieldLocation, IsFieldDefinition};
 use field::{FieldData, FieldEnumData};
 use fnv::FnvHashMap;
-pub use layout::{LayoutItem, LayoutItemKind};
+pub use layout::{LayoutItem, LayoutItemKind, display_layout_item};
 use layout::{LayoutItemData, LayoutItemKindData, LayoutItems};
 use std::sync::Arc;
 

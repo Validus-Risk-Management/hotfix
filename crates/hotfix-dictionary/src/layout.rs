@@ -4,8 +4,7 @@ use std::fmt;
 use crate::component::Component;
 use crate::{Dictionary, Field};
 
-#[allow(dead_code)]
-fn display_layout_item(indent: u32, item: LayoutItem, f: &mut fmt::Formatter) -> fmt::Result {
+pub fn display_layout_item(indent: u32, item: LayoutItem, f: &mut fmt::Formatter) -> fmt::Result {
     for _ in 0..indent {
         write!(f, " ")?;
     }
@@ -41,7 +40,6 @@ fn display_layout_item(indent: u32, item: LayoutItem, f: &mut fmt::Formatter) ->
 }
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub(crate) enum LayoutItemKindData {
     Component {
         name: SmartString,
