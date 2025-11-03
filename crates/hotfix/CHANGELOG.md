@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.2.5...hotfix-v0.2.6) - 2025-11-03
+
+### Added
+
+- make initiators cloneable ([#223](https://github.com/Validus-Risk-Management/hotfix/pull/223))
+
 ## [0.2.5](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.2.4...hotfix-v0.2.5) - 2025-10-21
 
 ### Added

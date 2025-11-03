@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-message-v0.2.3...hotfix-message-v0.2.4) - 2025-11-03
+
+### Added
+
+- make initiators cloneable ([#223](https://github.com/Validus-Risk-Management/hotfix/pull/223))
+
+### Fixed
+
+- switch message field data structure to IndexMap from BTreeMap to maintain insertion order ([#218](https://github.com/Validus-Risk-Management/hotfix/pull/218))
+
+### Other
+
+- refactor dictionary implementation ([#222](https://github.com/Validus-Risk-Management/hotfix/pull/222))
+
 ## [0.2.3](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-message-v0.2.2...hotfix-message-v0.2.3) - 2025-10-21
 
 ### Added
