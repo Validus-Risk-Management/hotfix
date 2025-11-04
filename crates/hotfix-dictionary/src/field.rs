@@ -1,5 +1,5 @@
+use crate::string::SmartString;
 use crate::{Datatype, Dictionary, FixDatatype, TagU32};
-use smartstring::alias::String as SmartString;
 
 pub trait IsFieldDefinition {
     /// Returns the FIX tag associated with `self`.

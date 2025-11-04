@@ -1,5 +1,4 @@
-use smartstring::alias::String as SmartString;
-
+use crate::string::SmartString;
 use crate::{Dictionary, Field, LayoutItem, LayoutItemData, LayoutItemKind};
 
 /// A [`Component`] is an ordered collection of fields and/or other components.

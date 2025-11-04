@@ -12,6 +12,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [features]
+default = ["smartstring"]
 fix40 = []
 fix41 = []
 fix42 = []
@@ -21,6 +22,7 @@ fix50 = []
 fix50sp1 = []
 fix50sp2 = []
 fixt11 = []
+smartstring = ["dep:smartstring"]
 
 [lints]
 workspace = true
@@ -28,6 +30,6 @@ workspace = true
 [dependencies]
 fnv.workspace = true
 roxmltree.workspace = true
-smartstring.workspace = true
+smartstring = { workspace = true, optional = true }
 strum.workspace = true
 strum_macros.workspace = true

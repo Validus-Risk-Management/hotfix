@@ -1,7 +1,7 @@
-use smartstring::alias::String as SmartString;
 use std::fmt;
 
 use crate::component::Component;
+use crate::string::SmartString;
 use crate::{Dictionary, Field};
 
 pub fn display_layout_item(indent: u32, item: LayoutItem, f: &mut fmt::Formatter) -> fmt::Result {

@@ -1,8 +1,7 @@
-use smartstring::alias::String as SmartString;
-
 use crate::builder::DictionaryBuilder;
 use crate::component::{ComponentData, FixmlComponentAttributes};
 use crate::message_definition::MessageData;
+use crate::string::SmartString;
 use crate::{
     DatatypeData, Dictionary, FieldData, FieldEnumData, FixDatatype, LayoutItemData,
     LayoutItemKindData, LayoutItems,

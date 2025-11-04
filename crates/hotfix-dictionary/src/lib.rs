@@ -8,6 +8,7 @@ mod field;
 mod layout;
 mod message_definition;
 mod quickfix;
+mod string;
 
 use component::{Component, ComponentData};
 use datatype::DatatypeData;

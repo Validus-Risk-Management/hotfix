@@ -2,8 +2,8 @@ use crate::{Component, ComponentData, Datatype, DatatypeData, Field, FieldData};
 
 use crate::message_definition::{MessageData, MessageDefinition};
 use crate::quickfix::{ParseDictionaryError, QuickFixReader};
+use crate::string::SmartString;
 use fnv::FnvHashMap;
-use smartstring::alias::String as SmartString;
 
 /// Specifies business semantics for application-level entities within the FIX
 /// Protocol.

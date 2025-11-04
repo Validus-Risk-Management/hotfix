@@ -1,5 +1,5 @@
+use crate::string::SmartString;
 use crate::{Dictionary, LayoutItem, LayoutItems};
-use smartstring::alias::String as SmartString;
 
 #[derive(Clone, Debug)]
 pub struct MessageData {
