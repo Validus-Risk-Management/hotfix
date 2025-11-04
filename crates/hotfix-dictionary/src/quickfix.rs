@@ -268,7 +268,14 @@ fn import_layout_item(
         "component" => {
             // Components may *not* be already present.
             import_component(builder, node, name)?;
-            LayoutItemKindData::Component { name: name.into() }
+            let mut items = Vec::new();
+            for child in node.children().filter(|n| n.is_element()) {
+                items.push(import_layout_item(builder, child)?);
+            }
+            LayoutItemKindData::Component {
+                name: name.into(),
+                items,
+            }
         }
         "group" => {
             let len_field_tag = builder

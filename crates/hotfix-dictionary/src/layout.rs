@@ -43,6 +43,7 @@ pub fn display_layout_item(indent: u32, item: LayoutItem, f: &mut fmt::Formatter
 pub(crate) enum LayoutItemKindData {
     Component {
         name: SmartString,
+        items: Vec<LayoutItemData>,
     },
     Group {
         len_field_tag: u32,
@@ -61,7 +62,7 @@ pub(crate) struct LayoutItemData {
 
 fn layout_item_kind<'a>(item: &'a LayoutItemKindData, dict: &'a Dictionary) -> LayoutItemKind<'a> {
     match item {
-        LayoutItemKindData::Component { name } => {
+        LayoutItemKindData::Component { name, .. } => {
             LayoutItemKind::Component(dict.component_by_name(name).unwrap())
         }
         LayoutItemKindData::Group {
@@ -111,7 +112,7 @@ impl<'a> LayoutItem<'a> {
     /// Returns the human-readable name of `self`.
     pub fn tag_text(&self) -> String {
         match &self.1.kind {
-            LayoutItemKindData::Component { name } => {
+            LayoutItemKindData::Component { name, .. } => {
                 self.0.component_by_name(name).unwrap().name().to_string()
             }
             LayoutItemKindData::Group {
