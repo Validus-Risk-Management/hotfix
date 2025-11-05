@@ -38,9 +38,8 @@ impl Message {
     }
 
     pub fn from_bytes(config: &Config, dict: &Dictionary, data: &[u8]) -> ParsedMessage {
-        if let Ok(parser) = MessageParser::new(dict, config, data) {
-            // parser.build()
-            todo!("recover parser.build()")
+        if let Ok(parser) = MessageParser::new(dict.clone(), *config) {
+            parser.build(data)
         } else {
             ParsedMessage::UnexpectedError("Failed to create message parser".to_string())
         }
@@ -128,6 +127,7 @@ impl Part for Message {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Config {
     pub(crate) separator: u8,
 }

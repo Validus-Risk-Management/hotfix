@@ -23,263 +23,19 @@ pub const SOH: u8 = 0x1;
 /// e.g. `10=643|`
 const CHECKSUM_LENGTH: usize = 7;
 
-pub struct MessageParser<'a> {
-    dict: &'a Dictionary,
-    header_tags: HashSet<TagU32>,
-    trailer_tags: HashSet<TagU32>,
+pub struct MessageParser {
+    dict: Dictionary,
+    parser_dict: ParserDictionary,
+    config: Config,
+}
+
+struct Parser<'a> {
     position: usize,
     raw_data: &'a [u8],
     config: &'a Config,
 }
 
-impl<'a> MessageParser<'a> {
-    pub fn new(dict: &'a Dictionary, config: &'a Config, data: &'a [u8]) -> ParserResult<Self> {
-        let parser = Self {
-            dict,
-            position: 0,
-            header_tags: Self::get_tags_for_component(dict, "StandardHeader")?,
-            trailer_tags: Self::get_tags_for_component(dict, "StandardTrailer")?,
-            raw_data: data,
-            config,
-        };
-
-        Ok(parser)
-    }
-
-    pub(crate) fn build(mut self, parser_dict: &ParserDictionary) -> ParsedMessage {
-        let (mut header, mut trailer) = match self.verify_integrity() {
-            Ok((header, trailer)) => (header, trailer),
-            Err(err) => return err.into(),
-        };
-
-        let next = match self.build_header(&mut header) {
-            Ok(next_field) => next_field,
-            Err(err) => {
-                return parser_error_to_parsed_message(err, header);
-            }
-        };
-
-        let msg_type = header.get::<&str>(MSG_TYPE).unwrap(); // we know this is valid at this point as we have already verified the integrity of the header
-        let (body, next) = match self.build_body(msg_type, parser_dict, next) {
-            Ok((body, field)) => (body, field),
-            Err(err) => {
-                return parser_error_to_parsed_message(err, header);
-            }
-        };
-
-        self.build_trailer(&mut trailer, next);
-
-        let msg = Message {
-            header,
-            body,
-            trailer,
-        };
-
-        ParsedMessage::Valid(msg)
-    }
-
-    fn verify_integrity(&mut self) -> Result<(Header, Trailer), MessageIntegrityError> {
-        let mut header = Header::default();
-
-        // The first field should always be BeginString
-        let begin_string_field = self.parse_begin_string()?;
-        header.fields.insert(begin_string_field);
-
-        // The second field should always be BodyLength
-        let body_length_field = self.parse_body_length()?;
-        header.fields.insert(body_length_field);
-
-        // The BodyLength is the number of bytes between the end of the BodyLength field and the start of the last field (i.e. the checksum)
-        let body_length = if let Ok(body_length) = header.get::<usize>(BODY_LENGTH) {
-            let expected_length = self.position + body_length + CHECKSUM_LENGTH;
-            if self.raw_data.len() != expected_length {
-                return Err(MessageIntegrityError::InvalidBodyLength);
-            }
-            body_length
-        } else {
-            // we failed to parse body length as usize
-            return Err(MessageIntegrityError::InvalidBodyLength);
-        };
-
-        // Parse the checksum (at the end of the message) and verify it matches the computed checksum
-        let mut trailer = Trailer::default();
-        let checksum_field = self.parse_checksum(self.position + body_length)?;
-        trailer.fields.insert(checksum_field);
-
-        if let Ok(checksum) = trailer.get::<CheckSum>(CHECK_SUM) {
-            let computed_checksum =
-                CheckSum::compute(&self.raw_data[0..self.position + body_length]);
-            if computed_checksum != checksum {
-                return Err(MessageIntegrityError::InvalidCheckSum);
-            }
-        }
-
-        // The third field should be the MsgType
-        let msg_type_field = self.parse_message_type()?;
-        header.fields.insert(msg_type_field);
-
-        Ok((header, trailer))
-    }
-    fn parse_begin_string(&mut self) -> Result<Field, MessageIntegrityError> {
-        if let Some(begin_string) = self.next_field()
-            && begin_string.tag.get() == BEGIN_STRING.tag
-        {
-            Ok(begin_string)
-        } else {
-            Err(MessageIntegrityError::InvalidBeginString)
-        }
-    }
-
-    fn parse_body_length(&mut self) -> Result<Field, MessageIntegrityError> {
-        if let Some(body_length) = self.next_field()
-            && body_length.tag.get() == BODY_LENGTH.tag
-        {
-            Ok(body_length)
-        } else {
-            Err(MessageIntegrityError::InvalidBodyLength)
-        }
-    }
-
-    fn parse_message_type(&mut self) -> Result<Field, MessageIntegrityError> {
-        if let Some(msg_type) = self.next_field()
-            && msg_type.tag.get() == MSG_TYPE.tag
-        {
-            Ok(msg_type)
-        } else {
-            Err(MessageIntegrityError::InvalidMsgType)
-        }
-    }
-
-    fn parse_checksum(&self, checksum_start: usize) -> Result<Field, MessageIntegrityError> {
-        if let Some((checksum, _)) = self.parse_field_at(checksum_start)
-            && checksum.tag.get() == CHECK_SUM.tag
-        {
-            Ok(checksum)
-        } else {
-            Err(MessageIntegrityError::InvalidCheckSum)
-        }
-    }
-
-    fn build_header(&mut self, header: &mut Header) -> ParserResult<Field> {
-        // we have already added the first 3 mandatory fields, build the rest
-
-        loop {
-            let field = self.next_field().ok_or(ParserError::Malformed(
-                "message ended within header".to_string(),
-            ))?;
-
-            if self.header_tags.contains(&field.tag) {
-                header.fields.insert(field);
-            } else {
-                // check the message type once all other header fields have been parsed
-                // we delay it until after parsing so our rejection has access to fields like the sequence number
-                let msg_type = header
-                    .get::<&str>(MSG_TYPE)
-                    .expect("this should never fail as we've verified the integrity of the header");
-                if self.dict.message_by_msgtype(msg_type).is_none() {
-                    return Err(ParserError::InvalidMsgType(msg_type.to_string()));
-                }
-
-                return Ok(field);
-            }
-        }
-    }
-
-    fn build_body(
-        &mut self,
-        msg_type: &str,
-        parser_dict: &ParserDictionary,
-        next_field: Field,
-    ) -> ParserResult<(Body, Field)> {
-        let message_def = parser_dict.get_message_def(msg_type)?;
-        let mut body = Body::default();
-        let mut field = next_field;
-
-        while message_def.contains_tag(field.tag) {
-            let tag = field.tag.get();
-            body.store_field(field);
-
-            // check if it's the start of a group and parse the group as needed
-            let field_def = self.get_dict_field_by_tag(tag)?;
-            match message_def.get_group(TagU32::new(tag).unwrap()) {
-                Some(group_def) => {
-                    let (groups, next) = self.parse_groups(group_def, field_def.tag())?;
-                    body.set_groups(groups);
-                    field = next;
-                }
-                None => {
-                    field = self.next_field().ok_or(ParserError::Malformed(
-                        "message ended within the body".to_string(),
-                    ))?;
-                }
-            }
-        }
-
-        Ok((body, field))
-    }
-
-    fn build_trailer(&mut self, trailer: &mut Trailer, next_field: Field) {
-        let mut field = Some(next_field);
-        while let Some(f) = field {
-            if f.tag.get() == CHECK_SUM.tag {
-                break;
-            }
-            trailer.store_field(f);
-            field = self.next_field();
-        }
-    }
-
-    fn parse_groups(
-        &mut self,
-        group_def: &GroupDef,
-        start_tag: TagU32,
-    ) -> ParserResult<(Vec<RepeatingGroup>, Field)> {
-        let first_field = self
-            .next_field()
-            .ok_or(ParserError::Malformed("missing begin field".to_string()))?;
-        let delimiter = first_field.tag;
-        let mut groups = vec![];
-
-        let mut field = first_field;
-        loop {
-            let mut group = RepeatingGroup::new_with_tags(start_tag, delimiter);
-
-            // we store the first field, which is the delimiter
-            group.store_field(field);
-            field = self
-                .next_field()
-                .ok_or(ParserError::Malformed("empty group".to_string()))?;
-
-            loop {
-                if group_def.contains_tag(field.tag) {
-                    // the next tag is still part of this group
-                    if field.tag == delimiter {
-                        // if the next field is the delimiter, we start a new group
-                        break;
-                    } else {
-                        let tag = field.tag;
-                        group.store_field(field);
-                        if let Some(nested_group_def) = group_def.get_nested_group(tag) {
-                            let (groups, next) = self.parse_groups(nested_group_def, tag)?;
-                            group.set_groups(groups);
-                            field = next;
-                            continue;
-                        }
-                    }
-                } else {
-                    // otherwise we have finished parsing the groups
-                    groups.push(group);
-                    return Ok((groups, field));
-                }
-                field = self
-                    .next_field()
-                    .ok_or(ParserError::Malformed("incomplete group".to_string()))?;
-            }
-
-            groups.push(group)
-        }
-    }
-
+impl<'a> Parser<'a> {
     fn next_field(&mut self) -> Option<Field> {
         let (field, end_position) = self.parse_field_at(self.position)?;
         self.position = end_position + 1;
@@ -298,6 +54,263 @@ impl<'a> MessageParser<'a> {
         let field = Field::new(tag, data);
 
         Some((field, separator_position))
+    }
+
+    fn parse_checksum(&self, checksum_start: usize) -> Result<Field, MessageIntegrityError> {
+        if let Some((checksum, _)) = self.parse_field_at(checksum_start)
+            && checksum.tag.get() == CHECK_SUM.tag
+        {
+            Ok(checksum)
+        } else {
+            Err(MessageIntegrityError::InvalidCheckSum)
+        }
+    }
+}
+
+impl MessageParser {
+    pub fn new(dict: Dictionary, config: Config) -> anyhow::Result<Self> {
+        let parser_dict: ParserDictionary = dict.clone().try_into()?;
+        let parser = Self {
+            dict,
+            parser_dict,
+            config,
+        };
+
+        Ok(parser)
+    }
+
+    pub(crate) fn build(mut self, data: &[u8]) -> ParsedMessage {
+        let mut parser = Parser {
+            position: 0,
+            raw_data: data,
+            config: &self.config,
+        };
+        let (mut header, mut trailer) = match self.verify_integrity(&mut parser) {
+            Ok((header, trailer)) => (header, trailer),
+            Err(err) => return err.into(),
+        };
+
+        let next = match self.build_header(&mut header, &mut parser) {
+            Ok(next_field) => next_field,
+            Err(err) => {
+                return parser_error_to_parsed_message(err, header);
+            }
+        };
+
+        let msg_type = header.get::<&str>(MSG_TYPE).unwrap(); // we know this is valid at this point as we have already verified the integrity of the header
+        let (body, next) = match self.build_body(msg_type, &mut parser, next) {
+            Ok((body, field)) => (body, field),
+            Err(err) => {
+                return parser_error_to_parsed_message(err, header);
+            }
+        };
+
+        self.build_trailer(&mut trailer, &mut parser, next);
+
+        let msg = Message {
+            header,
+            body,
+            trailer,
+        };
+
+        ParsedMessage::Valid(msg)
+    }
+
+    fn verify_integrity(
+        &self,
+        parser: &mut Parser,
+    ) -> Result<(Header, Trailer), MessageIntegrityError> {
+        let mut header = Header::default();
+
+        // The first field should always be BeginString
+        let begin_string_field = self.parse_begin_string(parser)?;
+        header.fields.insert(begin_string_field);
+
+        // The second field should always be BodyLength
+        let body_length_field = self.parse_body_length(parser)?;
+        header.fields.insert(body_length_field);
+
+        // The BodyLength is the number of bytes between the end of the BodyLength field and the start of the last field (i.e. the checksum)
+        let body_length = if let Ok(body_length) = header.get::<usize>(BODY_LENGTH) {
+            let expected_length = parser.position + body_length + CHECKSUM_LENGTH;
+            if parser.raw_data.len() != expected_length {
+                return Err(MessageIntegrityError::InvalidBodyLength);
+            }
+            body_length
+        } else {
+            // we failed to parse body length as usize
+            return Err(MessageIntegrityError::InvalidBodyLength);
+        };
+
+        // Parse the checksum (at the end of the message) and verify it matches the computed checksum
+        let mut trailer = Trailer::default();
+        let checksum_field = parser.parse_checksum(parser.position + body_length)?;
+        trailer.fields.insert(checksum_field);
+
+        if let Ok(checksum) = trailer.get::<CheckSum>(CHECK_SUM) {
+            let computed_checksum =
+                CheckSum::compute(&parser.raw_data[0..parser.position + body_length]);
+            if computed_checksum != checksum {
+                return Err(MessageIntegrityError::InvalidCheckSum);
+            }
+        }
+
+        // The third field should be the MsgType
+        let msg_type_field = self.parse_message_type(parser)?;
+        header.fields.insert(msg_type_field);
+
+        Ok((header, trailer))
+    }
+    fn parse_begin_string(&self, parser: &mut Parser) -> Result<Field, MessageIntegrityError> {
+        if let Some(begin_string) = parser.next_field()
+            && begin_string.tag.get() == BEGIN_STRING.tag
+        {
+            Ok(begin_string)
+        } else {
+            Err(MessageIntegrityError::InvalidBeginString)
+        }
+    }
+
+    fn parse_body_length(&self, parser: &mut Parser) -> Result<Field, MessageIntegrityError> {
+        if let Some(body_length) = parser.next_field()
+            && body_length.tag.get() == BODY_LENGTH.tag
+        {
+            Ok(body_length)
+        } else {
+            Err(MessageIntegrityError::InvalidBodyLength)
+        }
+    }
+
+    fn parse_message_type(&self, parser: &mut Parser) -> Result<Field, MessageIntegrityError> {
+        if let Some(msg_type) = parser.next_field()
+            && msg_type.tag.get() == MSG_TYPE.tag
+        {
+            Ok(msg_type)
+        } else {
+            Err(MessageIntegrityError::InvalidMsgType)
+        }
+    }
+
+    fn build_header(&self, header: &mut Header, parser: &mut Parser) -> ParserResult<Field> {
+        // we have already added the first 3 mandatory fields, build the rest
+
+        loop {
+            let field = parser.next_field().ok_or(ParserError::Malformed(
+                "message ended within header".to_string(),
+            ))?;
+
+            if self.parser_dict.is_header_tag(field.tag) {
+                header.fields.insert(field);
+            } else {
+                // check the message type once all other header fields have been parsed
+                // we delay it until after parsing so our rejection has access to fields like the sequence number
+                let msg_type = header
+                    .get::<&str>(MSG_TYPE)
+                    .expect("this should never fail as we've verified the integrity of the header");
+                if self.dict.message_by_msgtype(msg_type).is_none() {
+                    return Err(ParserError::InvalidMsgType(msg_type.to_string()));
+                }
+
+                return Ok(field);
+            }
+        }
+    }
+
+    fn build_body(
+        &self,
+        msg_type: &str,
+        parser: &mut Parser,
+        next_field: Field,
+    ) -> ParserResult<(Body, Field)> {
+        let message_def = self.parser_dict.get_message_def(msg_type)?;
+        let mut body = Body::default();
+        let mut field = next_field;
+
+        while message_def.contains_tag(field.tag) {
+            let tag = field.tag.get();
+            body.store_field(field);
+
+            // check if it's the start of a group and parse the group as needed
+            let field_def = self.get_dict_field_by_tag(tag)?;
+            match message_def.get_group(TagU32::new(tag).unwrap()) {
+                Some(group_def) => {
+                    let (groups, next) = self.parse_groups(parser, group_def, field_def.tag())?;
+                    body.set_groups(groups);
+                    field = next;
+                }
+                None => {
+                    field = parser.next_field().ok_or(ParserError::Malformed(
+                        "message ended within the body".to_string(),
+                    ))?;
+                }
+            }
+        }
+
+        Ok((body, field))
+    }
+
+    fn build_trailer(&self, trailer: &mut Trailer, parser: &mut Parser, next_field: Field) {
+        let mut field = Some(next_field);
+        while let Some(f) = field {
+            if f.tag.get() == CHECK_SUM.tag {
+                break;
+            }
+            trailer.store_field(f);
+            field = parser.next_field();
+        }
+    }
+
+    fn parse_groups(
+        &self,
+        parser: &mut Parser,
+        group_def: &GroupDef,
+        start_tag: TagU32,
+    ) -> ParserResult<(Vec<RepeatingGroup>, Field)> {
+        let first_field = parser
+            .next_field()
+            .ok_or(ParserError::Malformed("missing begin field".to_string()))?;
+        let delimiter = first_field.tag;
+        let mut groups = vec![];
+
+        let mut field = first_field;
+        loop {
+            let mut group = RepeatingGroup::new_with_tags(start_tag, delimiter);
+
+            // we store the first field, which is the delimiter
+            group.store_field(field);
+            field = parser
+                .next_field()
+                .ok_or(ParserError::Malformed("empty group".to_string()))?;
+
+            loop {
+                if group_def.contains_tag(field.tag) {
+                    // the next tag is still part of this group
+                    if field.tag == delimiter {
+                        // if the next field is the delimiter, we start a new group
+                        break;
+                    } else {
+                        let tag = field.tag;
+                        group.store_field(field);
+                        if let Some(nested_group_def) = group_def.get_nested_group(tag) {
+                            let (groups, next) =
+                                self.parse_groups(parser, nested_group_def, tag)?;
+                            group.set_groups(groups);
+                            field = next;
+                            continue;
+                        }
+                    }
+                } else {
+                    // otherwise we have finished parsing the groups
+                    groups.push(group);
+                    return Ok((groups, field));
+                }
+                field = parser
+                    .next_field()
+                    .ok_or(ParserError::Malformed("incomplete group".to_string()))?;
+            }
+
+            groups.push(group)
+        }
     }
 
     fn get_dict_field_by_tag(&self, tag: u32) -> ParserResult<hotfix_dictionary::Field<'_>> {
@@ -361,6 +374,7 @@ mod tests {
     use crate::field_types::Currency;
     use crate::message::{Config, Message};
     use crate::parsed_message::{GarbledReason, InvalidReason, ParsedMessage};
+    use crate::parser_dictionary::ParserDictionary;
     use crate::{Part, fix44};
     use hotfix_dictionary::{Dictionary, IsFieldDefinition};
 

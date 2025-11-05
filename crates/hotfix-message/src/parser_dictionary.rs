@@ -42,23 +42,38 @@ impl MessageDef {
     }
 }
 
-pub struct ParserDictionary<'a> {
-    dict: &'a Dictionary,
+pub struct ParserDictionary {
+    data_dict: Dictionary,
     header_tags: HashSet<TagU32>,
     trailer_tags: HashSet<TagU32>,
     message_definitions: HashMap<String, MessageDef>,
 }
 
-impl<'a> ParserDictionary<'a> {
-    pub fn new(dict: &'a Dictionary) -> Result<Self> {
+impl TryFrom<Dictionary> for ParserDictionary {
+    type Error = anyhow::Error;
+
+    fn try_from(data_dict: Dictionary) -> std::result::Result<Self, Self::Error> {
+        let header_tags = Self::get_tags_for_component(&data_dict, "StandardHeader")?;
+        let trailer_tags = Self::get_tags_for_component(&data_dict, "StandardTrailer")?;
+        let message_definitions = Self::build_message_definitions(&data_dict)?;
         let parser = Self {
-            dict,
-            header_tags: Self::get_tags_for_component(dict, "StandardHeader")?,
-            trailer_tags: Self::get_tags_for_component(dict, "StandardTrailer")?,
-            message_definitions: Self::build_message_definitions(dict)?,
+            data_dict,
+            header_tags,
+            trailer_tags,
+            message_definitions,
         };
 
         Ok(parser)
+    }
+}
+
+impl ParserDictionary {
+    pub fn dict(&self) -> &Dictionary {
+        &self.data_dict
+    }
+
+    pub fn is_header_tag(&self, tag: TagU32) -> bool {
+        self.header_tags.contains(&tag)
     }
 
     pub fn get_message_def(&self, msg_type: &str) -> ParserResult<&MessageDef> {
@@ -177,8 +192,7 @@ mod tests {
 
     #[test]
     fn test_top_level_fields() {
-        let dict = Dictionary::fix44();
-        let parser_dict = ParserDictionary::new(&dict).unwrap();
+        let parser_dict: ParserDictionary = Dictionary::fix44().try_into().unwrap();
         let message_def = parser_dict.get_message_def("J").unwrap();
 
         // check that it contains `Symbol`, a tag from the nested `Instrument` component
@@ -193,8 +207,7 @@ mod tests {
 
     #[test]
     fn test_top_level_groups() {
-        let dict = Dictionary::fix44();
-        let parser_dict = ParserDictionary::new(&dict).unwrap();
+        let parser_dict: ParserDictionary = Dictionary::fix44().try_into().unwrap();
         let message_def = parser_dict.get_message_def("J").unwrap();
 
         // check that it contains the right number of top-level groups
@@ -230,8 +243,7 @@ mod tests {
 
     #[test]
     fn test_nested_groups() {
-        let dict = Dictionary::fix44();
-        let parser_dict = ParserDictionary::new(&dict).unwrap();
+        let parser_dict: ParserDictionary = Dictionary::fix44().try_into().unwrap();
         let message_def = parser_dict.get_message_def("J").unwrap();
 
         // Order allocation groups only have one nested group, the parties
@@ -251,8 +263,7 @@ mod tests {
 
     #[test]
     fn test_field_order_in_nested_group() {
-        let dict = Dictionary::fix44();
-        let parser_dict = ParserDictionary::new(&dict).unwrap();
+        let parser_dict: ParserDictionary = Dictionary::fix44().try_into().unwrap();
         let message_def = parser_dict.get_message_def("J").unwrap();
 
         // get the parties group nested in the order allocation group
