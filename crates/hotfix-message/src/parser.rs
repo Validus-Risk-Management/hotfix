@@ -234,7 +234,7 @@ impl MessageParser {
             let field_def = self.get_dict_field_by_tag(tag)?;
             match message_def.get_group(TagU32::new(tag).unwrap()) {
                 Some(group_def) => {
-                    let (groups, next) = self.parse_groups(parser, group_def, field_def.tag())?;
+                    let (groups, next) = Self::parse_groups(parser, group_def, field_def.tag())?;
                     body.set_groups(groups);
                     field = next;
                 }
@@ -265,35 +265,22 @@ impl MessageParser {
     }
 
     fn parse_groups(
-        &self,
         parser: &mut Parser,
         group_def: &GroupDef,
         start_tag: TagU32,
     ) -> ParserResult<(Vec<RepeatingGroup>, Field)> {
-        let delimiter = group_def.delimiter_tag();
         let mut groups = vec![];
 
         let mut field = parser.next_field().ok_or(ParserError::Malformed(
             "missing delimiter field".to_string(),
         ))?;
-        if field.tag != delimiter {
-            return Err(ParserError::InvalidGroupFieldOrder {
-                tag: field.tag.get(),
-                group_tag: group_def.number_of_entries_tag().get(),
-            });
-        }
         loop {
-            let mut group = RepeatingGroup::new_with_tags(start_tag, delimiter);
-
-            // we store the first field, which is the delimiter
-            group.store_field(field);
-
-            field = parser
-                .next_field()
-                .ok_or(ParserError::Malformed("empty group".to_string()))?;
+            let mut group = RepeatingGroup::new_with_tags(start_tag, group_def.delimiter_tag());
 
             // we skip the first field as we've already stored the delimiter
-            for field_def in group_def.fields()[1..].iter() {
+            for field_def in group_def.fields().iter() {
+                let is_required =
+                    field_def.is_required || field_def.tag == group_def.delimiter_tag();
                 let current_tag = field.tag;
                 if field_def.tag == current_tag {
                     // the next tag is the next expected field's tag in the group, store it and move on
@@ -301,7 +288,7 @@ impl MessageParser {
                     field = if let Some(nested_group_def) = group_def.get_nested_group(current_tag)
                     {
                         let (groups, next) =
-                            self.parse_groups(parser, nested_group_def, current_tag)?;
+                            Self::parse_groups(parser, nested_group_def, current_tag)?;
                         group.set_groups(groups);
                         next
                     } else {
@@ -309,7 +296,7 @@ impl MessageParser {
                             .next_field()
                             .ok_or(ParserError::Malformed("incomplete group".to_string()))?
                     }
-                } else if !field_def.is_required {
+                } else if !is_required {
                     // this field isn't required in the group, so it's fine to skip it
                 } else {
                     // the next field in the group is required but the next field in the message isn't it

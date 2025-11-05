@@ -136,6 +136,21 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 InvalidReason::InvalidMsgType(msg_type) => {
                     self.handle_invalid_msg_type(message, &msg_type).await;
                 }
+                InvalidReason::InvalidOrderInGroup { tag, .. } => {
+                    match message.header().get(fix44::MSG_SEQ_NUM) {
+                        Ok(msg_seq_num) => {
+                            let reject = Reject::new(msg_seq_num)
+                                .session_reject_reason(
+                                    SessionRejectReason::RepeatingGroupFieldsOutOfOrder,
+                                )
+                                .text(&format!("field appears in incorrect order:{tag}"));
+                            self.send_message(reject).await;
+                        }
+                        Err(err) => {
+                            error!("failed to get message seq num: {:?}", err);
+                        }
+                    }
+                }
             },
             ParsedMessage::UnexpectedError(err) => {
                 error!("unexpected error: {:?}", err);

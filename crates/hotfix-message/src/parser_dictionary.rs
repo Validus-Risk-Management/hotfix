@@ -7,7 +7,6 @@ use std::collections::{HashMap, HashSet};
 pub struct FieldDef {
     pub(crate) tag: TagU32,
     pub(crate) is_required: bool,
-    pub(crate) is_group: bool,
 }
 
 pub struct GroupDef {
@@ -148,12 +147,10 @@ fn extract_fields(dict: &Dictionary, item: LayoutItem) -> Result<Vec<FieldDef>> 
         LayoutItemKind::Field(field) => vec![FieldDef {
             tag: field.tag(),
             is_required,
-            is_group: false,
         }],
         LayoutItemKind::Group(field, _) => vec![FieldDef {
             tag: field.tag(),
             is_required,
-            is_group: true,
         }],
     };
 
@@ -285,16 +282,15 @@ mod tests {
 
         let mut fields = nested_parties_2_group.fields.iter();
         let expected_fields = vec![
-            (fix44::NESTED2_PARTY_ID, false, false),
-            (fix44::NESTED2_PARTY_ID_SOURCE, false, false),
-            (fix44::NESTED2_PARTY_ROLE, false, false),
-            (fix44::NO_NESTED2_PARTY_SUB_I_DS, true, false),
+            (fix44::NESTED2_PARTY_ID, false),
+            (fix44::NESTED2_PARTY_ID_SOURCE, false),
+            (fix44::NESTED2_PARTY_ROLE, false),
+            (fix44::NO_NESTED2_PARTY_SUB_I_DS, false),
         ];
 
-        for (field_definition, is_group, is_required) in expected_fields {
+        for (field_definition, is_required) in expected_fields {
             let next = fields.next().unwrap();
             assert_eq!(next.tag.get(), field_definition.tag);
-            assert_eq!(next.is_group, is_group);
             assert_eq!(next.is_required, is_required);
         }
     }
