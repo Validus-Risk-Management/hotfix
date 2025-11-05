@@ -1,5 +1,4 @@
 use crate::error::{ParserError, ParserResult};
-use crate::message::Config;
 
 use anyhow::{Result, anyhow};
 use hotfix_dictionary::{Dictionary, LayoutItem, LayoutItemKind, TagU32};
@@ -81,7 +80,10 @@ impl<'a> ParserDictionary<'a> {
 
             let message_def = MessageDef {
                 fields,
-                groups: Default::default(),
+                groups: message.layout().fold(HashMap::new(), |mut acc, item| {
+                    acc.extend(extract_groups(dict, item).unwrap());
+                    acc
+                }),
             };
             definitions.insert(message.msg_type().to_string(), message_def);
         }
@@ -127,6 +129,37 @@ fn extract_fields(dict: &Dictionary, item: LayoutItem) -> Result<Vec<FieldDef>> 
     Ok(fields)
 }
 
+fn extract_groups(dict: &Dictionary, item: LayoutItem) -> Result<HashMap<TagU32, GroupDef>> {
+    let mut groups = HashMap::new();
+    match item.kind() {
+        LayoutItemKind::Component(c) => {
+            let component = dict
+                .component_by_name(c.name())
+                .ok_or_else(|| anyhow!("missing component"))?;
+            component.items().for_each(|i| {
+                groups.extend(extract_groups(dict, i).unwrap());
+            })
+        }
+        LayoutItemKind::Group(field, items) => {
+            groups.insert(
+                field.tag(),
+                GroupDef {
+                    starting_tag: field.tag(),
+                    is_required: item.required(),
+                    fields: extract_fields(dict, item.clone())?,
+                    nested_groups: items.iter().fold(HashMap::new(), |mut acc, i| {
+                        acc.extend(extract_groups(dict, i.clone()).unwrap());
+                        acc
+                    }),
+                },
+            );
+        }
+        _ => {}
+    };
+
+    Ok(groups)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::fix44;
@@ -134,7 +167,7 @@ mod tests {
     use hotfix_dictionary::{Dictionary, IsFieldDefinition, TagU32};
 
     #[test]
-    fn test_nested_groups_are_represented_correctly() {
+    fn test_top_level_fields() {
         let dict = Dictionary::fix44();
         let parser_dict = ParserDictionary::new(&dict).unwrap();
 
@@ -149,5 +182,44 @@ mod tests {
 
         // check that it doesn't contain other tags from the `OrdAllocGroup`
         assert!(!message_def.contains_tag(fix44::ORDER_QTY.tag()));
+    }
+
+    #[test]
+    fn test_top_level_groups() {
+        let dict = Dictionary::fix44();
+        let parser_dict = ParserDictionary::new(&dict).unwrap();
+
+        // we take an `AllocationInstruction` message as an example
+        let message_def = parser_dict.get_message_def("J").unwrap();
+
+        // check that it contains the right number of top-level groups
+        // expected 10 groups (7 directly (including `Parties` and `Stipulations`), 2 in `Instrument`, 1 in `InstrumentExtension`,
+        let expected_group_fields = vec![
+            fix44::NO_ORDERS,
+            fix44::NO_ALLOCS,
+            fix44::NO_EXECS,
+            fix44::NO_STIPULATIONS,
+            fix44::NO_PARTY_I_DS,
+            fix44::NO_SECURITY_ALT_ID,
+            fix44::NO_LEGS,
+            fix44::NO_UNDERLYINGS,
+            fix44::NO_EVENTS,
+            fix44::NO_INSTR_ATTRIB,
+        ];
+        assert_eq!(message_def.groups.len(), expected_group_fields.len());
+        for field in expected_group_fields {
+            assert!(
+                message_def
+                    .get_group(TagU32::new(field.tag).unwrap())
+                    .is_some()
+            );
+        }
+
+        // check that nested groups are not included directly
+        assert!(
+            message_def
+                .get_group(fix44::NO_NESTED2_PARTY_I_DS.tag())
+                .is_none()
+        );
     }
 }

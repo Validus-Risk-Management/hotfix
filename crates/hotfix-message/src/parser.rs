@@ -4,7 +4,7 @@ use crate::field_map::Field;
 use crate::field_types::CheckSum;
 use crate::message::{Config, Message};
 use crate::parsed_message::{GarbledReason, InvalidReason, ParsedMessage};
-use crate::parser_dictionary::{GroupDef, MessageDef, ParserDictionary};
+use crate::parser_dictionary::{GroupDef, ParserDictionary};
 use crate::parts::{Body, Header, RepeatingGroup, Trailer};
 use crate::tags::{BEGIN_STRING, BODY_LENGTH, CHECK_SUM, MSG_TYPE};
 use hotfix_dictionary::{Dictionary, LayoutItem, LayoutItemKind, TagU32};
