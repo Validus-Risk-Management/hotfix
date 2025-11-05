@@ -48,17 +48,15 @@ pub struct ParserDictionary<'a> {
     header_tags: HashSet<TagU32>,
     trailer_tags: HashSet<TagU32>,
     message_definitions: HashMap<String, MessageDef>,
-    config: &'a Config,
 }
 
 impl<'a> ParserDictionary<'a> {
-    pub fn new(dict: &'a Dictionary, config: &'a Config) -> Result<Self> {
+    pub fn new(dict: &'a Dictionary) -> Result<Self> {
         let parser = Self {
             dict,
             header_tags: Self::get_tags_for_component(dict, "StandardHeader")?,
             trailer_tags: Self::get_tags_for_component(dict, "StandardTrailer")?,
             message_definitions: Self::build_message_definitions(dict)?,
-            config,
         };
 
         Ok(parser)
@@ -127,4 +125,29 @@ fn extract_fields(dict: &Dictionary, item: LayoutItem) -> Result<Vec<FieldDef>> 
     };
 
     Ok(fields)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::fix44;
+    use crate::parser_dictionary::ParserDictionary;
+    use hotfix_dictionary::{Dictionary, IsFieldDefinition, TagU32};
+
+    #[test]
+    fn test_nested_groups_are_represented_correctly() {
+        let dict = Dictionary::fix44();
+        let parser_dict = ParserDictionary::new(&dict).unwrap();
+
+        // we take an `AllocationInstruction` message as an example
+        let message_def = parser_dict.get_message_def("J").unwrap();
+
+        // check that it contains `Symbol`, a tag from the nested `Instrument` component
+        assert!(message_def.contains_tag(fix44::SYMBOL.tag()));
+
+        // check that it contains `NoOrders`, the starting tag for `OrdAllocGrp`
+        assert!(message_def.contains_tag(fix44::NO_ORDERS.tag()));
+
+        // check that it doesn't contain other tags from the `OrdAllocGroup`
+        assert!(!message_def.contains_tag(fix44::ORDER_QTY.tag()));
+    }
 }
