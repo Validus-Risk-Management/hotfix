@@ -119,7 +119,12 @@ fn extract_fields(dict: &Dictionary, item: LayoutItem) -> Result<Vec<FieldDef>> 
                 .flatten()
                 .collect()
         }
-        LayoutItemKind::Field(field) | LayoutItemKind::Group(field, _) => vec![FieldDef {
+        LayoutItemKind::Field(field) => vec![FieldDef {
+            tag: field.tag(),
+            is_required,
+            is_group: false,
+        }],
+        LayoutItemKind::Group(field, _) => vec![FieldDef {
             tag: field.tag(),
             is_required,
             is_group: true,
@@ -146,7 +151,11 @@ fn extract_groups(dict: &Dictionary, item: LayoutItem) -> Result<HashMap<TagU32,
                 GroupDef {
                     starting_tag: field.tag(),
                     is_required: item.required(),
-                    fields: extract_fields(dict, item.clone())?,
+                    fields: items
+                        .iter()
+                        .flat_map(|i| extract_fields(dict, i.clone()))
+                        .flatten()
+                        .collect(),
                     nested_groups: items.iter().fold(HashMap::new(), |mut acc, i| {
                         acc.extend(extract_groups(dict, i.clone()).unwrap());
                         acc
@@ -170,8 +179,6 @@ mod tests {
     fn test_top_level_fields() {
         let dict = Dictionary::fix44();
         let parser_dict = ParserDictionary::new(&dict).unwrap();
-
-        // we take an `AllocationInstruction` message as an example
         let message_def = parser_dict.get_message_def("J").unwrap();
 
         // check that it contains `Symbol`, a tag from the nested `Instrument` component
@@ -188,8 +195,6 @@ mod tests {
     fn test_top_level_groups() {
         let dict = Dictionary::fix44();
         let parser_dict = ParserDictionary::new(&dict).unwrap();
-
-        // we take an `AllocationInstruction` message as an example
         let message_def = parser_dict.get_message_def("J").unwrap();
 
         // check that it contains the right number of top-level groups
@@ -221,5 +226,55 @@ mod tests {
                 .get_group(fix44::NO_NESTED2_PARTY_I_DS.tag())
                 .is_none()
         );
+    }
+
+    #[test]
+    fn test_nested_groups() {
+        let dict = Dictionary::fix44();
+        let parser_dict = ParserDictionary::new(&dict).unwrap();
+        let message_def = parser_dict.get_message_def("J").unwrap();
+
+        // Order allocation groups only have one nested group, the parties
+        let order_alloc_group = message_def.get_group(fix44::NO_ORDERS.tag()).unwrap();
+        assert_eq!(order_alloc_group.nested_groups.len(), 1);
+        let nested_parties_2_group = order_alloc_group
+            .get_nested_group(fix44::NO_NESTED2_PARTY_I_DS.tag())
+            .expect("nested parties group to exist");
+
+        // The parties group only has one nested group, the parties subgroup
+        assert_eq!(nested_parties_2_group.nested_groups.len(), 1);
+        let subgroup = nested_parties_2_group
+            .get_nested_group(fix44::NO_NESTED2_PARTY_SUB_I_DS.tag())
+            .expect("parties subgroup to exist");
+        assert!(subgroup.nested_groups.is_empty());
+    }
+
+    #[test]
+    fn test_field_order_in_nested_group() {
+        let dict = Dictionary::fix44();
+        let parser_dict = ParserDictionary::new(&dict).unwrap();
+        let message_def = parser_dict.get_message_def("J").unwrap();
+
+        // get the parties group nested in the order allocation group
+        let order_alloc_group = message_def.get_group(fix44::NO_ORDERS.tag()).unwrap();
+        assert_eq!(order_alloc_group.nested_groups.len(), 1);
+        let nested_parties_2_group = order_alloc_group
+            .get_nested_group(fix44::NO_NESTED2_PARTY_I_DS.tag())
+            .expect("nested parties group to exist");
+
+        let mut fields = nested_parties_2_group.fields.iter();
+        let expected_fields = vec![
+            (fix44::NESTED2_PARTY_ID, false, false),
+            (fix44::NESTED2_PARTY_ID_SOURCE, false, false),
+            (fix44::NESTED2_PARTY_ROLE, false, false),
+            (fix44::NO_NESTED2_PARTY_SUB_I_DS, true, false),
+        ];
+
+        for (field_definition, is_group, is_required) in expected_fields {
+            let next = fields.next().unwrap();
+            assert_eq!(next.tag.get(), field_definition.tag);
+            assert_eq!(next.is_group, is_group);
+            assert_eq!(next.is_required, is_required);
+        }
     }
 }
