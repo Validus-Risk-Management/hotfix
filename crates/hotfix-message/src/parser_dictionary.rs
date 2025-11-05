@@ -43,7 +43,6 @@ impl MessageDef {
 }
 
 pub struct ParserDictionary {
-    data_dict: Dictionary,
     header_tags: HashSet<TagU32>,
     trailer_tags: HashSet<TagU32>,
     message_definitions: HashMap<String, MessageDef>,
@@ -57,7 +56,6 @@ impl TryFrom<Dictionary> for ParserDictionary {
         let trailer_tags = Self::get_tags_for_component(&data_dict, "StandardTrailer")?;
         let message_definitions = Self::build_message_definitions(&data_dict)?;
         let parser = Self {
-            data_dict,
             header_tags,
             trailer_tags,
             message_definitions,
@@ -68,12 +66,12 @@ impl TryFrom<Dictionary> for ParserDictionary {
 }
 
 impl ParserDictionary {
-    pub fn dict(&self) -> &Dictionary {
-        &self.data_dict
-    }
-
     pub fn is_header_tag(&self, tag: TagU32) -> bool {
         self.header_tags.contains(&tag)
+    }
+
+    pub fn is_trailer_tag(&self, tag: TagU32) -> bool {
+        self.trailer_tags.contains(&tag)
     }
 
     pub fn get_message_def(&self, msg_type: &str) -> ParserResult<&MessageDef> {

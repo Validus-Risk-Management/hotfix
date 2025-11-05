@@ -161,6 +161,7 @@ impl MessageParser {
 
         Ok((header, trailer))
     }
+
     fn parse_begin_string(&self, parser: &mut Parser) -> Result<Field, MessageIntegrityError> {
         if let Some(begin_string) = parser.next_field()
             && begin_string.tag.get() == BEGIN_STRING.tag
@@ -246,6 +247,10 @@ impl MessageParser {
             }
         }
 
+        if !self.parser_dict.is_trailer_tag(field.tag) {
+            return Err(ParserError::InvalidField(field.tag.get()));
+        }
+
         Ok((body, field))
     }
 
@@ -318,23 +323,6 @@ impl MessageParser {
             .field_by_tag(tag)
             .ok_or(ParserError::InvalidField(tag))
     }
-
-    fn get_tags_for_component(
-        dict: &Dictionary,
-        component_name: &str,
-    ) -> ParserResult<HashSet<TagU32>> {
-        let mut tags = HashSet::new();
-        let component = dict
-            .component_by_name(component_name)
-            .ok_or(ParserError::InvalidComponent(component_name.to_string()))?;
-        for item in component.items() {
-            if let LayoutItemKind::Field(field) = item.kind() {
-                tags.insert(field.tag());
-            }
-        }
-
-        Ok(tags)
-    }
 }
 
 fn tag_from_bytes(bytes: &[u8]) -> Option<TagU32> {
@@ -374,7 +362,6 @@ mod tests {
     use crate::field_types::Currency;
     use crate::message::{Config, Message};
     use crate::parsed_message::{GarbledReason, InvalidReason, ParsedMessage};
-    use crate::parser_dictionary::ParserDictionary;
     use crate::{Part, fix44};
     use hotfix_dictionary::{Dictionary, IsFieldDefinition};
 
