@@ -7,8 +7,8 @@ use crate::parsed_message::{GarbledReason, InvalidReason, ParsedMessage};
 use crate::parser_dictionary::{GroupDef, ParserDictionary};
 use crate::parts::{Body, Header, RepeatingGroup, Trailer};
 use crate::tags::{BEGIN_STRING, BODY_LENGTH, CHECK_SUM, MSG_TYPE};
-use hotfix_dictionary::{Dictionary, LayoutItem, LayoutItemKind, TagU32};
-use std::collections::{HashMap, HashSet};
+use hotfix_dictionary::{Dictionary, LayoutItemKind, TagU32};
+use std::collections::HashSet;
 
 pub const SOH: u8 = 0x1;
 
@@ -27,7 +27,6 @@ pub struct MessageParser<'a> {
     dict: &'a Dictionary,
     header_tags: HashSet<TagU32>,
     trailer_tags: HashSet<TagU32>,
-    group_tags: HashMap<TagU32, HashSet<TagU32>>,
     position: usize,
     raw_data: &'a [u8],
     config: &'a Config,
@@ -40,7 +39,6 @@ impl<'a> MessageParser<'a> {
             position: 0,
             header_tags: Self::get_tags_for_component(dict, "StandardHeader")?,
             trailer_tags: Self::get_tags_for_component(dict, "StandardTrailer")?,
-            group_tags: Self::get_group_tags(dict),
             raw_data: data,
             config,
         };
@@ -323,41 +321,6 @@ impl<'a> MessageParser<'a> {
         }
 
         Ok(tags)
-    }
-
-    fn get_group_tags(dict: &Dictionary) -> HashMap<TagU32, HashSet<TagU32>> {
-        let mut groups: HashMap<_, HashSet<_>> = HashMap::new();
-
-        for component in dict.components() {
-            for item in component.items() {
-                if let LayoutItemKind::Group(field, items) = item.kind() {
-                    let group = groups.entry(field.tag()).or_default();
-                    for nested in items {
-                        group.extend(Self::get_tags_for_layout_item(nested));
-                    }
-                }
-            }
-        }
-
-        groups
-    }
-
-    fn get_tags_for_layout_item(item: LayoutItem) -> HashSet<TagU32> {
-        let mut tags = HashSet::new();
-        match item.kind() {
-            LayoutItemKind::Component(comp) => {
-                for i in comp.items() {
-                    tags.extend(Self::get_tags_for_layout_item(i));
-                }
-            }
-            LayoutItemKind::Group(f, _) => {
-                tags.insert(f.tag());
-            }
-            LayoutItemKind::Field(f) => {
-                tags.insert(f.tag());
-            }
-        }
-        tags
     }
 }
 
