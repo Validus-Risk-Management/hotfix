@@ -39,7 +39,8 @@ impl Message {
 
     pub fn from_bytes(config: &Config, dict: &Dictionary, data: &[u8]) -> ParsedMessage {
         if let Ok(parser) = MessageParser::new(dict, config, data) {
-            parser.build()
+            // parser.build()
+            todo!("recover parser.build()")
         } else {
             ParsedMessage::UnexpectedError("Failed to create message parser".to_string())
         }

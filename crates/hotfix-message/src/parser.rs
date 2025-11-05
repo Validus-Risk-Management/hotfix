@@ -4,6 +4,7 @@ use crate::field_map::Field;
 use crate::field_types::CheckSum;
 use crate::message::{Config, Message};
 use crate::parsed_message::{GarbledReason, InvalidReason, ParsedMessage};
+use crate::parser_dictionary::{GroupDef, MessageDef, ParserDictionary};
 use crate::parts::{Body, Header, RepeatingGroup, Trailer};
 use crate::tags::{BEGIN_STRING, BODY_LENGTH, CHECK_SUM, MSG_TYPE};
 use hotfix_dictionary::{Dictionary, LayoutItem, LayoutItemKind, TagU32};
@@ -47,7 +48,7 @@ impl<'a> MessageParser<'a> {
         Ok(parser)
     }
 
-    pub(crate) fn build(mut self) -> ParsedMessage {
+    pub(crate) fn build(mut self, parser_dict: &ParserDictionary) -> ParsedMessage {
         let (mut header, mut trailer) = match self.verify_integrity() {
             Ok((header, trailer)) => (header, trailer),
             Err(err) => return err.into(),
@@ -60,7 +61,8 @@ impl<'a> MessageParser<'a> {
             }
         };
 
-        let (body, next) = match self.build_body(next) {
+        let msg_type = header.get::<&str>(MSG_TYPE).unwrap(); // we know this is valid at this point as we have already verified the integrity of the header
+        let (body, next) = match self.build_body(msg_type, parser_dict, next) {
             Ok((body, field)) => (body, field),
             Err(err) => {
                 return parser_error_to_parsed_message(err, header);
@@ -185,24 +187,33 @@ impl<'a> MessageParser<'a> {
         }
     }
 
-    fn build_body(&mut self, next_field: Field) -> ParserResult<(Body, Field)> {
+    fn build_body(
+        &mut self,
+        msg_type: &str,
+        parser_dict: &ParserDictionary,
+        next_field: Field,
+    ) -> ParserResult<(Body, Field)> {
+        let message_def = parser_dict.get_message_def(msg_type)?;
         let mut body = Body::default();
         let mut field = next_field;
 
-        while !self.trailer_tags.contains(&field.tag) {
+        while message_def.contains_tag(field.tag) {
             let tag = field.tag.get();
             body.store_field(field);
 
             // check if it's the start of a group and parse the group as needed
             let field_def = self.get_dict_field_by_tag(tag)?;
-            if field_def.is_num_in_group() {
-                let (groups, next) = self.parse_groups(field_def.tag())?;
-                body.set_groups(groups);
-                field = next;
-            } else {
-                field = self.next_field().ok_or(ParserError::Malformed(
-                    "message ended within the body".to_string(),
-                ))?;
+            match message_def.get_group(TagU32::new(tag).unwrap()) {
+                Some(group_def) => {
+                    let (groups, next) = self.parse_groups(group_def, field_def.tag())?;
+                    body.set_groups(groups);
+                    field = next;
+                }
+                None => {
+                    field = self.next_field().ok_or(ParserError::Malformed(
+                        "message ended within the body".to_string(),
+                    ))?;
+                }
             }
         }
 
@@ -220,7 +231,11 @@ impl<'a> MessageParser<'a> {
         }
     }
 
-    fn parse_groups(&mut self, start_tag: TagU32) -> ParserResult<(Vec<RepeatingGroup>, Field)> {
+    fn parse_groups(
+        &mut self,
+        group_def: &GroupDef,
+        start_tag: TagU32,
+    ) -> ParserResult<(Vec<RepeatingGroup>, Field)> {
         let first_field = self
             .next_field()
             .ok_or(ParserError::Malformed("missing begin field".to_string()))?;
@@ -238,12 +253,7 @@ impl<'a> MessageParser<'a> {
                 .ok_or(ParserError::Malformed("empty group".to_string()))?;
 
             loop {
-                if self
-                    .group_tags
-                    .get(&start_tag)
-                    .ok_or(ParserError::InvalidGroup(start_tag.get()))?
-                    .contains(&field.tag)
-                {
+                if group_def.contains_tag(field.tag) {
                     // the next tag is still part of this group
                     if field.tag == delimiter {
                         // if the next field is the delimiter, we start a new group
@@ -251,9 +261,8 @@ impl<'a> MessageParser<'a> {
                     } else {
                         let tag = field.tag;
                         group.store_field(field);
-                        let field_def = self.get_dict_field_by_tag(tag.get())?;
-                        if field_def.is_num_in_group() {
-                            let (groups, next) = self.parse_groups(tag)?;
+                        if let Some(nested_group_def) = group_def.get_nested_group(tag) {
+                            let (groups, next) = self.parse_groups(nested_group_def, tag)?;
                             group.set_groups(groups);
                             field = next;
                             continue;

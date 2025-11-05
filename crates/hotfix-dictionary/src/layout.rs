@@ -43,6 +43,7 @@ pub fn display_layout_item(indent: u32, item: LayoutItem, f: &mut fmt::Formatter
 pub(crate) enum LayoutItemKindData {
     Component {
         name: SmartString,
+        #[allow(dead_code)]
         items: Vec<LayoutItemData>,
     },
     Group {
