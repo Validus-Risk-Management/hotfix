@@ -17,6 +17,10 @@ pub enum ParserError {
     InvalidField(u32),
     #[error("group (tag = {0}) is missing from FIX dictionary")]
     InvalidGroup(u32),
+    #[error(
+        "field (tag = {tag}) is not in a valid position within the group (group tag = {group_tag})"
+    )]
+    InvalidGroupFieldOrder { tag: u32, group_tag: u32 },
     #[error("component (name = {0}) is missing from FIX dictionary")]
     InvalidComponent(String),
     #[error("MsgType {0} is not a valid message type")]

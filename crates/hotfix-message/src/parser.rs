@@ -7,8 +7,7 @@ use crate::parsed_message::{GarbledReason, InvalidReason, ParsedMessage};
 use crate::parser_dictionary::{GroupDef, ParserDictionary};
 use crate::parts::{Body, Header, RepeatingGroup, Trailer};
 use crate::tags::{BEGIN_STRING, BODY_LENGTH, CHECK_SUM, MSG_TYPE};
-use hotfix_dictionary::{Dictionary, LayoutItemKind, TagU32};
-use std::collections::HashSet;
+use hotfix_dictionary::{Dictionary, TagU32};
 
 pub const SOH: u8 = 0x1;
 
@@ -79,7 +78,7 @@ impl MessageParser {
         Ok(parser)
     }
 
-    pub(crate) fn build(mut self, data: &[u8]) -> ParsedMessage {
+    pub(crate) fn build(&self, data: &[u8]) -> ParsedMessage {
         let mut parser = Parser {
             position: 0,
             raw_data: data,
@@ -271,50 +270,68 @@ impl MessageParser {
         group_def: &GroupDef,
         start_tag: TagU32,
     ) -> ParserResult<(Vec<RepeatingGroup>, Field)> {
-        let first_field = parser
-            .next_field()
-            .ok_or(ParserError::Malformed("missing begin field".to_string()))?;
-        let delimiter = first_field.tag;
+        let delimiter = group_def.delimiter_tag();
         let mut groups = vec![];
 
-        let mut field = first_field;
+        let mut field = parser.next_field().ok_or(ParserError::Malformed(
+            "missing delimiter field".to_string(),
+        ))?;
+        if field.tag != delimiter {
+            return Err(ParserError::InvalidGroupFieldOrder {
+                tag: field.tag.get(),
+                group_tag: group_def.number_of_entries_tag().get(),
+            });
+        }
         loop {
             let mut group = RepeatingGroup::new_with_tags(start_tag, delimiter);
 
             // we store the first field, which is the delimiter
             group.store_field(field);
+
             field = parser
                 .next_field()
                 .ok_or(ParserError::Malformed("empty group".to_string()))?;
 
-            loop {
-                if group_def.contains_tag(field.tag) {
-                    // the next tag is still part of this group
-                    if field.tag == delimiter {
-                        // if the next field is the delimiter, we start a new group
-                        break;
+            // we skip the first field as we've already stored the delimiter
+            for field_def in group_def.fields()[1..].iter() {
+                let current_tag = field.tag;
+                if field_def.tag == current_tag {
+                    // the next tag is the next expected field's tag in the group, store it and move on
+                    group.store_field(field);
+                    field = if let Some(nested_group_def) = group_def.get_nested_group(current_tag)
+                    {
+                        let (groups, next) =
+                            self.parse_groups(parser, nested_group_def, current_tag)?;
+                        group.set_groups(groups);
+                        next
                     } else {
-                        let tag = field.tag;
-                        group.store_field(field);
-                        if let Some(nested_group_def) = group_def.get_nested_group(tag) {
-                            let (groups, next) =
-                                self.parse_groups(parser, nested_group_def, tag)?;
-                            group.set_groups(groups);
-                            field = next;
-                            continue;
-                        }
+                        parser
+                            .next_field()
+                            .ok_or(ParserError::Malformed("incomplete group".to_string()))?
                     }
+                } else if !field_def.is_required {
+                    // this field isn't required in the group, so it's fine to skip it
                 } else {
-                    // otherwise we have finished parsing the groups
-                    groups.push(group);
-                    return Ok((groups, field));
+                    // the next field in the group is required but the next field in the message isn't it
+                    let err = if group_def.contains_tag(field.tag) {
+                        ParserError::InvalidGroupFieldOrder {
+                            tag: field.tag.get(),
+                            group_tag: group_def.number_of_entries_tag().get(),
+                        }
+                    } else {
+                        ParserError::InvalidField(field.tag.get())
+                    };
+                    return Err(err);
                 }
-                field = parser
-                    .next_field()
-                    .ok_or(ParserError::Malformed("incomplete group".to_string()))?;
             }
 
-            groups.push(group)
+            // we've checked all fields for this group,
+            // it's either another group in the repeating group or the end of the repeating group
+            groups.push(group);
+
+            if !group_def.contains_tag(field.tag) {
+                return Ok((groups, field));
+            }
         }
     }
 
@@ -343,6 +360,10 @@ fn parser_error_to_parsed_message(err: ParserError, header: Header) -> ParsedMes
         },
         ParserError::InvalidGroup(tag) => ParsedMessage::Invalid {
             reason: InvalidReason::InvalidGroup(tag),
+            message: Message::with_header(header),
+        },
+        ParserError::InvalidGroupFieldOrder { tag, group_tag } => ParsedMessage::Invalid {
+            reason: InvalidReason::InvalidOrderInGroup { tag, group_tag },
             message: Message::with_header(header),
         },
         ParserError::InvalidComponent(tag) => ParsedMessage::Invalid {
@@ -423,9 +444,8 @@ mod tests {
         let raw = b"8=FIX.4.4|9=247|35=8|34=2|49=Broker|52=20231103-09:30:00|56=Client|11=Order12345|17=Exec12345|150=0|39=0|55=APPL|54=1|38=100|32=50|31=150.00|151=50|14=50|6=150.00|453=2|448=PARTYA|447=D|452=1|802=2|523=SUBPARTYA1|803=1|523=SUBPARTYA2|803=2|448=PARTYB|447=D|452=2|10=129|";
         let dict = Dictionary::fix44();
 
-        let message = Message::from_bytes(&CONFIG, &dict, raw)
-            .into_message()
-            .unwrap();
+        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
+        let message = parsed_message.into_message().unwrap();
         let party_a = message.get_group(fix44::NO_PARTY_I_DS, 0).unwrap();
         let party_a_0 = party_a
             .get_group(fix44::NO_PARTY_SUB_I_DS.tag(), 0)
@@ -554,7 +574,10 @@ mod tests {
         assert!(matches!(
             parsed_message,
             ParsedMessage::Invalid {
-                reason: InvalidReason::InvalidGroup(_),
+                reason: InvalidReason::InvalidOrderInGroup {
+                    tag: 385,
+                    group_tag: 384
+                },
                 ..
             }
         ));

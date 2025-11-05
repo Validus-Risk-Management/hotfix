@@ -5,19 +5,32 @@ use hotfix_dictionary::{Dictionary, LayoutItem, LayoutItemKind, TagU32};
 use std::collections::{HashMap, HashSet};
 
 pub struct FieldDef {
-    tag: TagU32,
-    is_required: bool,
-    is_group: bool,
+    pub(crate) tag: TagU32,
+    pub(crate) is_required: bool,
+    pub(crate) is_group: bool,
 }
 
 pub struct GroupDef {
-    starting_tag: TagU32,
-    is_required: bool,
+    number_of_entries_tag: TagU32,
     fields: Vec<FieldDef>,
     nested_groups: HashMap<TagU32, GroupDef>,
 }
 
 impl GroupDef {
+    pub fn fields(&self) -> &[FieldDef] {
+        self.fields.as_slice()
+    }
+    pub fn number_of_entries_tag(&self) -> TagU32 {
+        self.number_of_entries_tag
+    }
+
+    pub fn delimiter_tag(&self) -> TagU32 {
+        self.fields
+            .first()
+            .expect("groups always have at least one field")
+            .tag
+    }
+
     pub fn contains_tag(&self, tag: TagU32) -> bool {
         self.fields.iter().any(|f| f.tag == tag)
     }
@@ -162,8 +175,7 @@ fn extract_groups(dict: &Dictionary, item: LayoutItem) -> Result<HashMap<TagU32,
             groups.insert(
                 field.tag(),
                 GroupDef {
-                    starting_tag: field.tag(),
-                    is_required: item.required(),
+                    number_of_entries_tag: field.tag(),
                     fields: items
                         .iter()
                         .flat_map(|i| extract_fields(dict, i.clone()))
