@@ -8,7 +8,7 @@ pub mod parsed_message;
 pub(crate) mod parts;
 mod tags;
 
-pub use builder::SOH;
+pub use builder::{MessageBuilder, SOH};
 pub use encoding::Buffer;
 pub use encoding::field_access::FieldType;
 pub use encoding::field_types;

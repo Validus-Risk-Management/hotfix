@@ -48,7 +48,7 @@ impl MessageBuilder {
         Ok(parser)
     }
 
-    pub(crate) fn build(&self, data: &[u8]) -> ParsedMessage {
+    pub fn build(&self, data: &[u8]) -> ParsedMessage {
         let mut parser = Parser {
             position: 0,
             raw_data: data,
