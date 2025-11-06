@@ -19,8 +19,6 @@ use field::{FieldData, FieldEnumData};
 use fnv::FnvHashMap;
 pub use layout::{LayoutItem, LayoutItemKind, display_layout_item};
 use layout::{LayoutItemData, LayoutItemKindData, LayoutItems};
-pub use message_definition::{MessageData, MessageDefinition};
-pub use quickfix::{ParseDictionaryError, QuickFixReader};
 use std::sync::Arc;
 
 /// A mapping from FIX version strings to [`Dictionary`] values.
