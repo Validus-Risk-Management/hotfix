@@ -5,7 +5,6 @@ pub mod error;
 mod field_map;
 pub mod message;
 pub mod parsed_message;
-mod parser_dictionary;
 pub(crate) mod parts;
 mod tags;
 
