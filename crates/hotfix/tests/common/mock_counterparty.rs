@@ -6,6 +6,7 @@ use hotfix::session::SessionRef;
 use hotfix::transport::FixConnection;
 use hotfix::transport::reader::ReaderRef;
 use hotfix::transport::writer::{WriterMessage, WriterRef};
+use hotfix_message::MessageBuilder;
 use hotfix_message::dict::Dictionary;
 use hotfix_message::message::{Config as MessageConfig, Message};
 use hotfix_message::parsed_message::ParsedMessage;
@@ -19,7 +20,7 @@ pub struct MockCounterparty<M> {
     sent_messages: Vec<Vec<u8>>,
     session_ref: SessionRef<M>,
     session_config: SessionConfig,
-    dictionary: Dictionary,
+    message_builder: MessageBuilder,
     message_config: MessageConfig,
     _connection: FixConnection,
     _dc_sender: oneshot::Sender<()>,
@@ -33,6 +34,8 @@ where
         let (writer_ref, receiver) = Self::create_writer();
         let (reader_ref, dc_sender) = Self::create_reader();
         let connection = FixConnection::new(writer_ref, reader_ref);
+        let message_config = MessageConfig::default();
+        let message_builder = MessageBuilder::new(Dictionary::fix44(), message_config).unwrap();
 
         session_ref.register_writer(connection.get_writer()).await;
 
@@ -42,8 +45,8 @@ where
             sent_messages: vec![],
             session_ref,
             session_config,
-            dictionary: Dictionary::fix44(),
-            message_config: MessageConfig::default(),
+            message_builder,
+            message_config,
             _connection: connection,
             _dc_sender: dc_sender,
         }
@@ -76,7 +79,7 @@ where
             return;
         }
 
-        let parsed = Message::from_bytes(&self.message_config, &self.dictionary, &original_raw);
+        let parsed = self.message_builder.build(&original_raw);
         let mut message = match parsed {
             ParsedMessage::Valid(m) => m,
             _ => panic!("trying to resend invalid message"),
@@ -166,11 +169,7 @@ where
     }
 
     fn parse_message(&self, raw_message: &RawFixMessage) -> Message {
-        match Message::from_bytes(
-            &self.message_config,
-            &self.dictionary,
-            raw_message.as_bytes(),
-        ) {
+        match self.message_builder.build(raw_message.as_bytes()) {
             ParsedMessage::Valid(valid_message) => valid_message,
             _ => {
                 panic!("only valid messages are supported in the mock counterparty")

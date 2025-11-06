@@ -547,7 +547,7 @@ fn extract_groups(
 mod tests {
     use crate::builder::MessageBuilder;
     use crate::field_types::Currency;
-    use crate::message::{Config, Message};
+    use crate::message::Config;
     use crate::parsed_message::{GarbledReason, InvalidReason, ParsedMessage};
     use crate::{Part, fix44};
     use hotfix_dictionary::{Dictionary, IsFieldDefinition, TagU32};
@@ -655,11 +655,9 @@ mod tests {
     #[test]
     fn parse_simple_message() {
         let raw = b"8=FIX.4.4|9=40|35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|10=093|";
-        let dict = Dictionary::fix44();
+        let builder = MessageBuilder::new(Dictionary::fix44(), CONFIG).unwrap();
 
-        let message = Message::from_bytes(&CONFIG, &dict, raw)
-            .into_message()
-            .unwrap();
+        let message = builder.build(raw).into_message().unwrap();
 
         let begin: &str = message.header().get(fix44::BEGIN_STRING).unwrap();
         assert_eq!(begin, "FIX.4.4");
@@ -683,11 +681,10 @@ mod tests {
     #[test]
     fn repeating_group_entries() {
         let raw = b"8=FIX.4.4|9=191|35=8|49=SENDER|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|139=7|10=140|";
-        let dict = Dictionary::fix44();
+        let builder = MessageBuilder::new(Dictionary::fix44(), CONFIG).unwrap();
 
-        let message = Message::from_bytes(&CONFIG, &dict, raw)
-            .into_message()
-            .unwrap();
+        let message = builder.build(raw).into_message().unwrap();
+
         let begin: &str = message.header().get(fix44::BEGIN_STRING).unwrap();
         assert_eq!(begin, "FIX.4.4");
 
@@ -706,10 +703,9 @@ mod tests {
     #[test]
     fn nested_repeating_group_entries() {
         let raw = b"8=FIX.4.4|9=247|35=8|34=2|49=Broker|52=20231103-09:30:00|56=Client|11=Order12345|17=Exec12345|150=0|39=0|55=APPL|54=1|38=100|32=50|31=150.00|151=50|14=50|6=150.00|453=2|448=PARTYA|447=D|452=1|802=2|523=SUBPARTYA1|803=1|523=SUBPARTYA2|803=2|448=PARTYB|447=D|452=2|10=129|";
-        let dict = Dictionary::fix44();
+        let builder = MessageBuilder::new(Dictionary::fix44(), CONFIG).unwrap();
+        let message = builder.build(raw).into_message().unwrap();
 
-        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
-        let message = parsed_message.into_message().unwrap();
         let party_a = message.get_group(fix44::NO_PARTY_I_DS, 0).unwrap();
         let party_a_0 = party_a
             .get_group(fix44::NO_PARTY_SUB_I_DS.tag(), 0)
@@ -731,9 +727,9 @@ mod tests {
     #[test]
     fn test_begin_string_not_the_first_tag() {
         let raw = b"9=40|8=FIX.4.4|35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|10=093|";
-        let dict = Dictionary::fix44();
+        let builder = MessageBuilder::new(Dictionary::fix44(), CONFIG).unwrap();
+        let parsed_message = builder.build(raw);
 
-        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
         assert!(matches!(
             parsed_message,
             ParsedMessage::Garbled(GarbledReason::InvalidBeginString)
@@ -743,9 +739,9 @@ mod tests {
     #[test]
     fn test_body_length_not_the_second_tag() {
         let raw = b"8=FIX.4.4|49=SENDER|9=191|35=8|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|139=7|10=140|";
-        let dict = Dictionary::fix44();
+        let builder = MessageBuilder::new(Dictionary::fix44(), CONFIG).unwrap();
+        let parsed_message = builder.build(raw);
 
-        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
         assert!(matches!(
             parsed_message,
             ParsedMessage::Garbled(GarbledReason::InvalidBodyLength)
@@ -755,9 +751,9 @@ mod tests {
     #[test]
     fn test_body_length_is_wrong() {
         let raw = b"8=FIX.4.4|9=192|35=8|49=SENDER|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|139=7|10=140|";
-        let dict = Dictionary::fix44();
+        let builder = MessageBuilder::new(Dictionary::fix44(), CONFIG).unwrap();
+        let parsed_message = builder.build(raw);
 
-        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
         assert!(matches!(
             parsed_message,
             ParsedMessage::Garbled(GarbledReason::InvalidBodyLength)
@@ -767,9 +763,9 @@ mod tests {
     #[test]
     fn test_body_length_exceeds_message_length() {
         let raw = b"8=FIX.4.4|9=500|35=8|49=SENDER|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|139=7|10=140|";
-        let dict = Dictionary::fix44();
+        let builder = MessageBuilder::new(Dictionary::fix44(), CONFIG).unwrap();
+        let parsed_message = builder.build(raw);
 
-        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
         assert!(matches!(
             parsed_message,
             ParsedMessage::Garbled(GarbledReason::InvalidBodyLength)
@@ -779,9 +775,9 @@ mod tests {
     #[test]
     fn test_msg_type_is_not_the_third_tag() {
         let raw = b"8=FIX.4.4|9=191|49=SENDER|35=8|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|139=7|10=140|";
-        let dict = Dictionary::fix44();
+        let builder = MessageBuilder::new(Dictionary::fix44(), CONFIG).unwrap();
+        let parsed_message = builder.build(raw);
 
-        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
         assert!(matches!(
             parsed_message,
             ParsedMessage::Garbled(GarbledReason::InvalidMsgType)
@@ -791,9 +787,9 @@ mod tests {
     #[test]
     fn test_checksum_is_not_the_last_tag() {
         let raw = b"8=FIX.4.4|9=191|35=8|49=SENDER|56=TARGET|34=123|52=20231103-12:00:00|11=12345|17=ABC123|150=2|39=1|55=XYZ|54=1|38=200|44=10|32=100|31=10|14=100|6=10|151=100|136=2|137=100|138=EUR|139=7|137=160|138=GBP|10=140|139=7|";
-        let dict = Dictionary::fix44();
+        let builder = MessageBuilder::new(Dictionary::fix44(), CONFIG).unwrap();
+        let parsed_message = builder.build(raw);
 
-        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
         assert!(matches!(
             parsed_message,
             ParsedMessage::Garbled(GarbledReason::InvalidChecksum)
@@ -803,9 +799,9 @@ mod tests {
     #[test]
     fn test_invalid_checksum() {
         let raw = b"8=FIX.4.4|9=40|35=D|49=AFUNDMGR|56=ABROKER|15=USD|59=0|10=000|";
-        let dict = Dictionary::fix44();
+        let builder = MessageBuilder::new(Dictionary::fix44(), CONFIG).unwrap();
+        let parsed_message = builder.build(raw);
 
-        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
         assert!(matches!(
             parsed_message,
             ParsedMessage::Garbled(GarbledReason::InvalidChecksum)
@@ -815,9 +811,9 @@ mod tests {
     #[test]
     fn test_invalid_field_in_body() {
         let raw = b"8=FIX.4.4|9=53|35=D|49=AFUNDMGR|9999=invalid|56=ABROKER|15=USD|59=0|10=229|";
-        let dict = Dictionary::fix44();
+        let builder = MessageBuilder::new(Dictionary::fix44(), CONFIG).unwrap();
+        let parsed_message = builder.build(raw);
 
-        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
         assert!(matches!(
             parsed_message,
             ParsedMessage::Invalid {
@@ -832,9 +828,9 @@ mod tests {
         // tag=384 is `NoMsgTypes`, which is supposed to have `RefMsgType` (tag=372) and `MsgDirection` (tag=385)
         // in our message, `RefMsgType` is missing
         let raw = b"8=FIX.4.4|9=75|35=A|49=SENDER|56=TARGET|34=1|52=20231103-12:00:00|98=0|108=30|384=1|385=R|10=050|";
-        let dict = Dictionary::fix44();
+        let builder = MessageBuilder::new(Dictionary::fix44(), CONFIG).unwrap();
+        let parsed_message = builder.build(raw);
 
-        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw);
         assert!(matches!(
             parsed_message,
             ParsedMessage::Invalid {
@@ -852,16 +848,13 @@ mod tests {
     fn test_parsing_nested_component_inside_group() {
         // an `AllocationInstruction` with `CommissionData` nested inside `AllocGrp`
         let raw = b"8=FIX.4.4|9=252|35=J|49=SELLSIDE|56=BUYSIDE|34=100|52=20251023-14:30:00|70=ALLOC001|71=0|626=1|854=0|55=AAPL|107=Apple Inc|167=CS|54=1|53=10000|60=20251023|75=20251023|381=250000|78=2|79=ACC001|661=1|80=5000|12=100|13=3|11=5|79=ACC002|661=1|80=5000|12=75|13=2|11=3.75|10=031|";
-        let dict = Dictionary::fix44();
+        let builder = MessageBuilder::new(Dictionary::fix44(), CONFIG).unwrap();
+        let message = builder.build(raw).into_message().unwrap();
 
-        let parsed_message = Message::from_bytes(&CONFIG, &dict, raw)
-            .into_message()
-            .unwrap();
-
-        let alloc_1 = parsed_message.get_group(fix44::NO_ALLOCS, 0).unwrap();
+        let alloc_1 = message.get_group(fix44::NO_ALLOCS, 0).unwrap();
         assert_eq!(alloc_1.get::<&str>(fix44::ALLOC_ID).unwrap(), "ALLOC001");
 
-        let alloc_2 = parsed_message.get_group(fix44::NO_ALLOCS, 1).unwrap();
+        let alloc_2 = message.get_group(fix44::NO_ALLOCS, 1).unwrap();
         assert_eq!(alloc_2.get::<&str>(fix44::ALLOC_ID).unwrap(), "ALLOC002");
     }
 }

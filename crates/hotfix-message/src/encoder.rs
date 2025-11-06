@@ -52,12 +52,12 @@ impl Encode for FieldMap {
 
 #[cfg(test)]
 mod tests {
-    use crate::Part;
     use crate::field_map::Field;
     use crate::field_types::{Date, Time, Timestamp};
     use crate::fix44;
     use crate::message::{Config, Message};
     use crate::parts::RepeatingGroup;
+    use crate::{MessageBuilder, Part};
     use hotfix_dictionary::{Dictionary, IsFieldDefinition};
 
     #[test]
@@ -78,10 +78,8 @@ mod tests {
         let config = Config { separator: b'|' };
         let raw_message = msg.encode(&config)?;
 
-        let dict = Dictionary::fix44();
-        let parsed_message = Message::from_bytes(&config, &dict, &raw_message)
-            .into_message()
-            .unwrap();
+        let builder = MessageBuilder::new(Dictionary::fix44(), config)?;
+        let parsed_message = builder.build(&raw_message).into_message().unwrap();
 
         let symbol: &str = parsed_message.get(fix44::SYMBOL)?;
         assert_eq!(symbol, "AAPL");
@@ -151,10 +149,8 @@ mod tests {
         let config = Config { separator: b'|' };
         let raw_message = msg.encode(&config)?;
 
-        let dict = Dictionary::fix44();
-        let parsed_message = Message::from_bytes(&config, &dict, &raw_message)
-            .into_message()
-            .unwrap();
+        let builder = MessageBuilder::new(Dictionary::fix44(), config)?;
+        let parsed_message = builder.build(&raw_message).into_message().unwrap();
 
         let party_a = parsed_message
             .get_group(fix44::NO_PARTY_I_DS, 0)
