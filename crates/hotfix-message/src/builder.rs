@@ -844,17 +844,25 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // TODO: making this test pass requires an overhaul of the message parsing logic
     fn test_parsing_nested_component_inside_group() {
         // an `AllocationInstruction` with `CommissionData` nested inside `AllocGrp`
-        let raw = b"8=FIX.4.4|9=252|35=J|49=SELLSIDE|56=BUYSIDE|34=100|52=20251023-14:30:00|70=ALLOC001|71=0|626=1|854=0|55=AAPL|107=Apple Inc|167=CS|54=1|53=10000|60=20251023|75=20251023|381=250000|78=2|79=ACC001|661=1|80=5000|12=100|13=3|11=5|79=ACC002|661=1|80=5000|12=75|13=2|11=3.75|10=031|";
+        let raw_instrument = "55=AAPL|107=Apple Inc|167=CS";
+        let raw_alloc_group =
+            "78=2|79=ACC001|661=1|80=5000|12=100|13=3|79=ACC002|661=1|80=5000|12=75|13=2";
+        let raw = format!(
+            "8=FIX.4.4|9=222|35=J|49=SELLSIDE|56=BUYSIDE|34=100|52=20251023-14:30:00|70=ALLOC001|71=0|626=1|857=0|54=1|{raw_instrument}|53=10000|6=125|75=20251023|{raw_alloc_group}|10=068|"
+        );
         let builder = MessageBuilder::new(Dictionary::fix44(), CONFIG).unwrap();
-        let message = builder.build(raw).into_message().unwrap();
+        let message = builder.build(raw.as_bytes()).into_message().unwrap();
 
         let alloc_1 = message.get_group(fix44::NO_ALLOCS, 0).unwrap();
-        assert_eq!(alloc_1.get::<&str>(fix44::ALLOC_ID).unwrap(), "ALLOC001");
+        assert_eq!(alloc_1.get::<&str>(fix44::ALLOC_ACCOUNT).unwrap(), "ACC001");
+        assert_eq!(alloc_1.get::<f64>(fix44::COMMISSION).unwrap(), 100.0);
+        assert_eq!(alloc_1.get::<&str>(fix44::COMM_TYPE).unwrap(), "3");
 
         let alloc_2 = message.get_group(fix44::NO_ALLOCS, 1).unwrap();
-        assert_eq!(alloc_2.get::<&str>(fix44::ALLOC_ID).unwrap(), "ALLOC002");
+        assert_eq!(alloc_2.get::<&str>(fix44::ALLOC_ACCOUNT).unwrap(), "ACC002");
+        assert_eq!(alloc_2.get::<f64>(fix44::COMMISSION).unwrap(), 75.0);
+        assert_eq!(alloc_2.get::<&str>(fix44::COMM_TYPE).unwrap(), "2");
     }
 }
