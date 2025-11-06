@@ -1,11 +1,11 @@
 use std::io::Write;
 
 use crate::FieldType;
+use crate::builder::{MessageBuilder, SOH};
 use crate::encoder::Encode;
 use crate::error::EncodingResult;
 use crate::field_map::{Field, FieldMap};
 use crate::parsed_message::ParsedMessage;
-use crate::parser::{MessageParser, SOH};
 use crate::parts::{Body, Header, Part, RepeatingGroup, Trailer};
 use crate::{HardCodedFixFieldDefinition, fix44};
 use hotfix_dictionary::{Dictionary, FieldLocation, IsFieldDefinition};
@@ -38,7 +38,7 @@ impl Message {
     }
 
     pub fn from_bytes(config: &Config, dict: &Dictionary, data: &[u8]) -> ParsedMessage {
-        if let Ok(parser) = MessageParser::new(dict.clone(), *config) {
+        if let Ok(parser) = MessageBuilder::new(dict.clone(), *config) {
             parser.build(data)
         } else {
             ParsedMessage::UnexpectedError("Failed to create message parser".to_string())

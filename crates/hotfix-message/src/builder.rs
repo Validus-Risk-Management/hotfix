@@ -22,51 +22,13 @@ pub const SOH: u8 = 0x1;
 /// e.g. `10=643|`
 const CHECKSUM_LENGTH: usize = 7;
 
-pub struct MessageParser {
+pub struct MessageBuilder {
     dict: Dictionary,
     parser_dict: ParserDictionary,
     config: Config,
 }
 
-struct Parser<'a> {
-    position: usize,
-    raw_data: &'a [u8],
-    config: &'a Config,
-}
-
-impl<'a> Parser<'a> {
-    fn next_field(&mut self) -> Option<Field> {
-        let (field, end_position) = self.parse_field_at(self.position)?;
-        self.position = end_position + 1;
-
-        Some(field)
-    }
-
-    fn parse_field_at(&self, position: usize) -> Option<(Field, usize)> {
-        let mut iter = self.raw_data[position..].iter();
-        let equal_sign_position = position + iter.position(|c| *c == b'=')?;
-        let bytes_until_separator = iter.position(|c| *c == self.config.separator)?;
-        let separator_position = equal_sign_position + bytes_until_separator + 1;
-
-        let tag = tag_from_bytes(&self.raw_data[position..equal_sign_position])?;
-        let data = self.raw_data[equal_sign_position + 1..separator_position].to_vec();
-        let field = Field::new(tag, data);
-
-        Some((field, separator_position))
-    }
-
-    fn parse_checksum(&self, checksum_start: usize) -> Result<Field, MessageIntegrityError> {
-        if let Some((checksum, _)) = self.parse_field_at(checksum_start)
-            && checksum.tag.get() == CHECK_SUM.tag
-        {
-            Ok(checksum)
-        } else {
-            Err(MessageIntegrityError::InvalidCheckSum)
-        }
-    }
-}
-
-impl MessageParser {
+impl MessageBuilder {
     pub fn new(dict: Dictionary, config: Config) -> anyhow::Result<Self> {
         let parser_dict: ParserDictionary = dict.clone().try_into()?;
         let parser = Self {
@@ -326,6 +288,44 @@ impl MessageParser {
         self.dict
             .field_by_tag(tag)
             .ok_or(ParserError::InvalidField(tag))
+    }
+}
+
+struct Parser<'a> {
+    position: usize,
+    raw_data: &'a [u8],
+    config: &'a Config,
+}
+
+impl<'a> Parser<'a> {
+    fn next_field(&mut self) -> Option<Field> {
+        let (field, end_position) = self.parse_field_at(self.position)?;
+        self.position = end_position + 1;
+
+        Some(field)
+    }
+
+    fn parse_field_at(&self, position: usize) -> Option<(Field, usize)> {
+        let mut iter = self.raw_data[position..].iter();
+        let equal_sign_position = position + iter.position(|c| *c == b'=')?;
+        let bytes_until_separator = iter.position(|c| *c == self.config.separator)?;
+        let separator_position = equal_sign_position + bytes_until_separator + 1;
+
+        let tag = tag_from_bytes(&self.raw_data[position..equal_sign_position])?;
+        let data = self.raw_data[equal_sign_position + 1..separator_position].to_vec();
+        let field = Field::new(tag, data);
+
+        Some((field, separator_position))
+    }
+
+    fn parse_checksum(&self, checksum_start: usize) -> Result<Field, MessageIntegrityError> {
+        if let Some((checksum, _)) = self.parse_field_at(checksum_start)
+            && checksum.tag.get() == CHECK_SUM.tag
+        {
+            Ok(checksum)
+        } else {
+            Err(MessageIntegrityError::InvalidCheckSum)
+        }
     }
 }
 
