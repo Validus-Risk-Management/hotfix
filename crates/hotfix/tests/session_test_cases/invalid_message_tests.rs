@@ -1,5 +1,5 @@
 use crate::common::actions::when;
-use crate::common::assertions::then;
+use crate::common::assertions::{assert_msg_type, then};
 use crate::common::setup::{COUNTERPARTY_COMP_ID, OUR_COMP_ID, given_an_active_session};
 use crate::common::test_messages::{
     ExecutionReportWithInvalidField, TestMessage, build_execution_report_with_comp_id,
@@ -11,7 +11,7 @@ use crate::common::test_messages::{
 };
 use hotfix::session::Status;
 use hotfix_message::Part;
-use hotfix_message::fix44::{MSG_TYPE, SESSION_REJECT_REASON, SessionRejectReason};
+use hotfix_message::fix44::{MsgType, SESSION_REJECT_REASON, SessionRejectReason};
 
 /// Tests that when a counterparty sends a message containing an invalid/unrecognised field,
 /// the session rejects the message by sending a Reject (MsgType=3) message back.
@@ -23,7 +23,7 @@ async fn test_message_with_invalid_field_gets_rejected() {
         .sends_message(ExecutionReportWithInvalidField::default())
         .await;
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "3"))
+        .receives(|msg| assert_msg_type(msg, MsgType::Reject))
         .await;
 
     when(&session).requests_disconnect().await;
@@ -51,7 +51,7 @@ async fn test_garbled_message_with_invalid_target_comp_id_gets_ignored() {
 
     // we then initiate a resend, having skipped the garbled message
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
+        .receives(|msg| assert_msg_type(msg, MsgType::ResendRequest))
         .await;
     then(&session)
         .status_changes_to(Status::AwaitingResend {
@@ -81,7 +81,7 @@ async fn test_message_with_invalid_begin_string() {
 
     // then we log out and disconnect
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "5"))
+        .receives(|msg| assert_msg_type(msg, MsgType::Logout))
         .await;
     then(&mut mock_counterparty).gets_disconnected().await;
 }
@@ -104,10 +104,10 @@ async fn test_message_with_invalid_target_comp_id() {
 
     // then we send a reject, log out and disconnect
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "3"))
+        .receives(|msg| assert_msg_type(msg, MsgType::Reject))
         .await;
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "5"))
+        .receives(|msg| assert_msg_type(msg, MsgType::Logout))
         .await;
     then(&mut mock_counterparty).gets_disconnected().await;
 }
@@ -130,10 +130,10 @@ async fn test_message_with_invalid_sender_comp_id() {
 
     // then we send a reject, log out and disconnect
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "3"))
+        .receives(|msg| assert_msg_type(msg, MsgType::Reject))
         .await;
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "5"))
+        .receives(|msg| assert_msg_type(msg, MsgType::Logout))
         .await;
     then(&mut mock_counterparty).gets_disconnected().await;
 }
@@ -154,7 +154,7 @@ async fn test_message_with_invalid_msg_type() {
     // then we send a reject
     then(&mut mock_counterparty)
         .receives(|msg| {
-            assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "3");
+            assert_msg_type(msg, MsgType::Reject);
             assert_eq!(msg.get::<u32>(SESSION_REJECT_REASON).unwrap(), 11);
         })
         .await;
@@ -189,7 +189,7 @@ async fn test_message_with_sequence_number_too_low() {
     then(&mut mock_counterparty)
         .receives(|msg| {
             // we log them out
-            assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "5");
+            assert_msg_type(msg, MsgType::Logout);
         })
         .await;
     then(&mut mock_counterparty).gets_disconnected().await;
@@ -253,7 +253,7 @@ async fn test_message_with_incorrect_orig_sending_time_is_rejected() {
         .await;
     then(&mut mock_counterparty)
         .receives(|msg| {
-            assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "3");
+            assert_msg_type(msg, MsgType::Reject);
             assert_eq!(
                 msg.get::<SessionRejectReason>(SESSION_REJECT_REASON)
                     .unwrap(),
@@ -290,7 +290,7 @@ async fn test_message_with_missing_orig_sending_time_is_rejected() {
         .await;
     then(&mut mock_counterparty)
         .receives(|msg| {
-            assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "3");
+            assert_msg_type(msg, MsgType::Reject);
             assert_eq!(
                 msg.get::<SessionRejectReason>(SESSION_REJECT_REASON)
                     .unwrap(),

@@ -1,12 +1,11 @@
 use crate::common::actions::when;
-use crate::common::assertions::then;
+use crate::common::assertions::{assert_msg_type, then};
 use crate::common::setup::given_an_active_session;
 use crate::common::test_messages::{
     TestMessage, build_execution_report_with_incorrect_body_length,
 };
 use hotfix::session::Status;
-use hotfix_message::Part;
-use hotfix_message::fix44::MSG_TYPE;
+use hotfix_message::fix44::MsgType;
 
 #[tokio::test]
 async fn test_message_sequence_number_too_high() {
@@ -31,7 +30,7 @@ async fn test_message_sequence_number_too_high() {
         })
         .await;
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
+        .receives(|msg| assert_msg_type(msg, MsgType::ResendRequest))
         .await;
 
     // the first message is the logon message, which doesn't need to be resent
@@ -64,7 +63,7 @@ async fn test_infinite_resend_requests_are_prevented() {
 
     // we then initiate a resend, having skipped the garbled message
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
+        .receives(|msg| assert_msg_type(msg, MsgType::ResendRequest))
         .await;
     then(&session)
         .status_changes_to(Status::AwaitingResend {
@@ -90,7 +89,7 @@ async fn test_infinite_resend_requests_are_prevented() {
             })
             .await;
         then(&mut mock_counterparty)
-            .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
+            .receives(|msg| assert_msg_type(msg, MsgType::ResendRequest))
             .await;
     }
 

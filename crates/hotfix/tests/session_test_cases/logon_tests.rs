@@ -1,5 +1,5 @@
 use crate::common::actions::when;
-use crate::common::assertions::then;
+use crate::common::assertions::{assert_msg_type, then};
 use crate::common::setup::{
     LOGON_TIMEOUT, given_a_connected_session, given_a_connected_session_with_store,
 };
@@ -7,8 +7,7 @@ use crate::common::test_messages::TestMessage;
 use hotfix::session::Status;
 use hotfix::store::MessageStore;
 use hotfix::store::in_memory::InMemoryMessageStore;
-use hotfix_message::Part;
-use hotfix_message::fix44::MSG_TYPE;
+use hotfix_message::fix44::MsgType;
 use std::time::Duration;
 
 /// Tests successful FIX session establishment via logon message exchange.
@@ -20,7 +19,7 @@ async fn test_happy_logon() {
 
     // assert that a logon message is received (type 'A')
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+        .receives(|msg| assert_msg_type(msg, MsgType::Logon))
         .await;
     then(&session)
         .status_changes_to(Status::AwaitingLogon)
@@ -43,7 +42,7 @@ async fn test_non_logon_response_to_logon() {
 
     // assert that a logon message is received (type 'A')
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+        .receives(|msg| assert_msg_type(msg, MsgType::Logon))
         .await;
     then(&session)
         .status_changes_to(Status::AwaitingLogon)
@@ -75,7 +74,7 @@ async fn test_logon_response_with_sequence_number_too_low() {
 
     // assert that a logon message is received (type 'A')
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+        .receives(|msg| assert_msg_type(msg, MsgType::Logon))
         .await;
     then(&session)
         .status_changes_to(Status::AwaitingLogon)
@@ -85,7 +84,7 @@ async fn test_logon_response_with_sequence_number_too_low() {
     when(&mut mock_counterparty).sends_logon().await;
     // the counterparty then receives a logout message (type '5') and gets disconnected
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "5"))
+        .receives(|msg| assert_msg_type(msg, MsgType::Logout))
         .await;
     then(&mut mock_counterparty).gets_disconnected().await;
 }
@@ -106,7 +105,7 @@ async fn test_logon_response_with_sequence_number_too_high() {
 
     // assert that a logon message is received (type 'A')
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+        .receives(|msg| assert_msg_type(msg, MsgType::Logon))
         .await;
     then(&session)
         .status_changes_to(Status::AwaitingLogon)
@@ -123,7 +122,7 @@ async fn test_logon_response_with_sequence_number_too_high() {
         })
         .await;
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "2"))
+        .receives(|msg| assert_msg_type(msg, MsgType::ResendRequest))
         .await;
 
     // the counterparty then completes the resend sequence and the session transitions to Active
@@ -145,7 +144,7 @@ async fn test_logon_timeout() {
 
     // assert that a logon message is received (type 'A')
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+        .receives(|msg| assert_msg_type(msg, MsgType::Logon))
         .await;
     then(&session)
         .status_changes_to(Status::AwaitingLogon)

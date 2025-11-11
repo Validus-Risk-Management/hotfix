@@ -2,7 +2,9 @@ use crate::common::mock_counterparty::MockCounterparty;
 use crate::common::test_messages::TestMessage;
 use hotfix::session::SessionRef;
 use hotfix::session::Status;
+use hotfix_message::fix44::{MSG_TYPE, MsgType};
 use hotfix_message::message::Message;
+use hotfix_message::{FieldType, Part};
 use std::time::Duration;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(500);
@@ -76,4 +78,11 @@ impl Then<&mut MockCounterparty<TestMessage>> {
             .assert_disconnected_with_timeout(DEFAULT_TIMEOUT)
             .await;
     }
+}
+
+pub fn assert_msg_type(msg: &Message, msg_type: MsgType) {
+    assert_eq!(
+        msg.header().get::<&str>(MSG_TYPE).unwrap(),
+        msg_type.to_string()
+    )
 }

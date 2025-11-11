@@ -1,8 +1,7 @@
 use crate::common::actions::when;
-use crate::common::assertions::then;
+use crate::common::assertions::{assert_msg_type, then};
 use crate::common::setup::{HEARTBEAT_INTERVAL, given_an_active_session};
-use hotfix_message::Part;
-use hotfix_message::fix44::MSG_TYPE;
+use hotfix_message::fix44::MsgType;
 use std::time::Duration;
 
 /// Tests the automatic heartbeat mechanism in an active FIX session:
@@ -23,7 +22,7 @@ async fn test_heartbeats() {
         .elapses()
         .await;
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "0"))
+        .receives(|msg| assert_msg_type(msg, MsgType::Heartbeat))
         .await;
 
     when(&session).requests_disconnect().await;
@@ -49,7 +48,7 @@ async fn test_peer_timeout() {
         .elapses()
         .await;
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "0"))
+        .receives(|msg| assert_msg_type(msg, MsgType::Heartbeat))
         .await;
 
     // we wait enough time for the peer deadline to pass
@@ -58,7 +57,7 @@ async fn test_peer_timeout() {
         .await;
     // a TestRequest (type '1') is sent to the counterparty
     then(&mut mock_counterparty)
-        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "1"))
+        .receives(|msg| assert_msg_type(msg, MsgType::TestRequest))
         .await;
 
     // we wait even longer and the counterparty never responds, so we disconnect from the counterparty

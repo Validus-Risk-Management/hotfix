@@ -3,6 +3,7 @@ use crate::common::assertions::then;
 use crate::common::setup::given_an_active_session;
 use crate::common::test_messages::TestMessage;
 use hotfix::message::FixMessage;
+use hotfix_message::{FieldType, fix44::MsgType};
 
 #[tokio::test]
 async fn test_new_order_single() {
@@ -15,7 +16,7 @@ async fn test_new_order_single() {
     then(&mut mock_counterparty)
         .receives(|msg| {
             let parsed = TestMessage::parse(msg);
-            assert_eq!(parsed.message_type(), "D");
+            assert_eq!(parsed.message_type(), MsgType::OrderSingle.to_string());
         })
         .await;
 
