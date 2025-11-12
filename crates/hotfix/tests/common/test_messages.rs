@@ -331,6 +331,25 @@ pub fn build_execution_report_with_missing_sending_time(msg_seq_num: u64) -> Vec
     msg.encode(&Config::default()).unwrap()
 }
 
+pub fn build_execution_report_with_sending_time_too_old(msg_seq_num: u64) -> Vec<u8> {
+    let report = TestMessage::dummy_execution_report();
+
+    let mut msg = Message::new("FIX.4.4", "8");
+    msg.set(fix44::SENDER_COMP_ID, COUNTERPARTY_COMP_ID);
+    msg.set(fix44::TARGET_COMP_ID, OUR_COMP_ID);
+    msg.set(fix44::MSG_SEQ_NUM, msg_seq_num);
+
+    // Set sending time to 121 seconds in the past (beyond the 120 second threshold)
+    let now = chrono::Utc::now();
+    let past_time = now - TimeDelta::seconds(121);
+    let past_timestamp: Timestamp = past_time.naive_utc().into();
+    msg.set(fix44::SENDING_TIME, past_timestamp);
+
+    report.write(&mut msg);
+
+    msg.encode(&Config::default()).unwrap()
+}
+
 /// Replaces the value of a field in a raw FIX message.
 pub fn replace_field_value(raw_message: &mut Vec<u8>, tag: u32, new_value: &[u8]) {
     let tag_bytes = format!("{}=", tag).into_bytes();
