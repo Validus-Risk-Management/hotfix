@@ -13,6 +13,7 @@ pub mod reject;
 pub mod resend_request;
 pub mod sequence_reset;
 pub mod test_request;
+pub mod verification;
 
 pub use parser::RawFixMessage;
 
