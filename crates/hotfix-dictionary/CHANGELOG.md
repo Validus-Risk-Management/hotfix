@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-dictionary-v0.1.2...hotfix-dictionary-v0.1.3) - 2025-11-12
+
+### Added
+
+- make smartstrings a feature for hotfix-dictionary ([#225](https://github.com/Validus-Risk-Management/hotfix/pull/225))
+
 ## [0.1.2](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-dictionary-v0.1.1...hotfix-dictionary-v0.1.2) - 2025-11-03
 
 ### Other

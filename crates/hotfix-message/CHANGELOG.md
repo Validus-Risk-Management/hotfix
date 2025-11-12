@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-message-v0.2.4...hotfix-message-v0.2.5) - 2025-11-12
+
+### Added
+
+- fix handling of groups and components in message parser ([#226](https://github.com/Validus-Risk-Management/hotfix/pull/226))
+
 ## [0.2.4](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-message-v0.2.3...hotfix-message-v0.2.4) - 2025-11-03
 
 ### Added
