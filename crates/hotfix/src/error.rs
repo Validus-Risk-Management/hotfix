@@ -31,6 +31,9 @@ pub enum MessageVerificationError {
     /// The sending time is not within the latency threshold.
     #[error("sending time accuracy issue")]
     SendingTimeAccuracyIssue { msg_seq_num: u64 },
+    /// The sending time field is missing from the message.
+    #[error("sending time missing")]
+    SendingTimeMissing { msg_seq_num: u64 },
     /// Original sending time is not provided despite PossDupFlag being set.
     #[error("original sending time missing")]
     OriginalSendingTimeMissing { msg_seq_num: u64 },

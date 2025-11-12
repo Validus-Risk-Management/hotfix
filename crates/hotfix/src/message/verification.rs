@@ -7,6 +7,9 @@ use hotfix_message::{Part, fix44};
 use std::cmp::Ordering;
 use tracing::error;
 
+/// Maximum allowed difference in seconds between SendingTime and current time
+const SENDING_TIME_THRESHOLD: u64 = 120;
+
 pub(crate) fn verify_message(
     message: &Message,
     config: &SessionConfig,
@@ -20,6 +23,32 @@ pub(crate) fn verify_message(
     }
 
     let actual_seq_number: u64 = message.header().get(fix44::MSG_SEQ_NUM).unwrap_or_default();
+
+    // Validate SendingTime presence
+    let sending_time = match message.header().get::<Timestamp>(SENDING_TIME) {
+        Ok(st) => st,
+        Err(_) => {
+            return Err(MessageVerificationError::SendingTimeMissing {
+                msg_seq_num: actual_seq_number,
+            });
+        }
+    };
+
+    // Validate SendingTime is within threshold
+    let now = Timestamp::utc_now();
+    if let (Some(sending_chrono), Some(now_chrono)) = (sending_time.to_chrono_utc(), now.to_chrono_utc()) {
+        let diff = if sending_chrono > now_chrono {
+            sending_chrono - now_chrono
+        } else {
+            now_chrono - sending_chrono
+        };
+
+        if diff.num_seconds() > SENDING_TIME_THRESHOLD as i64 {
+            return Err(MessageVerificationError::SendingTimeAccuracyIssue {
+                msg_seq_num: actual_seq_number,
+            });
+        }
+    }
 
     // our TargetCompId is always the same as the expected SenderCompId for them
     let expected_sender_comp_id: &str = config.target_comp_id.as_str();
@@ -47,17 +76,14 @@ pub(crate) fn verify_message(
     if possible_duplicate {
         match message.header().get::<Timestamp>(ORIG_SENDING_TIME) {
             Ok(original_sending_time) => {
-                if let Ok(sending_time) = message.header().get::<Timestamp>(SENDING_TIME) {
-                    // TODO: check presence of sending time (see related test cases https://www.fixtrading.org/standards/fix-session-testcases-online/#scenario-2-receive-message-standard-header)
-                    if original_sending_time > sending_time {
-                        return Err(
-                            MessageVerificationError::OriginalSendingTimeAfterSendingTime {
-                                msg_seq_num: actual_seq_number,
-                                original_sending_time,
-                                sending_time,
-                            },
-                        );
-                    }
+                if original_sending_time > sending_time {
+                    return Err(
+                        MessageVerificationError::OriginalSendingTimeAfterSendingTime {
+                            msg_seq_num: actual_seq_number,
+                            original_sending_time,
+                            sending_time,
+                        },
+                    );
                 }
             }
             Err(err) => {
@@ -122,7 +148,7 @@ mod tests {
         msg.set(fix44::SENDER_COMP_ID, sender_comp_id);
         msg.set(fix44::TARGET_COMP_ID, target_comp_id);
         msg.set(fix44::MSG_SEQ_NUM, seq_num);
-        msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
+        msg.set(SENDING_TIME, Timestamp::utc_now());
         msg
     }
 
@@ -498,6 +524,124 @@ mod tests {
         let result = verify_message(&msg, &config, 42);
 
         // Should succeed - orig time only required when poss dup is true
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_missing_sending_time() {
+        let config = build_test_config();
+        let mut msg = Message::new("FIX.4.4", "D");
+        msg.set(fix44::SENDER_COMP_ID, "TARGET");
+        msg.set(fix44::TARGET_COMP_ID, "SENDER");
+        msg.set(fix44::MSG_SEQ_NUM, 42u64);
+        // Don't set SendingTime
+
+        let result = verify_message(&msg, &config, 42);
+
+        assert!(matches!(
+            result,
+            Err(MessageVerificationError::SendingTimeMissing { .. })
+        ));
+        if let Err(MessageVerificationError::SendingTimeMissing { msg_seq_num }) = result {
+            assert_eq!(msg_seq_num, 42);
+        }
+    }
+
+    #[test]
+    fn test_sending_time_too_far_in_past() {
+        use chrono::Duration;
+
+        let config = build_test_config();
+        let mut msg = Message::new("FIX.4.4", "D");
+        msg.set(fix44::SENDER_COMP_ID, "TARGET");
+        msg.set(fix44::TARGET_COMP_ID, "SENDER");
+        msg.set(fix44::MSG_SEQ_NUM, 42u64);
+
+        // Set sending time to 121 seconds in the past (beyond threshold)
+        let now = chrono::Utc::now();
+        let past_time = now - Duration::seconds(121);
+        let past_timestamp: Timestamp = past_time.naive_utc().into();
+        msg.set(SENDING_TIME, past_timestamp);
+
+        let result = verify_message(&msg, &config, 42);
+
+        assert!(matches!(
+            result,
+            Err(MessageVerificationError::SendingTimeAccuracyIssue { .. })
+        ));
+        if let Err(MessageVerificationError::SendingTimeAccuracyIssue { msg_seq_num }) = result {
+            assert_eq!(msg_seq_num, 42);
+        }
+    }
+
+    #[test]
+    fn test_sending_time_too_far_in_future() {
+        use chrono::Duration;
+
+        let config = build_test_config();
+        let mut msg = Message::new("FIX.4.4", "D");
+        msg.set(fix44::SENDER_COMP_ID, "TARGET");
+        msg.set(fix44::TARGET_COMP_ID, "SENDER");
+        msg.set(fix44::MSG_SEQ_NUM, 42u64);
+
+        // Set sending time to 121 seconds in the future (beyond threshold)
+        let now = chrono::Utc::now();
+        let future_time = now + Duration::seconds(121);
+        let future_timestamp: Timestamp = future_time.naive_utc().into();
+        msg.set(SENDING_TIME, future_timestamp);
+
+        let result = verify_message(&msg, &config, 42);
+
+        assert!(matches!(
+            result,
+            Err(MessageVerificationError::SendingTimeAccuracyIssue { .. })
+        ));
+        if let Err(MessageVerificationError::SendingTimeAccuracyIssue { msg_seq_num }) = result {
+            assert_eq!(msg_seq_num, 42);
+        }
+    }
+
+    #[test]
+    fn test_sending_time_at_threshold_boundary() {
+        use chrono::Duration;
+
+        let config = build_test_config();
+        let mut msg = Message::new("FIX.4.4", "D");
+        msg.set(fix44::SENDER_COMP_ID, "TARGET");
+        msg.set(fix44::TARGET_COMP_ID, "SENDER");
+        msg.set(fix44::MSG_SEQ_NUM, 42u64);
+
+        // Set sending time to exactly 120 seconds in the past (at threshold)
+        let now = chrono::Utc::now();
+        let boundary_time = now - Duration::seconds(120);
+        let boundary_timestamp: Timestamp = boundary_time.naive_utc().into();
+        msg.set(SENDING_TIME, boundary_timestamp);
+
+        let result = verify_message(&msg, &config, 42);
+
+        // Should succeed - exactly at threshold is valid
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_sending_time_within_threshold() {
+        use chrono::Duration;
+
+        let config = build_test_config();
+        let mut msg = Message::new("FIX.4.4", "D");
+        msg.set(fix44::SENDER_COMP_ID, "TARGET");
+        msg.set(fix44::TARGET_COMP_ID, "SENDER");
+        msg.set(fix44::MSG_SEQ_NUM, 42u64);
+
+        // Set sending time to 60 seconds in the past (within threshold)
+        let now = chrono::Utc::now();
+        let valid_time = now - Duration::seconds(60);
+        let valid_timestamp: Timestamp = valid_time.naive_utc().into();
+        msg.set(SENDING_TIME, valid_timestamp);
+
+        let result = verify_message(&msg, &config, 42);
+
+        // Should succeed - within threshold
         assert!(result.is_ok());
     }
 }

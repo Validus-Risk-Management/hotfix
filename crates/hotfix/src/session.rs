@@ -440,6 +440,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 self.handle_sending_time_accuracy_problem(msg_seq_num, "unexpected sending time")
                     .await;
             }
+            MessageVerificationError::SendingTimeMissing { msg_seq_num } => {
+                self.handle_sending_time_accuracy_problem(msg_seq_num, "sending time missing")
+                    .await;
+            }
             MessageVerificationError::OriginalSendingTimeMissing { msg_seq_num } => {
                 self.handle_original_sending_time_missing(msg_seq_num).await;
             }
