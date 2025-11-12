@@ -8,6 +8,7 @@ use crate::common::test_messages::{
     build_execution_report_with_incorrect_body_length,
     build_execution_report_with_incorrect_orig_sending_time,
     build_execution_report_with_missing_orig_sending_time,
+    build_execution_report_with_missing_sending_time,
 };
 use hotfix::session::Status;
 use hotfix_message::Part;
@@ -297,6 +298,40 @@ async fn test_message_with_missing_orig_sending_time_is_rejected() {
                 SessionRejectReason::RequiredTagMissing
             );
         })
+        .await;
+
+    when(&session).requests_disconnect().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
+}
+
+/// Tests that a message with missing `SendingTime` is rejected.
+///
+/// `SendingTime` is a required field in all FIX messages.
+#[tokio::test]
+async fn test_message_with_missing_sending_time_is_rejected() {
+    let (session, mut mock_counterparty) = given_an_active_session().await;
+
+    // A message with missing SendingTime is sent by the counterparty
+    let seq_number = mock_counterparty.next_target_sequence_number();
+    when(&mut mock_counterparty)
+        .sends_raw_message(build_execution_report_with_missing_sending_time(seq_number))
+        .await;
+
+    // Then we send a reject with the appropriate reason
+    then(&mut mock_counterparty)
+        .receives(|msg| {
+            assert_msg_type(msg, MsgType::Reject);
+            assert_eq!(
+                msg.get::<SessionRejectReason>(SESSION_REJECT_REASON)
+                    .unwrap(),
+                SessionRejectReason::SendingtimeAccuracyProblem
+            );
+        })
+        .await;
+
+    // Our target sequence number should be incremented
+    then(&session)
+        .target_sequence_number_reaches(seq_number)
         .await;
 
     when(&session).requests_disconnect().await;
