@@ -15,28 +15,62 @@ pub(crate) fn verify_message(
     config: &SessionConfig,
     expected_seq_number: u64,
 ) -> Result<(), MessageVerificationError> {
+    check_begin_string(message, config.begin_string.as_str())?;
+    let actual_seq_number: u64 = message.header().get(fix44::MSG_SEQ_NUM).unwrap_or_default();
+
+    // our TargetCompId is always the same as the expected SenderCompId for them
+    let expected_sender_comp_id: &str = config.target_comp_id.as_str();
+    check_sender_comp_id(message, actual_seq_number, expected_sender_comp_id)?;
+
+    // our SenderCompId is always the same as the expected TargetCompId for them
+    let expected_target_comp_id: &str = config.sender_comp_id.as_str();
+    check_target_comp_id(message, actual_seq_number, expected_target_comp_id)?;
+
+    // check SendingTime and OrigSendingTime
+    let sending_time = check_sending_time(message, actual_seq_number)?;
+    let possible_duplicate = message.header().get::<bool>(POSS_DUP_FLAG).unwrap_or(false);
+    if possible_duplicate {
+        check_original_sending_time(message, actual_seq_number, sending_time)?;
+    }
+
+    check_sequence_number(actual_seq_number, expected_seq_number, possible_duplicate)?;
+
+    Ok(())
+}
+
+fn check_begin_string(
+    message: &Message,
+    expected_begin_string: &str,
+) -> Result<(), MessageVerificationError> {
     let begin_string: &str = message.header().get(fix44::BEGIN_STRING).unwrap_or("");
-    if begin_string != config.begin_string.as_str() {
+    if begin_string != expected_begin_string {
         return Err(MessageVerificationError::IncorrectBeginString(
             begin_string.to_string(),
         ));
     }
 
-    let actual_seq_number: u64 = message.header().get(fix44::MSG_SEQ_NUM).unwrap_or_default();
+    Ok(())
+}
 
+fn check_sending_time(
+    message: &Message,
+    sequence_number: u64,
+) -> Result<Timestamp, MessageVerificationError> {
     // Validate SendingTime presence
     let sending_time = match message.header().get::<Timestamp>(SENDING_TIME) {
         Ok(st) => st,
         Err(_) => {
             return Err(MessageVerificationError::SendingTimeMissing {
-                msg_seq_num: actual_seq_number,
+                msg_seq_num: sequence_number,
             });
         }
     };
 
     // Validate SendingTime is within threshold
     let now = Timestamp::utc_now();
-    if let (Some(sending_chrono), Some(now_chrono)) = (sending_time.to_chrono_utc(), now.to_chrono_utc()) {
+    if let (Some(sending_chrono), Some(now_chrono)) =
+        (sending_time.to_chrono_utc(), now.to_chrono_utc())
+    {
         let diff = if sending_chrono > now_chrono {
             sending_chrono - now_chrono
         } else {
@@ -45,56 +79,64 @@ pub(crate) fn verify_message(
 
         if diff.num_seconds() > SENDING_TIME_THRESHOLD as i64 {
             return Err(MessageVerificationError::SendingTimeAccuracyIssue {
-                msg_seq_num: actual_seq_number,
+                msg_seq_num: sequence_number,
             });
         }
     }
 
-    // our TargetCompId is always the same as the expected SenderCompId for them
-    let expected_sender_comp_id: &str = config.target_comp_id.as_str();
-    let actual_sender_comp_id: &str = message.header().get(fix44::SENDER_COMP_ID).unwrap_or("");
-    if expected_sender_comp_id != actual_sender_comp_id {
-        return Err(MessageVerificationError::IncorrectCompId {
-            comp_id: actual_sender_comp_id.to_string(),
-            comp_id_type: CompIdType::Sender,
-            msg_seq_num: actual_seq_number,
-        });
-    }
+    Ok(sending_time)
+}
 
-    // our SenderCompId is always the same as the expected TargetCompId for them
-    let expected_target_comp_id: &str = config.sender_comp_id.as_str();
-    let actual_target_comp_id: &str = message.header().get(fix44::TARGET_COMP_ID).unwrap_or("");
-    if expected_target_comp_id != actual_target_comp_id {
-        return Err(MessageVerificationError::IncorrectCompId {
-            comp_id: actual_target_comp_id.to_string(),
-            comp_id_type: CompIdType::Target,
-            msg_seq_num: actual_seq_number,
-        });
-    }
-
-    let possible_duplicate = message.header().get::<bool>(POSS_DUP_FLAG).unwrap_or(false);
-    if possible_duplicate {
-        match message.header().get::<Timestamp>(ORIG_SENDING_TIME) {
-            Ok(original_sending_time) => {
-                if original_sending_time > sending_time {
-                    return Err(
-                        MessageVerificationError::OriginalSendingTimeAfterSendingTime {
-                            msg_seq_num: actual_seq_number,
-                            original_sending_time,
-                            sending_time,
-                        },
-                    );
-                }
+fn check_original_sending_time(
+    message: &Message,
+    sequence_number: u64,
+    sending_time: Timestamp,
+) -> Result<(), MessageVerificationError> {
+    match message.header().get::<Timestamp>(ORIG_SENDING_TIME) {
+        Ok(original_sending_time) => {
+            if original_sending_time > sending_time {
+                return Err(
+                    MessageVerificationError::OriginalSendingTimeAfterSendingTime {
+                        msg_seq_num: sequence_number,
+                        original_sending_time,
+                        sending_time,
+                    },
+                );
             }
-            Err(err) => {
-                error!(error = debug(err), "original sending time is missing");
-                return Err(MessageVerificationError::OriginalSendingTimeMissing {
-                    msg_seq_num: actual_seq_number,
-                });
-            }
+        }
+        Err(err) => {
+            error!(error = debug(err), "original sending time is missing");
+            return Err(MessageVerificationError::OriginalSendingTimeMissing {
+                msg_seq_num: sequence_number,
+            });
         }
     }
 
+    Ok(())
+}
+
+fn check_sender_comp_id(
+    message: &Message,
+    sequence_number: u64,
+    expected_comp_id: &str,
+) -> Result<(), MessageVerificationError> {
+    let actual_sender_comp_id: &str = message.header().get(fix44::SENDER_COMP_ID).unwrap_or("");
+    if actual_sender_comp_id != expected_comp_id {
+        return Err(MessageVerificationError::IncorrectCompId {
+            comp_id: actual_sender_comp_id.to_string(),
+            comp_id_type: CompIdType::Sender,
+            msg_seq_num: sequence_number,
+        });
+    }
+
+    Ok(())
+}
+
+fn check_sequence_number(
+    actual_seq_number: u64,
+    expected_seq_number: u64,
+    possible_duplicate: bool,
+) -> Result<(), MessageVerificationError> {
     match actual_seq_number.cmp(&expected_seq_number) {
         Ordering::Greater => {
             return Err(MessageVerificationError::SeqNumberTooHigh {
@@ -110,6 +152,22 @@ pub(crate) fn verify_message(
             });
         }
         _ => {}
+    }
+    Ok(())
+}
+
+fn check_target_comp_id(
+    message: &Message,
+    msg_seq_num: u64,
+    expected_comp_id: &str,
+) -> Result<(), MessageVerificationError> {
+    let actual_target_comp_id: &str = message.header().get(fix44::TARGET_COMP_ID).unwrap_or("");
+    if actual_target_comp_id != expected_comp_id {
+        return Err(MessageVerificationError::IncorrectCompId {
+            comp_id: actual_target_comp_id.to_string(),
+            comp_id_type: CompIdType::Target,
+            msg_seq_num,
+        });
     }
 
     Ok(())
