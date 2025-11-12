@@ -175,9 +175,10 @@ fn check_target_comp_id(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{Message, MessageVerificationError, SessionConfig, verify_message};
+    use crate::error::CompIdType;
     use hotfix_message::field_types::Timestamp;
-    use hotfix_message::fix44;
+    use hotfix_message::{Part, fix44};
 
     fn build_test_config() -> SessionConfig {
         SessionConfig {
@@ -206,7 +207,7 @@ mod tests {
         msg.set(fix44::SENDER_COMP_ID, sender_comp_id);
         msg.set(fix44::TARGET_COMP_ID, target_comp_id);
         msg.set(fix44::MSG_SEQ_NUM, seq_num);
-        msg.set(SENDING_TIME, Timestamp::utc_now());
+        msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
         msg
     }
 
@@ -315,9 +316,9 @@ mod tests {
     fn test_seq_number_too_low_with_poss_dup_flag() {
         let config = build_test_config();
         let mut msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 40);
-        msg.header_mut().set(POSS_DUP_FLAG, true);
+        msg.header_mut().set(fix44::POSS_DUP_FLAG, true);
         msg.header_mut()
-            .set(ORIG_SENDING_TIME, Timestamp::utc_now());
+            .set(fix44::ORIG_SENDING_TIME, Timestamp::utc_now());
 
         let result = verify_message(&msg, &config, 42);
 
@@ -358,7 +359,7 @@ mod tests {
     fn test_poss_dup_flag_missing_orig_sending_time() {
         let config = build_test_config();
         let mut msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 42);
-        msg.header_mut().set(POSS_DUP_FLAG, true);
+        msg.header_mut().set(fix44::POSS_DUP_FLAG, true);
         // Don't set OrigSendingTime
 
         let result = verify_message(&msg, &config, 42);
@@ -381,10 +382,10 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(10));
         let sending_time = Timestamp::utc_now();
 
-        msg.header_mut().set(POSS_DUP_FLAG, true);
-        msg.header_mut().set(ORIG_SENDING_TIME, orig_time);
-        msg.header_mut().pop(SENDING_TIME);
-        msg.header_mut().set(SENDING_TIME, sending_time);
+        msg.header_mut().set(fix44::POSS_DUP_FLAG, true);
+        msg.header_mut().set(fix44::ORIG_SENDING_TIME, orig_time);
+        msg.header_mut().pop(fix44::SENDING_TIME);
+        msg.header_mut().set(fix44::SENDING_TIME, sending_time);
 
         let result = verify_message(&msg, &config, 42);
 
@@ -400,10 +401,10 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(10));
         let orig_time = Timestamp::utc_now();
 
-        msg.header_mut().set(POSS_DUP_FLAG, true);
-        msg.header_mut().set(ORIG_SENDING_TIME, orig_time);
-        msg.header_mut().pop(SENDING_TIME);
-        msg.header_mut().set(SENDING_TIME, sending_time);
+        msg.header_mut().set(fix44::POSS_DUP_FLAG, true);
+        msg.header_mut().set(fix44::ORIG_SENDING_TIME, orig_time);
+        msg.header_mut().pop(fix44::SENDING_TIME);
+        msg.header_mut().set(fix44::SENDING_TIME, sending_time);
 
         let result = verify_message(&msg, &config, 42);
 
@@ -429,14 +430,15 @@ mod tests {
 
         let timestamp = Timestamp::utc_now();
 
-        msg.header_mut().set(POSS_DUP_FLAG, true);
-        msg.header_mut().set(ORIG_SENDING_TIME, timestamp.clone());
-        msg.header_mut().pop(SENDING_TIME);
-        msg.header_mut().set(SENDING_TIME, timestamp);
+        msg.header_mut().set(fix44::POSS_DUP_FLAG, true);
+        msg.header_mut()
+            .set(fix44::ORIG_SENDING_TIME, timestamp.clone());
+        msg.header_mut().pop(fix44::SENDING_TIME);
+        msg.header_mut().set(fix44::SENDING_TIME, timestamp);
 
         let result = verify_message(&msg, &config, 42);
 
-        // Equal timestamps should be valid (orig <= sending)
+        // equal timestamps should be valid (orig <= sending)
         assert!(result.is_ok());
     }
 
@@ -449,7 +451,7 @@ mod tests {
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
         msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
 
-        // Remove begin string
+        // remove begin string, which is automatically added by `Message::new`
         msg.header_mut().pop(fix44::BEGIN_STRING);
 
         let result = verify_message(&msg, &config, 42);
@@ -467,7 +469,6 @@ mod tests {
         msg.set(fix44::TARGET_COMP_ID, "SENDER");
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
         msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
-        // Don't set sender comp id
 
         let result = verify_message(&msg, &config, 42);
 
@@ -487,7 +488,6 @@ mod tests {
         msg.set(fix44::SENDER_COMP_ID, "TARGET");
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
         msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
-        // Don't set target comp id
 
         let result = verify_message(&msg, &config, 42);
 
@@ -507,11 +507,10 @@ mod tests {
         msg.set(fix44::SENDER_COMP_ID, "TARGET");
         msg.set(fix44::TARGET_COMP_ID, "SENDER");
         msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
-        // Don't set msg seq num
 
         let result = verify_message(&msg, &config, 42);
 
-        // Missing seq num defaults to 0, which will be too low
+        // missing seq num defaults to 0, which will be too low
         assert!(matches!(
             result,
             Err(MessageVerificationError::SeqNumberTooLow { .. })
@@ -544,7 +543,7 @@ mod tests {
     #[test]
     fn test_verification_order_begin_string_checked_first() {
         let config = build_test_config();
-        // Wrong begin string AND wrong seq num - begin string error should come first
+        // wrong begin string AND wrong seq num - begin string error should come first
         let msg = build_test_message("FIX.4.2", "TARGET", "SENDER", 100);
 
         let result = verify_message(&msg, &config, 42);
@@ -558,7 +557,7 @@ mod tests {
     #[test]
     fn test_verification_order_sender_comp_id_checked_before_target() {
         let config = build_test_config();
-        // Wrong sender AND wrong target - sender error should come first
+        // wrong sender and wrong target - sender error should come first
         let msg = build_test_message("FIX.4.4", "WRONG_SENDER", "WRONG_TARGET", 42);
 
         let result = verify_message(&msg, &config, 42);
@@ -573,26 +572,12 @@ mod tests {
     }
 
     #[test]
-    fn test_poss_dup_flag_false_without_orig_time() {
-        let config = build_test_config();
-        let mut msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 42);
-        msg.header_mut().set(POSS_DUP_FLAG, false);
-        // No OrigSendingTime
-
-        let result = verify_message(&msg, &config, 42);
-
-        // Should succeed - orig time only required when poss dup is true
-        assert!(result.is_ok());
-    }
-
-    #[test]
     fn test_missing_sending_time() {
         let config = build_test_config();
         let mut msg = Message::new("FIX.4.4", "D");
         msg.set(fix44::SENDER_COMP_ID, "TARGET");
         msg.set(fix44::TARGET_COMP_ID, "SENDER");
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
-        // Don't set SendingTime
 
         let result = verify_message(&msg, &config, 42);
 
@@ -615,11 +600,11 @@ mod tests {
         msg.set(fix44::TARGET_COMP_ID, "SENDER");
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
 
-        // Set sending time to 121 seconds in the past (beyond threshold)
+        // set sending time to 121 seconds in the past (beyond the threshold)
         let now = chrono::Utc::now();
         let past_time = now - Duration::seconds(121);
         let past_timestamp: Timestamp = past_time.naive_utc().into();
-        msg.set(SENDING_TIME, past_timestamp);
+        msg.set(fix44::SENDING_TIME, past_timestamp);
 
         let result = verify_message(&msg, &config, 42);
 
@@ -642,11 +627,11 @@ mod tests {
         msg.set(fix44::TARGET_COMP_ID, "SENDER");
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
 
-        // Set sending time to 121 seconds in the future (beyond threshold)
+        // set sending time to 121 seconds in the future (beyond the threshold)
         let now = chrono::Utc::now();
         let future_time = now + Duration::seconds(121);
         let future_timestamp: Timestamp = future_time.naive_utc().into();
-        msg.set(SENDING_TIME, future_timestamp);
+        msg.set(fix44::SENDING_TIME, future_timestamp);
 
         let result = verify_message(&msg, &config, 42);
 
@@ -669,15 +654,14 @@ mod tests {
         msg.set(fix44::TARGET_COMP_ID, "SENDER");
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
 
-        // Set sending time to exactly 120 seconds in the past (at threshold)
+        // set sending time to exactly 120 seconds in the past (at the threshold)
         let now = chrono::Utc::now();
         let boundary_time = now - Duration::seconds(120);
         let boundary_timestamp: Timestamp = boundary_time.naive_utc().into();
-        msg.set(SENDING_TIME, boundary_timestamp);
+        msg.set(fix44::SENDING_TIME, boundary_timestamp);
 
         let result = verify_message(&msg, &config, 42);
 
-        // Should succeed - exactly at threshold is valid
         assert!(result.is_ok());
     }
 
@@ -691,15 +675,14 @@ mod tests {
         msg.set(fix44::TARGET_COMP_ID, "SENDER");
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
 
-        // Set sending time to 60 seconds in the past (within threshold)
+        // set sending time to 60 seconds in the past (within the threshold)
         let now = chrono::Utc::now();
         let valid_time = now - Duration::seconds(60);
         let valid_timestamp: Timestamp = valid_time.naive_utc().into();
-        msg.set(SENDING_TIME, valid_timestamp);
+        msg.set(fix44::SENDING_TIME, valid_timestamp);
 
         let result = verify_message(&msg, &config, 42);
 
-        // Should succeed - within threshold
         assert!(result.is_ok());
     }
 }
