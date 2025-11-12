@@ -512,14 +512,21 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 self.handle_incorrect_comp_id(comp_id, comp_id_type, msg_seq_num)
                     .await;
             }
+            MessageVerificationError::SendingTimeAccuracyIssue { msg_seq_num } => {
+                self.handle_sending_time_accuracy_problem(msg_seq_num, "unexpected sending time")
+                    .await;
+            }
             MessageVerificationError::OriginalSendingTimeMissing { msg_seq_num } => {
                 self.handle_original_sending_time_missing(msg_seq_num).await;
             }
             MessageVerificationError::OriginalSendingTimeAfterSendingTime {
                 msg_seq_num, ..
             } => {
-                self.handle_original_sending_time_after_sending_time(msg_seq_num)
-                    .await
+                self.handle_sending_time_accuracy_problem(
+                    msg_seq_num,
+                    "original sending time is after sending time",
+                )
+                .await;
             }
         }
     }
@@ -623,10 +630,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         }
     }
 
-    async fn handle_original_sending_time_after_sending_time(&mut self, msg_seq_num: u64) {
+    async fn handle_sending_time_accuracy_problem(&mut self, msg_seq_num: u64, text: &str) {
         let reject = Reject::new(msg_seq_num)
             .session_reject_reason(SessionRejectReason::SendingtimeAccuracyProblem)
-            .text("original sending time is after sending time");
+            .text(text);
         self.send_message(reject).await;
         if let Err(err) = self.store.increment_target_seq_number().await {
             error!("failed to increment target seq number: {:?}", err);
