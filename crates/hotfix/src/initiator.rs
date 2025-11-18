@@ -12,7 +12,7 @@ use tokio::time::error::Elapsed;
 use tokio::time::sleep;
 use tracing::{debug, warn};
 
-use crate::application::{Application, ApplicationRef};
+use crate::application::Application;
 use crate::config::SessionConfig;
 use crate::message::FixMessage;
 use crate::session::SessionRef;
@@ -32,8 +32,7 @@ impl<M: FixMessage> Initiator<M> {
         application: impl Application<M>,
         store: impl MessageStore + Send + Sync + 'static,
     ) -> Self {
-        let application_ref = ApplicationRef::new(application);
-        let session_ref = SessionRef::new(config.clone(), application_ref, store);
+        let session_ref = SessionRef::new(config.clone(), application, store);
         let (completion_tx, completion_rx) = watch::channel(false);
 
         tokio::spawn({

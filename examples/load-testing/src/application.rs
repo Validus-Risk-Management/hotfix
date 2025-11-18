@@ -15,11 +15,11 @@ impl LoadTestingApplication {
 
 #[async_trait::async_trait]
 impl Application<Message> for LoadTestingApplication {
-    async fn on_outbound_message(&self, _msg: Message) {
-        todo!()
+    async fn on_outbound_message(&self, _msg: &Message) -> anyhow::Result<()> {
+        Ok(())
     }
 
-    async fn on_inbound_message(&self, msg: Message) {
+    async fn on_inbound_message(&self, msg: Message) -> anyhow::Result<()> {
         match msg {
             Message::NewOrderSingle(_) => {
                 unimplemented!("we should not receive orders");
@@ -33,16 +33,20 @@ impl Application<Message> for LoadTestingApplication {
                 info!("received message: {:?}", s);
             }
             Message::ExecutionReport(report) => {
-                self.sender.send(report).unwrap();
+                self.sender.send(report)?;
             }
         }
+
+        Ok(())
     }
 
-    async fn on_logout(&mut self, _reason: &str) {
+    async fn on_logout(&mut self, _reason: &str) -> anyhow::Result<()> {
         info!("we've been logged out");
+        Ok(())
     }
 
-    async fn on_logon(&mut self) {
+    async fn on_logon(&mut self) -> anyhow::Result<()> {
         info!("we've been logged in");
+        Ok(())
     }
 }

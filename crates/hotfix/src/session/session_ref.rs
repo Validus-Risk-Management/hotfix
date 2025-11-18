@@ -1,11 +1,10 @@
-use crate::application::ApplicationRef;
 use crate::config::SessionConfig;
 use crate::message::{FixMessage, RawFixMessage};
-use crate::session;
 use crate::session::event::{AwaitingActiveSessionResponse, SessionEvent};
 use crate::session::{Session, SessionInfo};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
+use crate::{Application, session};
 use tokio::sync::{mpsc, oneshot};
 use tracing::debug;
 
@@ -17,7 +16,7 @@ pub struct SessionRef<M> {
 impl<M: FixMessage> SessionRef<M> {
     pub fn new(
         config: SessionConfig,
-        application: ApplicationRef<M>,
+        application: impl Application<M>,
         store: impl MessageStore + Send + Sync + 'static,
     ) -> Self {
         let (sender, mailbox) = mpsc::channel::<SessionEvent<M>>(10);

@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 hotfix = { path = "../../crates/hotfix", features = ["mongodb", "redb"] }
 
+anyhow.workspace = true
 async-trait.workspace = true
 clap = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }

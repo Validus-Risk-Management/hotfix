@@ -14,7 +14,6 @@ use tokio::sync::mpsc;
 use tokio::time::{Duration, Instant, Sleep, sleep, sleep_until};
 use tracing::{debug, error, info, warn};
 
-use crate::application::ApplicationRef;
 use crate::config::SessionConfig;
 use crate::message::FixMessage;
 use crate::message::generate_message;
@@ -37,6 +36,7 @@ use hotfix_message::fix44::SessionRejectReason;
 use hotfix_message::parsed_message::{InvalidReason, ParsedMessage};
 use state::SessionState;
 
+use crate::Application;
 use crate::message::reject::Reject;
 use crate::message::verification::verify_message;
 pub use info::{SessionInfo, Status};
@@ -44,25 +44,25 @@ pub use session_ref::SessionRef;
 
 const SCHEDULE_CHECK_INTERVAL: u64 = 1;
 
-struct Session<M, S> {
+struct Session<A, M, S> {
     mailbox: mpsc::Receiver<SessionEvent<M>>,
     message_config: MessageConfig,
     config: SessionConfig,
     schedule: SessionSchedule,
     message_builder: MessageBuilder,
     state: SessionState,
-    application: ApplicationRef<M>,
+    application: A,
     store: S,
     schedule_check_timer: Pin<Box<Sleep>>,
 }
 
-impl<M: FixMessage, S: MessageStore> Session<M, S> {
+impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     fn new(
         mailbox: mpsc::Receiver<SessionEvent<M>>,
         config: SessionConfig,
-        application: ApplicationRef<M>,
+        application: A,
         store: S,
-    ) -> Session<M, S> {
+    ) -> Session<A, M, S> {
         let schedule_check_timer = sleep(Duration::from_secs(SCHEDULE_CHECK_INTERVAL));
 
         let dictionary = Self::get_data_dictionary(&config);
@@ -216,7 +216,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 let parsed_message = M::parse(message);
                 if self
                     .application
-                    .send_on_inbound_message(parsed_message)
+                    .on_inbound_message(parsed_message)
                     .await
                     .is_err()
                 {
@@ -310,7 +310,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                     // happy logon flow, the session is now active
                     self.state =
                         SessionState::new_active(writer.clone(), self.config.heartbeat_interval);
-                    if self.application.send_logon().await.is_err() {
+                    if self.application.on_logon().await.is_err() {
                         error!("failed to send logon to application");
                         self.state.disconnect().await;
                     }
@@ -335,7 +335,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             self.state = SessionState::LoggedOut { reconnect: false };
             if self
                 .application
-                .send_logout("peer has logged us out".to_string())
+                .on_logout("peer has logged us out")
                 .await
                 .is_err()
             {
@@ -666,12 +666,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 
     async fn send_app_message(&mut self, message: M) {
-        if self
-            .application
-            .send_on_outbound_message(message.clone())
-            .await
-            .is_ok()
-        {
+        if self.application.on_outbound_message(&message).await.is_ok() {
             self.send_message(message).await;
         } else {
             error!("failed to send message to application");
@@ -863,8 +858,9 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
     }
 }
 
-async fn run_session<M, S>(mut session: Session<M, S>)
+async fn run_session<A, M, S>(mut session: Session<A, M, S>)
 where
+    A: Application<M>,
     M: FixMessage,
     S: MessageStore + Send + 'static,
 {

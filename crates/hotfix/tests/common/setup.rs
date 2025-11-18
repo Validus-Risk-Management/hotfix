@@ -3,7 +3,6 @@ use crate::common::assertions::then;
 use crate::common::mock_application::MockApplication;
 use crate::common::mock_counterparty::MockCounterparty;
 use crate::common::test_messages::TestMessage;
-use hotfix::application::ApplicationRef;
 use hotfix::config::SessionConfig;
 use hotfix::session::SessionRef;
 use hotfix::session::Status;
@@ -29,9 +28,7 @@ pub async fn given_a_connected_session_with_store(
     let config = create_session_config();
     let counterparty_config = create_counterparty_session_config(config.clone());
 
-    let application_ref = ApplicationRef::new(MockApplication {});
-
-    let session = SessionRef::new(config, application_ref, message_store);
+    let session = SessionRef::new(config, MockApplication {}, message_store);
     let mock_counterparty = MockCounterparty::start(session.clone(), counterparty_config).await;
 
     (session, mock_counterparty)
