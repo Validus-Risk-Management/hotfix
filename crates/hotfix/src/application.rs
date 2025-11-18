@@ -16,6 +16,8 @@ pub trait Application<M>: Send + Sync + 'static {
     async fn on_inbound_message(&self, msg: M);
     /// Called when the session is logged out.
     async fn on_logout(&mut self, reason: &str);
+    /// Called when the session is logged on.
+    async fn on_logon(&mut self);
 }
 
 #[derive(Debug, Clone)]
@@ -24,6 +26,7 @@ enum ApplicationMessage<M> {
     SendingMessage(M),
     ReceivedMessage(M),
     LoggedOut(String),
+    LoggedOn,
 }
 
 #[derive(Clone)]
@@ -92,6 +95,9 @@ where
             }
             ApplicationMessage::LoggedOut(reason) => {
                 self.application.on_logout(&reason).await;
+            }
+            ApplicationMessage::LoggedOn => {
+                self.application.on_logon().await;
             }
         }
     }
