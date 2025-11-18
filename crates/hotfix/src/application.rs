@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use tokio::sync::mpsc;
 
 use crate::message::FixMessage;
@@ -6,16 +7,19 @@ use crate::message::FixMessage;
 /// The application users of HotFIX can implement to hook into the engine.
 pub trait Application<M>: Send + Sync + 'static {
     /// Called when a message is sent to the engine to be sent to the counterparty.
+    ///
+    /// This is invoked before the raw message is persisted in the message store.
     async fn on_outbound_message(&self, msg: M);
     /// Called when a message is received from the counterparty.
     ///
     /// This is invoked after the message is verified and parsed into a typed message.
     async fn on_inbound_message(&self, msg: M);
+    /// Called when the session is logged out.
     async fn on_logout(&mut self, reason: &str);
 }
 
 #[derive(Debug, Clone)]
-pub enum ApplicationMessage<M> {
+enum ApplicationMessage<M> {
     #[allow(dead_code)]
     SendingMessage(M),
     ReceivedMessage(M),
@@ -36,11 +40,21 @@ impl<M: FixMessage> ApplicationRef<M> {
         Self { sender }
     }
 
-    pub async fn send_message(&self, msg: ApplicationMessage<M>) {
+    pub async fn send_on_outbound_message(&self, msg: M) -> anyhow::Result<()> {
+        self.send_message(ApplicationMessage::SendingMessage(msg))
+            .await
+    }
+
+    pub async fn send_on_inbound_message(&self, msg: M) -> anyhow::Result<()> {
+        self.send_message(ApplicationMessage::ReceivedMessage(msg))
+            .await
+    }
+
+    async fn send_message(&self, msg: ApplicationMessage<M>) -> anyhow::Result<()> {
         self.sender
             .send(msg)
             .await
-            .expect("be able to send message to app");
+            .map_err(|_| anyhow!("failed to send message to app"))
     }
 
     pub async fn send_logout(&self, reason: String) {

@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 use tokio::time::{Duration, Instant, Sleep, sleep, sleep_until};
 use tracing::{debug, error, info, warn};
 
-use crate::application::{ApplicationMessage, ApplicationRef};
+use crate::application::ApplicationRef;
 use crate::config::SessionConfig;
 use crate::message::FixMessage;
 use crate::message::generate_message;
@@ -214,8 +214,15 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
         match self.verify_message(message).await {
             Ok(_) => {
                 let parsed_message = M::parse(message);
-                let app_message = ApplicationMessage::ReceivedMessage(parsed_message);
-                self.application.send_message(app_message).await;
+                if self
+                    .application
+                    .send_on_inbound_message(parsed_message)
+                    .await
+                    .is_err()
+                {
+                    error!("failed to send inbound message to application");
+                    self.state.disconnect().await;
+                }
                 self.store.increment_target_seq_number().await?;
             }
             Err(err) => self.handle_verification_error(err).await,
@@ -648,6 +655,20 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             .reset_peer_timer(self.config.heartbeat_interval, test_request_id);
     }
 
+    async fn send_app_message(&mut self, message: M) {
+        if self
+            .application
+            .send_on_outbound_message(message.clone())
+            .await
+            .is_ok()
+        {
+            self.send_message(message).await;
+        } else {
+            error!("failed to send message to application");
+            self.state.disconnect().await;
+        }
+    }
+
     async fn send_message(&mut self, message: impl FixMessage) {
         let seq_num = self.store.next_sender_seq_number();
         self.store.increment_sender_seq_number().await.unwrap();
@@ -735,7 +756,7 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                 }
             }
             SessionEvent::SendMessage(message) => {
-                self.send_message(message).await;
+                self.send_app_message(message).await;
             }
             SessionEvent::Disconnected(reason) => {
                 warn!(reason, "disconnected from peer");
