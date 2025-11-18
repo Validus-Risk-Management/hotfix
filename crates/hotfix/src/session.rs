@@ -37,6 +37,7 @@ use hotfix_message::parsed_message::{InvalidReason, ParsedMessage};
 use state::SessionState;
 
 use crate::Application;
+use crate::application::{InboundDecision, OutboundDecision};
 use crate::message::reject::Reject;
 use crate::message::verification::verify_message;
 pub use info::{SessionInfo, Status};
@@ -214,12 +215,10 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
         match self.verify_message(message).await {
             Ok(_) => {
                 let parsed_message = M::parse(message);
-                if self
-                    .application
-                    .on_inbound_message(parsed_message)
-                    .await
-                    .is_err()
-                {
+                if matches!(
+                    self.application.on_inbound_message(parsed_message).await,
+                    InboundDecision::TerminateSession
+                ) {
                     error!("failed to send inbound message to application");
                     self.state.disconnect().await;
                 }
@@ -310,10 +309,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
                     // happy logon flow, the session is now active
                     self.state =
                         SessionState::new_active(writer.clone(), self.config.heartbeat_interval);
-                    if self.application.on_logon().await.is_err() {
-                        error!("failed to send logon to application");
-                        self.state.disconnect().await;
-                    }
+                    self.application.on_logon().await;
                     self.store.increment_target_seq_number().await?;
                 }
                 Err(err) => self.handle_verification_error(err).await,
@@ -333,15 +329,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
             // TODO: reconnect = false isn't always valid, this should be more sophisticated
             self.state.disconnect().await;
             self.state = SessionState::LoggedOut { reconnect: false };
-            if self
-                .application
-                .on_logout("peer has logged us out")
-                .await
-                .is_err()
-            {
-                error!("failed to send logout to application");
-                self.state.disconnect().await;
-            }
+            self.application.on_logout("peer has logged us out").await;
         }
         self.store.increment_target_seq_number().await
     }
@@ -666,11 +654,17 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     }
 
     async fn send_app_message(&mut self, message: M) {
-        if self.application.on_outbound_message(&message).await.is_ok() {
-            self.send_message(message).await;
-        } else {
-            error!("failed to send message to application");
-            self.state.disconnect().await;
+        match self.application.on_outbound_message(&message).await {
+            OutboundDecision::Send => {
+                self.send_message(message).await;
+            }
+            OutboundDecision::Drop => {
+                debug!("dropped outbound message as instructed by the application");
+            }
+            OutboundDecision::TerminateSession => {
+                error!("failed to send message to application");
+                self.state.disconnect().await;
+            }
         }
     }
 

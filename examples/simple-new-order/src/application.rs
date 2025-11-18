@@ -1,18 +1,18 @@
-use hotfix::Application;
-use tracing::info;
-
 use crate::messages::Message;
+use hotfix::Application;
+use hotfix::application::{InboundDecision, OutboundDecision};
+use tracing::info;
 
 #[derive(Default)]
 pub struct TestApplication {}
 
 #[async_trait::async_trait]
 impl Application<Message> for TestApplication {
-    async fn on_outbound_message(&self, _msg: &Message) -> anyhow::Result<()> {
-        Ok(())
+    async fn on_outbound_message(&self, _msg: &Message) -> OutboundDecision {
+        OutboundDecision::Send
     }
 
-    async fn on_inbound_message(&self, msg: Message) -> anyhow::Result<()> {
+    async fn on_inbound_message(&self, msg: Message) -> InboundDecision {
         match msg {
             Message::NewOrderSingle(_) => {
                 unimplemented!("we should not receive orders");
@@ -26,16 +26,15 @@ impl Application<Message> for TestApplication {
                 info!("received message: {:?}", s);
             }
         }
-        Ok(())
+
+        InboundDecision::Accept
     }
 
-    async fn on_logout(&mut self, _reason: &str) -> anyhow::Result<()> {
+    async fn on_logout(&mut self, _reason: &str) {
         info!("we've been logged out");
-        Ok(())
     }
 
-    async fn on_logon(&mut self) -> anyhow::Result<()> {
+    async fn on_logon(&mut self) {
         info!("we've been logged in");
-        Ok(())
     }
 }
