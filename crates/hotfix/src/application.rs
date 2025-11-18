@@ -53,18 +53,20 @@ impl<M: FixMessage> ApplicationRef<M> {
             .await
     }
 
+    pub async fn send_logout(&self, reason: String) -> anyhow::Result<()> {
+        self.send_message(ApplicationMessage::LoggedOut(reason))
+            .await
+    }
+
+    pub async fn send_logon(&self) -> anyhow::Result<()> {
+        self.send_message(ApplicationMessage::LoggedOn).await
+    }
+
     async fn send_message(&self, msg: ApplicationMessage<M>) -> anyhow::Result<()> {
         self.sender
             .send(msg)
             .await
             .map_err(|_| anyhow!("failed to send message to app"))
-    }
-
-    pub async fn send_logout(&self, reason: String) {
-        self.sender
-            .send(ApplicationMessage::LoggedOut(reason))
-            .await
-            .expect("be able tell the app we have been logged out");
     }
 }
 

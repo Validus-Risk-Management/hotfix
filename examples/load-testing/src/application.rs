@@ -41,4 +41,8 @@ impl Application<Message> for LoadTestingApplication {
     async fn on_logout(&mut self, _reason: &str) {
         info!("we've been logged out");
     }
+
+    async fn on_logon(&mut self) {
+        info!("we've been logged in");
+    }
 }

@@ -310,6 +310,10 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
                     // happy logon flow, the session is now active
                     self.state =
                         SessionState::new_active(writer.clone(), self.config.heartbeat_interval);
+                    if self.application.send_logon().await.is_err() {
+                        error!("failed to send logon to application");
+                        self.state.disconnect().await;
+                    }
                     self.store.increment_target_seq_number().await?;
                 }
                 Err(err) => self.handle_verification_error(err).await,
@@ -329,9 +333,15 @@ impl<M: FixMessage, S: MessageStore> Session<M, S> {
             // TODO: reconnect = false isn't always valid, this should be more sophisticated
             self.state.disconnect().await;
             self.state = SessionState::LoggedOut { reconnect: false };
-            self.application
+            if self
+                .application
                 .send_logout("peer has logged us out".to_string())
-                .await;
+                .await
+                .is_err()
+            {
+                error!("failed to send logout to application");
+                self.state.disconnect().await;
+            }
         }
         self.store.increment_target_seq_number().await
     }
