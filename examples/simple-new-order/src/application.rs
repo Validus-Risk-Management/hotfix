@@ -8,11 +8,11 @@ pub struct TestApplication {}
 
 #[async_trait::async_trait]
 impl Application<Message> for TestApplication {
-    async fn on_message_from_app(&self, _msg: Message) {
+    async fn on_outbound_message(&self, _msg: Message) {
         todo!()
     }
 
-    async fn on_message_to_app(&self, msg: Message) {
+    async fn on_inbound_message(&self, msg: Message) {
         match msg {
             Message::NewOrderSingle(_) => {
                 unimplemented!("we should not receive orders");

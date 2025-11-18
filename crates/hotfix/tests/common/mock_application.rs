@@ -5,9 +5,9 @@ pub struct MockApplication {}
 
 #[async_trait::async_trait]
 impl Application<TestMessage> for MockApplication {
-    async fn on_message_from_app(&self, _msg: TestMessage) {}
+    async fn on_outbound_message(&self, _msg: TestMessage) {}
 
-    async fn on_message_to_app(&self, _msg: TestMessage) {}
+    async fn on_inbound_message(&self, _msg: TestMessage) {}
 
     async fn on_logout(&mut self, _reason: &str) {}
 }

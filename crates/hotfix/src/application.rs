@@ -5,8 +5,12 @@ use crate::message::FixMessage;
 #[async_trait::async_trait]
 /// The application users of HotFIX can implement to hook into the engine.
 pub trait Application<M>: Send + Sync + 'static {
-    async fn on_message_from_app(&self, msg: M);
-    async fn on_message_to_app(&self, msg: M);
+    /// Called when a message is sent to the engine to be sent to the counterparty.
+    async fn on_outbound_message(&self, msg: M);
+    /// Called when a message is received from the counterparty.
+    ///
+    /// This is invoked after the message is verified and parsed into a typed message.
+    async fn on_inbound_message(&self, msg: M);
     async fn on_logout(&mut self, reason: &str);
 }
 
@@ -67,10 +71,10 @@ where
     async fn handle(&mut self, msg: ApplicationMessage<M>) {
         match msg {
             ApplicationMessage::SendingMessage(m) => {
-                self.application.on_message_from_app(m).await;
+                self.application.on_outbound_message(m).await;
             }
             ApplicationMessage::ReceivedMessage(m) => {
-                self.application.on_message_to_app(m).await;
+                self.application.on_inbound_message(m).await;
             }
             ApplicationMessage::LoggedOut(reason) => {
                 self.application.on_logout(&reason).await;
