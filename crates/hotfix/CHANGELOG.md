@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.8](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.2.7...hotfix-v0.2.8) - 2025-11-19
+
+### Added
+
+- improved Application approach ([#232](https://github.com/Validus-Risk-Management/hotfix/pull/232))
+- handle missing and inaccurate SendingTime ([#229](https://github.com/Validus-Risk-Management/hotfix/pull/229))
+
+### Other
+
+- add test case for responding to Test Requests with heartbeat ([#227](https://github.com/Validus-Risk-Management/hotfix/pull/227))
+
 ## [0.2.7](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.2.6...hotfix-v0.2.7) - 2025-11-12
 
 ### Added
