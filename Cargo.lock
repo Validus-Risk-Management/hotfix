@@ -1832,7 +1832,6 @@ checksum = "241eaef5fd12c88705a01fc1066c48c4b36e0dd4377dcdc7ec3942cea7a69956"
 name = "load-testing"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "clap",
  "hotfix",
@@ -3125,7 +3124,6 @@ dependencies = [
 name = "simple-new-order"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "axum",
  "clap",

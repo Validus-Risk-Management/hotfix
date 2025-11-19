@@ -19,7 +19,7 @@ mongodb = ["dep:mongodb"]
 workspace = true
 
 [dependencies]
-hotfix-message = { version = "0.2.5", path = "../hotfix-message" }
+hotfix-message = { version = "0.2.5", path = "../hotfix-message", features = ["utils-chrono"] }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }
