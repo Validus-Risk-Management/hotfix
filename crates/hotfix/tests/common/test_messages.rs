@@ -35,8 +35,12 @@ pub enum TestMessage {
 
 impl TestMessage {
     pub fn dummy_execution_report() -> Self {
+        Self::dummy_execution_report_with_order_id("123456789".to_string())
+    }
+
+    pub fn dummy_execution_report_with_order_id(order_id: String) -> Self {
         Self::ExecutionReport {
-            order_id: "123456789".to_string(),
+            order_id,
             exec_id: "123456789".to_string(),
             exec_type: fix44::ExecType::New,
             ord_status: fix44::OrdStatus::New,

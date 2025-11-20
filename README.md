@@ -34,6 +34,7 @@ reaching full support of FIX 4.4 and 5.0 workflows as soon as possible.
 - [x] Session-layer supporting the core flows, such as logins, resends, etc.
 - [x] Built-in message stores
     - [x] in-memory
+    - [x] file-system
     - [x] [mongodb](https://www.mongodb.com/docs/drivers/rust/current/)
     - [x] [redb](https://www.redb.org/)
 - [x] Code-generation for FIX fields from XML specifications

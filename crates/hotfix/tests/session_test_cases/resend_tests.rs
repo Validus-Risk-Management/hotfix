@@ -4,7 +4,9 @@ use crate::common::setup::given_an_active_session;
 use crate::common::test_messages::{
     TestMessage, build_execution_report_with_incorrect_body_length,
 };
+use hotfix::message::FixMessage;
 use hotfix::session::Status;
+use hotfix_message::FieldType;
 use hotfix_message::fix44::MsgType;
 
 #[tokio::test]
@@ -107,13 +109,35 @@ async fn test_infinite_resend_requests_are_prevented() {
 /// the session ignores the resent message and does not increment the target sequence number.
 #[tokio::test]
 async fn test_resent_message_previously_received_is_ignored() {
-    let (session, mut counterparty) = given_an_active_session().await;
+    let (mut session, mut counterparty) = given_an_active_session().await;
 
     when(&mut counterparty)
         .sends_message(TestMessage::dummy_execution_report())
         .await;
+    then(&mut session)
+        .receives(|msg| assert_eq!(msg.message_type(), MsgType::ExecutionReport.to_string()))
+        .await;
+    then(&mut session).target_sequence_number_reaches(2).await;
 
-    // TODO: finish this test
+    // they resend a message we previously received, which we ignore - not affecting future messages
+    when(&mut counterparty).resends_message(2).await;
+
+    // the counterparty then sends another report, and we assert this is the next message we receive
+    let new_report_order_id = "xxx".to_string();
+    when(&mut counterparty)
+        .sends_message(TestMessage::dummy_execution_report_with_order_id(
+            new_report_order_id.clone(),
+        ))
+        .await;
+    then(&mut session)
+        .receives(|msg| {
+            if let TestMessage::ExecutionReport { order_id, .. } = msg {
+                assert_eq!(order_id, &new_report_order_id);
+            } else {
+                panic!("Unexpected message: {:?}", msg);
+            }
+        })
+        .await;
 
     when(&session).requests_disconnect().await;
     then(&mut counterparty).gets_disconnected().await;
