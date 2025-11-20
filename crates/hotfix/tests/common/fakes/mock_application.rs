@@ -2,7 +2,15 @@ use crate::common::test_messages::TestMessage;
 use hotfix::Application;
 use hotfix::application::{InboundDecision, OutboundDecision};
 
-pub struct MockApplication {}
+pub struct MockApplication {
+    message_sender: tokio::sync::mpsc::UnboundedSender<TestMessage>,
+}
+
+impl MockApplication {
+    pub fn new(message_sender: tokio::sync::mpsc::UnboundedSender<TestMessage>) -> Self {
+        Self { message_sender }
+    }
+}
 
 #[async_trait::async_trait]
 impl Application<TestMessage> for MockApplication {
@@ -10,7 +18,8 @@ impl Application<TestMessage> for MockApplication {
         OutboundDecision::Send
     }
 
-    async fn on_inbound_message(&self, _msg: TestMessage) -> InboundDecision {
+    async fn on_inbound_message(&self, msg: TestMessage) -> InboundDecision {
+        self.message_sender.send(msg).unwrap();
         InboundDecision::Accept
     }
 

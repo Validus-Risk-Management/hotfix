@@ -102,3 +102,19 @@ async fn test_infinite_resend_requests_are_prevented() {
         .await;
     then(&mut mock_counterparty).gets_disconnected().await;
 }
+
+/// Tests that when a counterparty resends a message we previously received,
+/// the session ignores the resent message and does not increment the target sequence number.
+#[tokio::test]
+async fn test_resent_message_previously_received_is_ignored() {
+    let (session, mut mock_counterparty) = given_an_active_session().await;
+
+    when(&mut mock_counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
+        .await;
+
+    // TODO: finish this test
+
+    when(&session).requests_disconnect().await;
+    then(&mut mock_counterparty).gets_disconnected().await;
+}

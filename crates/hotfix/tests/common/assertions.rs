@@ -1,4 +1,4 @@
-use crate::common::mock_counterparty::MockCounterparty;
+use crate::common::fakes::{MockCounterparty, SessionSpy};
 use crate::common::test_messages::TestMessage;
 use hotfix::session::SessionRef;
 use hotfix::session::Status;
@@ -17,19 +17,23 @@ pub fn then<T>(target: T) -> Then<T> {
     Then { target }
 }
 
-impl Then<&SessionRef<TestMessage>> {
+impl Then<&SessionSpy> {
+    fn session(&self) -> &SessionRef<TestMessage> {
+        self.target.session_ref()
+    }
+
     pub async fn target_sequence_number_reaches(self, expected_target_sequence_number: u64) {
         let timeout = DEFAULT_TIMEOUT;
         let deadline = tokio::time::Instant::now() + timeout;
         let retry_interval = Duration::from_millis(1);
 
-        let mut session_info = self.target.get_session_info().await;
+        let mut session_info = self.session().get_session_info().await;
         while tokio::time::Instant::now() < deadline {
             if session_info.next_target_seq_number - 1 == expected_target_sequence_number {
                 return;
             }
             tokio::time::sleep(retry_interval).await;
-            session_info = self.target.get_session_info().await;
+            session_info = self.session().get_session_info().await;
         }
 
         let actual_target_seq_number = session_info.next_target_seq_number - 1;
@@ -47,13 +51,13 @@ impl Then<&SessionRef<TestMessage>> {
         let deadline = tokio::time::Instant::now() + timeout;
         let retry_interval = Duration::from_millis(1);
 
-        let mut session_info = self.target.get_session_info().await;
+        let mut session_info = self.session().get_session_info().await;
         while tokio::time::Instant::now() < deadline {
             if session_info.status == expected_status {
                 return;
             }
             tokio::time::sleep(retry_interval).await;
-            session_info = self.target.get_session_info().await;
+            session_info = self.session().get_session_info().await;
         }
 
         let actual_status = session_info.status;

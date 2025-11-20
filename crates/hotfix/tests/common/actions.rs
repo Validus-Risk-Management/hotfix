@@ -1,4 +1,4 @@
-use crate::common::mock_counterparty::MockCounterparty;
+use crate::common::fakes::{MockCounterparty, SessionSpy};
 use crate::common::test_messages::TestMessage;
 use hotfix::message::FixMessage;
 use hotfix::session::SessionRef;
@@ -12,15 +12,19 @@ pub fn when<T>(target: T) -> When<T> {
     When { target }
 }
 
-impl When<&SessionRef<TestMessage>> {
+impl When<&SessionSpy> {
+    fn session(&self) -> &SessionRef<TestMessage> {
+        self.target.session_ref()
+    }
+
     pub async fn requests_disconnect(self) {
-        self.target
+        self.session()
             .disconnect("Test Session Finished".to_string())
             .await;
     }
 
     pub async fn sends_message(self, message: TestMessage) {
-        self.target.send_message(message).await;
+        self.session().send_message(message).await;
     }
 }
 

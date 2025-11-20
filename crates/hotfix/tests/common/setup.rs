@@ -1,7 +1,6 @@
 use crate::common::actions::when;
 use crate::common::assertions::then;
-use crate::common::mock_application::MockApplication;
-use crate::common::mock_counterparty::MockCounterparty;
+use crate::common::fakes::{MockApplication, MockCounterparty, SessionSpy};
 use crate::common::test_messages::TestMessage;
 use hotfix::config::SessionConfig;
 use hotfix::session::SessionRef;
@@ -16,34 +15,36 @@ pub const LOGON_TIMEOUT: u64 = 10;
 pub const COUNTERPARTY_COMP_ID: &str = "dummy-acceptor";
 pub const OUR_COMP_ID: &str = "dummy-initiator";
 
-pub async fn given_a_connected_session() -> (SessionRef<TestMessage>, MockCounterparty<TestMessage>)
-{
+pub async fn given_a_connected_session() -> (SessionSpy, MockCounterparty<TestMessage>) {
     let message_store = InMemoryMessageStore::default();
     given_a_connected_session_with_store(message_store).await
 }
 
 pub async fn given_a_connected_session_with_store(
     message_store: InMemoryMessageStore,
-) -> (SessionRef<TestMessage>, MockCounterparty<TestMessage>) {
+) -> (SessionSpy, MockCounterparty<TestMessage>) {
     let config = create_session_config();
     let counterparty_config = create_counterparty_session_config(config.clone());
 
-    let session = SessionRef::new(config, MockApplication {}, message_store);
+    let (message_tx, message_rx) = tokio::sync::mpsc::unbounded_channel();
+    let session = SessionRef::new(config, MockApplication::new(message_tx), message_store);
+
+    let fake_service = SessionSpy::new(session.clone(), message_rx);
     let mock_counterparty = MockCounterparty::start(session.clone(), counterparty_config).await;
 
-    (session, mock_counterparty)
+    (fake_service, mock_counterparty)
 }
 
-pub async fn given_an_active_session() -> (SessionRef<TestMessage>, MockCounterparty<TestMessage>) {
-    let (session, mut mock_counterparty) = given_a_connected_session().await;
+pub async fn given_an_active_session() -> (SessionSpy, MockCounterparty<TestMessage>) {
+    let (fake_service, mut mock_counterparty) = given_a_connected_session().await;
 
     then(&mut mock_counterparty)
         .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
     when(&mut mock_counterparty).sends_logon().await;
-    then(&session).status_changes_to(Status::Active).await;
+    then(&fake_service).status_changes_to(Status::Active).await;
 
-    (session, mock_counterparty)
+    (fake_service, mock_counterparty)
 }
 
 pub fn create_session_config() -> SessionConfig {
