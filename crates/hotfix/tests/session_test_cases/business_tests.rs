@@ -7,7 +7,7 @@ use hotfix_message::{FieldType, fix44::MsgType};
 
 #[tokio::test]
 async fn test_new_order_single() {
-    let (session, mut counterparty) = given_an_active_session().await;
+    let (mut session, mut counterparty) = given_an_active_session().await;
 
     // we send a new order to the counterparty and they receive it successfully
     when(&session)
@@ -23,7 +23,9 @@ async fn test_new_order_single() {
     when(&mut counterparty)
         .sends_message(TestMessage::dummy_execution_report())
         .await;
-    // TODO: we currently have no good way of asserting this message was received
+    then(&mut session)
+        .receives(|msg| assert_eq!(msg.message_type(), MsgType::ExecutionReport.to_string()))
+        .await;
 
     when(&session).requests_disconnect().await;
     then(&mut counterparty).gets_disconnected().await;

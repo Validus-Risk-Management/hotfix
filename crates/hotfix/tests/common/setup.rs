@@ -29,22 +29,22 @@ pub async fn given_a_connected_session_with_store(
     let (message_tx, message_rx) = tokio::sync::mpsc::unbounded_channel();
     let session = SessionRef::new(config, FakeApplication::new(message_tx), message_store);
 
-    let fake_service = SessionSpy::new(session.clone(), message_rx);
+    let session_spy = SessionSpy::new(session.clone(), message_rx);
     let mock_counterparty = FakeCounterparty::start(session.clone(), counterparty_config).await;
 
-    (fake_service, mock_counterparty)
+    (session_spy, mock_counterparty)
 }
 
 pub async fn given_an_active_session() -> (SessionSpy, FakeCounterparty<TestMessage>) {
-    let (fake_service, mut mock_counterparty) = given_a_connected_session().await;
+    let (mut session, mut mock_counterparty) = given_a_connected_session().await;
 
     then(&mut mock_counterparty)
         .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
         .await;
     when(&mut mock_counterparty).sends_logon().await;
-    then(&fake_service).status_changes_to(Status::Active).await;
+    then(&mut session).status_changes_to(Status::Active).await;
 
-    (fake_service, mock_counterparty)
+    (session, mock_counterparty)
 }
 
 pub fn create_session_config() -> SessionConfig {

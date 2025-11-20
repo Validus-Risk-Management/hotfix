@@ -36,7 +36,7 @@ async fn test_message_with_invalid_field_gets_rejected() {
 /// the session silently ignores it and detects a sequence gap when the next valid message arrives.
 #[tokio::test]
 async fn test_garbled_message_with_invalid_target_comp_id_gets_ignored() {
-    let (session, mut counterparty) = given_an_active_session().await;
+    let (mut session, mut counterparty) = given_an_active_session().await;
 
     // counterparty sends a message with invalid body length, which constitutes a garbled message
     let garbled_message_seq_num = counterparty.next_target_sequence_number();
@@ -55,7 +55,7 @@ async fn test_garbled_message_with_invalid_target_comp_id_gets_ignored() {
     then(&mut counterparty)
         .receives(|msg| assert_msg_type(msg, MsgType::ResendRequest))
         .await;
-    then(&session)
+    then(&mut session)
         .status_changes_to(Status::AwaitingResend {
             begin: garbled_message_seq_num,
             end: garbled_message_seq_num + 1,
@@ -144,7 +144,7 @@ async fn test_message_with_invalid_sender_comp_id() {
 /// the session sends a Reject (MsgType=3) with the appropriate reject reason.
 #[tokio::test]
 async fn test_message_with_invalid_msg_type() {
-    let (session, mut counterparty) = given_an_active_session().await;
+    let (mut session, mut counterparty) = given_an_active_session().await;
 
     // a message with invalid MsgType is sent by the counterparty
     let sequence_number = counterparty.next_target_sequence_number();
@@ -161,7 +161,7 @@ async fn test_message_with_invalid_msg_type() {
         })
         .await;
     // our target sequence number should be incremented
-    then(&session)
+    then(&mut session)
         .target_sequence_number_reaches(sequence_number)
         .await;
 
@@ -173,13 +173,13 @@ async fn test_message_with_invalid_msg_type() {
 /// causes the session to log out and disconnect the counterparty.
 #[tokio::test]
 async fn test_message_with_sequence_number_too_low() {
-    let (session, mut counterparty) = given_an_active_session().await;
+    let (mut session, mut counterparty) = given_an_active_session().await;
 
     let sequence_number = counterparty.next_target_sequence_number();
     when(&mut counterparty)
         .sends_message(TestMessage::dummy_execution_report())
         .await;
-    then(&session)
+    then(&mut session)
         .target_sequence_number_reaches(sequence_number)
         .await;
 
@@ -202,14 +202,14 @@ async fn test_message_with_sequence_number_too_low() {
 /// and that subsequent in-sequence messages continue processing normally.
 #[tokio::test]
 async fn test_message_with_sequence_number_too_low_possdup_ignored() {
-    let (session, mut counterparty) = given_an_active_session().await;
+    let (mut session, mut counterparty) = given_an_active_session().await;
 
     // A valid execution report is sent and processed normally
     let first_seq = counterparty.next_target_sequence_number();
     when(&mut counterparty)
         .sends_message(TestMessage::dummy_execution_report())
         .await;
-    then(&session)
+    then(&mut session)
         .target_sequence_number_reaches(first_seq)
         .await;
 
@@ -222,7 +222,7 @@ async fn test_message_with_sequence_number_too_low_possdup_ignored() {
     when(&mut counterparty)
         .sends_message(TestMessage::dummy_execution_report())
         .await;
-    then(&session)
+    then(&mut session)
         .target_sequence_number_reaches(second_seq)
         .await;
 
@@ -234,14 +234,14 @@ async fn test_message_with_sequence_number_too_low_possdup_ignored() {
 /// with an appropriate rejection reason.
 #[tokio::test]
 async fn test_message_with_incorrect_orig_sending_time_is_rejected() {
-    let (session, mut counterparty) = given_an_active_session().await;
+    let (mut session, mut counterparty) = given_an_active_session().await;
 
     // A valid execution report is sent and processed normally
     let seq_number = counterparty.next_target_sequence_number();
     when(&mut counterparty)
         .sends_message(TestMessage::dummy_execution_report())
         .await;
-    then(&session)
+    then(&mut session)
         .target_sequence_number_reaches(seq_number)
         .await;
 
@@ -271,14 +271,14 @@ async fn test_message_with_incorrect_orig_sending_time_is_rejected() {
 /// `OrigSendingTime` is required when `PossDupFlag` is set to `Y`.
 #[tokio::test]
 async fn test_message_with_missing_orig_sending_time_is_rejected() {
-    let (session, mut counterparty) = given_an_active_session().await;
+    let (mut session, mut counterparty) = given_an_active_session().await;
 
     // a valid execution report is sent and processed normally
     let seq_number = counterparty.next_target_sequence_number();
     when(&mut counterparty)
         .sends_message(TestMessage::dummy_execution_report())
         .await;
-    then(&session)
+    then(&mut session)
         .target_sequence_number_reaches(seq_number)
         .await;
 
@@ -308,7 +308,7 @@ async fn test_message_with_missing_orig_sending_time_is_rejected() {
 /// `SendingTime` is a required field in all FIX messages.
 #[tokio::test]
 async fn test_message_with_missing_sending_time_is_rejected() {
-    let (session, mut counterparty) = given_an_active_session().await;
+    let (mut session, mut counterparty) = given_an_active_session().await;
 
     // a message with missing SendingTime is sent by the counterparty
     let seq_number = counterparty.next_target_sequence_number();
@@ -329,7 +329,7 @@ async fn test_message_with_missing_sending_time_is_rejected() {
         .await;
 
     // our target sequence number should be incremented
-    then(&session)
+    then(&mut session)
         .target_sequence_number_reaches(seq_number)
         .await;
 
@@ -342,7 +342,7 @@ async fn test_message_with_missing_sending_time_is_rejected() {
 /// Messages with `SendingTime` more than 120 seconds in the past should be rejected.
 #[tokio::test]
 async fn test_message_with_sending_time_too_old_is_rejected() {
-    let (session, mut counterparty) = given_an_active_session().await;
+    let (mut session, mut counterparty) = given_an_active_session().await;
 
     // a message with SendingTime 121 seconds in the past is sent by the counterparty
     let seq_number = counterparty.next_target_sequence_number();
@@ -363,7 +363,7 @@ async fn test_message_with_sending_time_too_old_is_rejected() {
         .await;
 
     // our target sequence number should be incremented
-    then(&session)
+    then(&mut session)
         .target_sequence_number_reaches(seq_number)
         .await;
 

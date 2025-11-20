@@ -9,7 +9,7 @@ use hotfix_message::fix44::MsgType;
 
 #[tokio::test]
 async fn test_message_sequence_number_too_high() {
-    let (session, mut counterparty) = given_an_active_session().await;
+    let (mut session, mut counterparty) = given_an_active_session().await;
 
     // the counterparty previously sent an execution report which we missed
     when(&mut counterparty)
@@ -22,7 +22,7 @@ async fn test_message_sequence_number_too_high() {
         .await;
 
     // we then ask them to resend the first message
-    then(&session)
+    then(&mut session)
         .status_changes_to(Status::AwaitingResend {
             begin: 2,
             end: 3,
@@ -36,7 +36,7 @@ async fn test_message_sequence_number_too_high() {
     // the first message is the logon message, which doesn't need to be resent
     when(&mut counterparty).resends_message(2).await; // the missed message is resent
     when(&mut counterparty).resends_message(3).await; // the second message is resent
-    then(&session).status_changes_to(Status::Active).await;
+    then(&mut session).status_changes_to(Status::Active).await;
 
     when(&session).requests_disconnect().await;
     then(&mut counterparty).gets_disconnected().await;
@@ -46,7 +46,7 @@ async fn test_message_sequence_number_too_high() {
 /// the session eventually terminates the connection after exceeding the maximum resend attempts threshold.
 #[tokio::test]
 async fn test_infinite_resend_requests_are_prevented() {
-    let (session, mut counterparty) = given_an_active_session().await;
+    let (mut session, mut counterparty) = given_an_active_session().await;
 
     // counterparty sends a message with invalid body length, which we skip as it's a garbled message
     let garbled_message_seq_num = counterparty.next_target_sequence_number();
@@ -65,7 +65,7 @@ async fn test_infinite_resend_requests_are_prevented() {
     then(&mut counterparty)
         .receives(|msg| assert_msg_type(msg, MsgType::ResendRequest))
         .await;
-    then(&session)
+    then(&mut session)
         .status_changes_to(Status::AwaitingResend {
             begin: garbled_message_seq_num,
             end: garbled_message_seq_num + 1,
@@ -81,7 +81,7 @@ async fn test_infinite_resend_requests_are_prevented() {
         when(&mut counterparty)
             .resends_message(garbled_message_seq_num + 1)
             .await;
-        then(&session)
+        then(&mut session)
             .status_changes_to(Status::AwaitingResend {
                 begin: garbled_message_seq_num,
                 end: garbled_message_seq_num + 1,

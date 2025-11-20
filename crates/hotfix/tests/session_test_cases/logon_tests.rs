@@ -15,19 +15,19 @@ use std::time::Duration;
 /// transitions to Active status, and disconnects cleanly.
 #[tokio::test]
 async fn test_happy_logon() {
-    let (session, mut mock_counterparty) = given_a_connected_session().await;
+    let (mut session, mut mock_counterparty) = given_a_connected_session().await;
 
     // assert that a logon message is received (type 'A')
     then(&mut mock_counterparty)
         .receives(|msg| assert_msg_type(msg, MsgType::Logon))
         .await;
-    then(&session)
+    then(&mut session)
         .status_changes_to(Status::AwaitingLogon)
         .await;
 
     // counterparty responds with a logon to establish a happy session
     when(&mut mock_counterparty).sends_logon().await;
-    then(&session).status_changes_to(Status::Active).await;
+    then(&mut session).status_changes_to(Status::Active).await;
 
     when(&session).requests_disconnect().await;
     then(&mut mock_counterparty).gets_disconnected().await;
@@ -38,13 +38,13 @@ async fn test_happy_logon() {
 /// where the first message after connection must be a logon response.
 #[tokio::test]
 async fn test_non_logon_response_to_logon() {
-    let (session, mut mock_counterparty) = given_a_connected_session().await;
+    let (mut session, mut mock_counterparty) = given_a_connected_session().await;
 
     // assert that a logon message is received (type 'A')
     then(&mut mock_counterparty)
         .receives(|msg| assert_msg_type(msg, MsgType::Logon))
         .await;
-    then(&session)
+    then(&mut session)
         .status_changes_to(Status::AwaitingLogon)
         .await;
 
@@ -69,13 +69,13 @@ async fn test_logon_response_with_sequence_number_too_low() {
     // a session is created with an expected sequence number of 5 for the counterparty
     let mut message_store = InMemoryMessageStore::default();
     message_store.set_target_seq_number(5).await.unwrap();
-    let (session, mut counterparty) = given_a_connected_session_with_store(message_store).await;
+    let (mut session, mut counterparty) = given_a_connected_session_with_store(message_store).await;
 
     // assert that a logon message is received (type 'A')
     then(&mut counterparty)
         .receives(|msg| assert_msg_type(msg, MsgType::Logon))
         .await;
-    then(&session)
+    then(&mut session)
         .status_changes_to(Status::AwaitingLogon)
         .await;
 
@@ -94,7 +94,7 @@ async fn test_logon_response_with_sequence_number_too_low() {
 /// before the logon sequence completes.
 #[tokio::test]
 async fn test_logon_response_with_sequence_number_too_high() {
-    let (session, mut counterparty) = given_a_connected_session().await;
+    let (mut session, mut counterparty) = given_a_connected_session().await;
 
     // the counterparty previously sent an execution report which we missed
     let dummy_report = TestMessage::dummy_execution_report();
@@ -106,14 +106,14 @@ async fn test_logon_response_with_sequence_number_too_high() {
     then(&mut counterparty)
         .receives(|msg| assert_msg_type(msg, MsgType::Logon))
         .await;
-    then(&session)
+    then(&mut session)
         .status_changes_to(Status::AwaitingLogon)
         .await;
 
     // the counterparty responds with a logon with a sequence number that indicates a message we missed
     when(&mut counterparty).sends_logon().await;
     // we then ask them to resend the message
-    then(&session)
+    then(&mut session)
         .status_changes_to(Status::AwaitingResend {
             begin: 1,
             end: 2,
@@ -127,7 +127,7 @@ async fn test_logon_response_with_sequence_number_too_high() {
     // the counterparty then completes the resend sequence and the session transitions to Active
     when(&mut counterparty).resends_message(1).await; // the missed message is resent
     when(&mut counterparty).sends_gap_fill(2, 3).await; // the logon is gap filled
-    then(&session).status_changes_to(Status::Active).await;
+    then(&mut session).status_changes_to(Status::Active).await;
 
     when(&session).requests_disconnect().await;
     then(&mut counterparty).gets_disconnected().await;
@@ -139,13 +139,13 @@ async fn test_logon_response_with_sequence_number_too_high() {
 /// This results in us disconnecting.
 #[tokio::test(start_paused = true)]
 async fn test_logon_timeout() {
-    let (session, mut counterparty) = given_a_connected_session().await;
+    let (mut session, mut counterparty) = given_a_connected_session().await;
 
     // assert that a logon message is received (type 'A')
     then(&mut counterparty)
         .receives(|msg| assert_msg_type(msg, MsgType::Logon))
         .await;
-    then(&session)
+    then(&mut session)
         .status_changes_to(Status::AwaitingLogon)
         .await;
 

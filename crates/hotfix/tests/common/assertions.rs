@@ -17,9 +17,18 @@ pub fn then<T>(target: T) -> Then<T> {
     Then { target }
 }
 
-impl Then<&SessionSpy> {
+impl Then<&mut SessionSpy> {
     fn session(&self) -> &SessionRef<TestMessage> {
         self.target.session_ref()
+    }
+
+    pub async fn receives<F>(self, assertion: F)
+    where
+        F: FnOnce(&TestMessage),
+    {
+        self.target
+            .assert_next_with_timeout(assertion, DEFAULT_TIMEOUT)
+            .await;
     }
 
     pub async fn target_sequence_number_reaches(self, expected_target_sequence_number: u64) {
