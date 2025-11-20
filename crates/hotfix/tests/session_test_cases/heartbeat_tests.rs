@@ -17,18 +17,18 @@ use std::time::Duration;
 /// as required by the FIX protocol to prevent timeout disconnections.
 #[tokio::test(start_paused = true)]
 async fn test_heartbeats() {
-    let (session, mut mock_counterparty) = given_an_active_session().await;
+    let (session, mut counterparty) = given_an_active_session().await;
 
     // let's wait enough time for a heartbeat and assert that the heartbeat was sent
     when(Duration::from_secs(HEARTBEAT_INTERVAL + 1))
         .elapses()
         .await;
-    then(&mut mock_counterparty)
+    then(&mut counterparty)
         .receives(|msg| assert_msg_type(msg, MsgType::Heartbeat))
         .await;
 
     when(&session).requests_disconnect().await;
-    then(&mut mock_counterparty).gets_disconnected().await;
+    then(&mut counterparty).gets_disconnected().await;
 }
 
 /// Tests the peer timeout and disconnection mechanism:
@@ -43,13 +43,13 @@ async fn test_heartbeats() {
 #[tokio::test(start_paused = true)]
 async fn test_peer_timeout() {
     let peer_interval = (1.2 * HEARTBEAT_INTERVAL as f64) as u64 + 1;
-    let (_session, mut mock_counterparty) = given_an_active_session().await;
+    let (_session, mut counterparty) = given_an_active_session().await;
 
     // let's wait enough time for a heartbeat and assert that the heartbeat was sent
     when(Duration::from_secs(HEARTBEAT_INTERVAL + 1))
         .elapses()
         .await;
-    then(&mut mock_counterparty)
+    then(&mut counterparty)
         .receives(|msg| assert_msg_type(msg, MsgType::Heartbeat))
         .await;
 
@@ -58,13 +58,13 @@ async fn test_peer_timeout() {
         .elapses()
         .await;
     // a TestRequest (type '1') is sent to the counterparty
-    then(&mut mock_counterparty)
+    then(&mut counterparty)
         .receives(|msg| assert_msg_type(msg, MsgType::TestRequest))
         .await;
 
     // we wait even longer and the counterparty never responds, so we disconnect from the counterparty
     when(Duration::from_secs(peer_interval)).elapses().await;
-    then(&mut mock_counterparty).gets_disconnected().await;
+    then(&mut counterparty).gets_disconnected().await;
 }
 
 /// Tests that we send a heartbeat in response to Test Requests.
@@ -72,13 +72,11 @@ async fn test_peer_timeout() {
 /// The `TestReqID` of the heartbeat (field 112) should match that of the request.
 #[tokio::test(start_paused = true)]
 async fn test_heartbeat_in_response_to_test_request() {
-    let (session, mut mock_counterparty) = given_an_active_session().await;
+    let (session, mut counterparty) = given_an_active_session().await;
 
     let test_request = TestRequest::new("abc-123".to_string());
-    when(&mut mock_counterparty)
-        .sends_message(test_request)
-        .await;
-    then(&mut mock_counterparty)
+    when(&mut counterparty).sends_message(test_request).await;
+    then(&mut counterparty)
         .receives(|msg| {
             assert_msg_type(msg, MsgType::Heartbeat);
             assert_eq!(msg.get::<&str>(TEST_REQ_ID).unwrap(), "abc-123");
@@ -86,5 +84,5 @@ async fn test_heartbeat_in_response_to_test_request() {
         .await;
 
     when(&session).requests_disconnect().await;
-    then(&mut mock_counterparty).gets_disconnected().await;
+    then(&mut counterparty).gets_disconnected().await;
 }

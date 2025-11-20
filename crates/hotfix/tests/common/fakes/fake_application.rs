@@ -2,18 +2,18 @@ use crate::common::test_messages::TestMessage;
 use hotfix::Application;
 use hotfix::application::{InboundDecision, OutboundDecision};
 
-pub struct MockApplication {
+pub struct FakeApplication {
     message_sender: tokio::sync::mpsc::UnboundedSender<TestMessage>,
 }
 
-impl MockApplication {
+impl FakeApplication {
     pub fn new(message_sender: tokio::sync::mpsc::UnboundedSender<TestMessage>) -> Self {
         Self { message_sender }
     }
 }
 
 #[async_trait::async_trait]
-impl Application<TestMessage> for MockApplication {
+impl Application<TestMessage> for FakeApplication {
     async fn on_outbound_message(&self, _msg: &TestMessage) -> OutboundDecision {
         OutboundDecision::Send
     }

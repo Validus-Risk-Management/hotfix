@@ -1,6 +1,6 @@
 use crate::common::actions::when;
 use crate::common::assertions::then;
-use crate::common::fakes::{MockApplication, MockCounterparty, SessionSpy};
+use crate::common::fakes::{FakeApplication, FakeCounterparty, SessionSpy};
 use crate::common::test_messages::TestMessage;
 use hotfix::config::SessionConfig;
 use hotfix::session::SessionRef;
@@ -15,27 +15,27 @@ pub const LOGON_TIMEOUT: u64 = 10;
 pub const COUNTERPARTY_COMP_ID: &str = "dummy-acceptor";
 pub const OUR_COMP_ID: &str = "dummy-initiator";
 
-pub async fn given_a_connected_session() -> (SessionSpy, MockCounterparty<TestMessage>) {
+pub async fn given_a_connected_session() -> (SessionSpy, FakeCounterparty<TestMessage>) {
     let message_store = InMemoryMessageStore::default();
     given_a_connected_session_with_store(message_store).await
 }
 
 pub async fn given_a_connected_session_with_store(
     message_store: InMemoryMessageStore,
-) -> (SessionSpy, MockCounterparty<TestMessage>) {
+) -> (SessionSpy, FakeCounterparty<TestMessage>) {
     let config = create_session_config();
     let counterparty_config = create_counterparty_session_config(config.clone());
 
     let (message_tx, message_rx) = tokio::sync::mpsc::unbounded_channel();
-    let session = SessionRef::new(config, MockApplication::new(message_tx), message_store);
+    let session = SessionRef::new(config, FakeApplication::new(message_tx), message_store);
 
     let fake_service = SessionSpy::new(session.clone(), message_rx);
-    let mock_counterparty = MockCounterparty::start(session.clone(), counterparty_config).await;
+    let mock_counterparty = FakeCounterparty::start(session.clone(), counterparty_config).await;
 
     (fake_service, mock_counterparty)
 }
 
-pub async fn given_an_active_session() -> (SessionSpy, MockCounterparty<TestMessage>) {
+pub async fn given_an_active_session() -> (SessionSpy, FakeCounterparty<TestMessage>) {
     let (fake_service, mut mock_counterparty) = given_a_connected_session().await;
 
     then(&mut mock_counterparty)

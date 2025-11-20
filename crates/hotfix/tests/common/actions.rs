@@ -1,4 +1,4 @@
-use crate::common::fakes::{MockCounterparty, SessionSpy};
+use crate::common::fakes::{FakeCounterparty, SessionSpy};
 use crate::common::test_messages::TestMessage;
 use hotfix::message::FixMessage;
 use hotfix::session::SessionRef;
@@ -28,7 +28,7 @@ impl When<&SessionSpy> {
     }
 }
 
-impl When<&mut MockCounterparty<TestMessage>> {
+impl When<&mut FakeCounterparty<TestMessage>> {
     pub async fn has_previously_sent(&mut self, message: impl FixMessage) {
         self.target.push_previously_sent_message(message).await;
     }

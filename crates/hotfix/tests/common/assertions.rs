@@ -1,4 +1,4 @@
-use crate::common::fakes::{MockCounterparty, SessionSpy};
+use crate::common::fakes::{FakeCounterparty, SessionSpy};
 use crate::common::test_messages::TestMessage;
 use hotfix::session::SessionRef;
 use hotfix::session::Status;
@@ -67,7 +67,7 @@ impl Then<&SessionSpy> {
     }
 }
 
-impl Then<&mut MockCounterparty<TestMessage>> {
+impl Then<&mut FakeCounterparty<TestMessage>> {
     pub async fn receives<F>(self, assertion: F)
     where
         F: FnOnce(&Message),

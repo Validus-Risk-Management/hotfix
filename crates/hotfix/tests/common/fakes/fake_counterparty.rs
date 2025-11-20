@@ -14,7 +14,7 @@ use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 
-pub struct MockCounterparty<M> {
+pub struct FakeCounterparty<M> {
     receiver: Receiver<WriterMessage>,
     received_messages: Vec<Message>,
     sent_messages: Vec<Vec<u8>>,
@@ -26,7 +26,7 @@ pub struct MockCounterparty<M> {
     _dc_sender: oneshot::Sender<()>,
 }
 
-impl<M> MockCounterparty<M>
+impl<M> FakeCounterparty<M>
 where
     M: FixMessage,
 {
