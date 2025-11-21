@@ -3,13 +3,13 @@ use hotfix_message::message::Message;
 use hotfix_message::{Part, fix44};
 
 #[derive(Clone, Copy)]
-pub(crate) struct ResendRequest {
+pub struct ResendRequest {
     begin_seq_no: u64,
     end_seq_no: u64,
 }
 
 impl ResendRequest {
-    pub(crate) fn new(begin: u64, end: u64) -> Self {
+    pub fn new(begin: u64, end: u64) -> Self {
         Self {
             begin_seq_no: begin,
             end_seq_no: end,

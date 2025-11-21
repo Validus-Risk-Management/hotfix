@@ -16,6 +16,7 @@ pub mod test_request;
 pub mod verification;
 
 pub use parser::RawFixMessage;
+pub use resend_request::ResendRequest;
 
 pub trait FixMessage: Clone + Send + 'static {
     fn write(&self, msg: &mut Message);

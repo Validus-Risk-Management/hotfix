@@ -1,13 +1,14 @@
 use crate::common::actions::when;
 use crate::common::assertions::{assert_msg_type, then};
-use crate::common::setup::given_an_active_session;
+use crate::common::setup::{HEARTBEAT_INTERVAL, given_an_active_session};
 use crate::common::test_messages::{
     TestMessage, build_execution_report_with_incorrect_body_length, build_invalid_resend_request,
 };
-use hotfix::message::FixMessage;
+use hotfix::message::{FixMessage, ResendRequest};
 use hotfix::session::Status;
-use hotfix_message::FieldType;
-use hotfix_message::fix44::MsgType;
+use hotfix_message::fix44::{GAP_FILL_FLAG, MsgType, NEW_SEQ_NO};
+use hotfix_message::{FieldType, Part};
+use std::time::Duration;
 
 #[tokio::test]
 async fn test_message_sequence_number_too_high() {
@@ -167,4 +168,56 @@ async fn test_invalid_resend_request_gets_rejected() {
         when(&session).requests_disconnect().await;
         then(&mut counterparty).gets_disconnected().await;
     }
+}
+
+/// Tests that when a counterparty requests a resend of both admin and business messages,
+/// the session gap fills admin messages and resends business messages as expected.
+#[tokio::test(start_paused = true)]
+async fn test_resend_request_with_gap_fill_for_admin_messages() {
+    let (session, mut counterparty) = given_an_active_session().await;
+
+    // wait for a heartbeat to be sent automatically (this will be message sequence number 2)
+    when(Duration::from_secs(HEARTBEAT_INTERVAL + 1))
+        .elapses()
+        .await;
+    then(&mut counterparty)
+        .receives(|msg| assert_msg_type(msg, MsgType::Heartbeat))
+        .await;
+
+    // send an execution report from the session (this will be message sequence number 3)
+    when(&session)
+        .sends_message(TestMessage::dummy_execution_report())
+        .await;
+    then(&mut counterparty)
+        .receives(|msg| assert_msg_type(msg, MsgType::ExecutionReport))
+        .await;
+
+    // counterparty requests a resend of messages 2 and 3
+    let resend_request = ResendRequest::new(2, 3);
+    when(&mut counterparty).sends_message(resend_request).await;
+
+    // the session should send a SequenceReset-GapFill for the heartbeat (message 2)
+    then(&mut counterparty)
+        .receives(|msg| {
+            assert_msg_type(msg, MsgType::SequenceReset);
+            assert_eq!(msg.get::<&str>(GAP_FILL_FLAG).unwrap(), "Y");
+            // the gap fill's MsgSeqNum indicates the beginning of the gap
+            assert_eq!(
+                msg.header()
+                    .get::<u64>(hotfix_message::fix44::MSG_SEQ_NUM)
+                    .unwrap(),
+                2
+            );
+            // NewSeqNo indicates the next sequence number after the gap
+            assert_eq!(msg.get::<u64>(NEW_SEQ_NO).unwrap(), 3);
+        })
+        .await;
+
+    // the session should resend the execution report (message 3)
+    then(&mut counterparty)
+        .receives(|msg| assert_msg_type(msg, MsgType::ExecutionReport))
+        .await;
+
+    when(&session).requests_disconnect().await;
+    then(&mut counterparty).gets_disconnected().await;
 }
