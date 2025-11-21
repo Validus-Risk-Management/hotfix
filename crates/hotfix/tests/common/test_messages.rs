@@ -375,14 +375,23 @@ pub fn replace_field_value(raw_message: &mut Vec<u8>, tag: u32, new_value: &[u8]
 }
 
 /// Builds a resend request message without the required BeginSeqNo field.
-pub fn build_resend_request_without_begin_seq_no(msg_seq_num: u64) -> Vec<u8> {
+pub fn build_invalid_resend_request(
+    msg_seq_num: u64,
+    begin_seq_no: Option<u64>,
+    end_seq_no: Option<u64>,
+) -> Vec<u8> {
     let mut msg = Message::new("FIX.4.4", "2"); // MsgType 2 = ResendRequest
     msg.set(fix44::SENDER_COMP_ID, COUNTERPARTY_COMP_ID);
     msg.set(fix44::TARGET_COMP_ID, OUR_COMP_ID);
     msg.set(fix44::MSG_SEQ_NUM, msg_seq_num);
     msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
-    // Intentionally omit BeginSeqNo (tag 7)
-    msg.set(fix44::END_SEQ_NO, 2);
+
+    if let Some(begin_seq_no) = begin_seq_no {
+        msg.set(fix44::BEGIN_SEQ_NO, begin_seq_no);
+    }
+    if let Some(end_seq_no) = end_seq_no {
+        msg.set(fix44::END_SEQ_NO, end_seq_no);
+    }
 
     msg.encode(&Config::default()).unwrap()
 }

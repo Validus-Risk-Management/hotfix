@@ -2,8 +2,7 @@ use crate::common::actions::when;
 use crate::common::assertions::{assert_msg_type, then};
 use crate::common::setup::given_an_active_session;
 use crate::common::test_messages::{
-    TestMessage, build_execution_report_with_incorrect_body_length,
-    build_resend_request_without_begin_seq_no,
+    TestMessage, build_execution_report_with_incorrect_body_length, build_invalid_resend_request,
 };
 use hotfix::message::FixMessage;
 use hotfix::session::Status;
@@ -144,24 +143,28 @@ async fn test_resent_message_previously_received_is_ignored() {
     then(&mut counterparty).gets_disconnected().await;
 }
 
-/// Tests that when a counterparty sends a resend request without the required BeginSeqNo field,
-/// the session rejects the malformed message.
+/// Tests that when a counterparty sends a resend request without the required field,
+/// the session rejects the invalid message.
 #[tokio::test]
-async fn test_resend_request_without_begin_seq_no_is_rejected() {
-    let (session, mut counterparty) = given_an_active_session().await;
+async fn test_invalid_resend_request_gets_rejected() {
+    // We run the test twice - once with an invalid BeginSeqNo and once with an invalid EndSeqNo.
+    for (begin_seq_no, end_seq_no) in [(None, Some(2)), (Some(1), None)] {
+        let (session, mut counterparty) = given_an_active_session().await;
 
-    // build a resend request message missing the required BeginSeqNo (tag 7)
-    let seq_num = counterparty.next_target_sequence_number();
-    let invalid_resend_request = build_resend_request_without_begin_seq_no(seq_num);
-    when(&mut counterparty)
-        .sends_raw_message(invalid_resend_request)
-        .await;
+        // build a resend request message missing the required BeginSeqNo (tag 7)
+        let seq_num = counterparty.next_target_sequence_number();
+        let invalid_resend_request =
+            build_invalid_resend_request(seq_num, begin_seq_no, end_seq_no);
+        when(&mut counterparty)
+            .sends_raw_message(invalid_resend_request)
+            .await;
 
-    // the session should reject this invalid resend request
-    then(&mut counterparty)
-        .receives(|msg| assert_msg_type(msg, MsgType::Reject))
-        .await;
+        // the session should reject this invalid resend request
+        then(&mut counterparty)
+            .receives(|msg| assert_msg_type(msg, MsgType::Reject))
+            .await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+        when(&session).requests_disconnect().await;
+        then(&mut counterparty).gets_disconnected().await;
+    }
 }
