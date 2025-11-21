@@ -370,6 +370,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
             Err(_) => {
                 let reject = Reject::new(
                     message
+                        .header()
                         .get(fix44::MSG_SEQ_NUM)
                         .map_err(|_| anyhow!("failed to get seq number"))?,
                 )
@@ -392,6 +393,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
             Err(_) => {
                 let reject = Reject::new(
                     message
+                        .header()
                         .get(fix44::MSG_SEQ_NUM)
                         .map_err(|_| anyhow!("failed to get seq number"))?,
                 )
