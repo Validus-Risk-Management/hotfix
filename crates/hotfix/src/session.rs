@@ -3,6 +3,14 @@ mod info;
 mod session_ref;
 mod state;
 
+use crate::config::SessionConfig;
+use crate::message::FixMessage;
+use crate::message::generate_message;
+use crate::message::heartbeat::Heartbeat;
+use crate::message::logon::{Logon, ResetSeqNumConfig};
+use crate::message::parser::RawFixMessage;
+use crate::store::MessageStore;
+use crate::transport::writer::WriterRef;
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 use hotfix_message::dict::Dictionary;
@@ -12,16 +20,7 @@ use std::pin::Pin;
 use tokio::select;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, Instant, Sleep, sleep, sleep_until};
-use tracing::{debug, error, info, warn};
-
-use crate::config::SessionConfig;
-use crate::message::FixMessage;
-use crate::message::generate_message;
-use crate::message::heartbeat::Heartbeat;
-use crate::message::logon::{Logon, ResetSeqNumConfig};
-use crate::message::parser::RawFixMessage;
-use crate::store::MessageStore;
-use crate::transport::writer::WriterRef;
+use tracing::{debug, enabled, error, info, warn};
 
 use crate::error::{CompIdType, MessageVerificationError};
 use crate::message::logout::Logout;
@@ -584,18 +583,16 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     }
 
     async fn resend_messages(&mut self, begin: usize, end: usize, _message: &Message) {
-        debug!(begin, end, "resending messages as requested");
+        info!(begin, end, "resending messages as requested");
         let messages = self.store.get_slice(begin, end).await.unwrap();
 
         let no = messages.len();
-        debug!(no, "number of messages");
+        debug!(number_of_messages = no, "number of messages");
 
         let mut reset_start: Option<u64> = None;
         let mut sequence_number = 0;
 
         for msg in messages {
-            let m = String::from_utf8(msg.clone()).unwrap();
-            debug!(m, "resending message");
             let mut message = self
                 .message_builder
                 .build(msg.as_slice())
@@ -609,7 +606,6 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
                 .to_string();
 
             if is_admin(message_type.as_str()) {
-                debug!("skipping message as it's an admin message");
                 if reset_start.is_none() {
                     reset_start = Some(sequence_number);
                 }
@@ -618,6 +614,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
 
             if let Some(begin) = reset_start {
                 let end = sequence_number;
+                Self::log_skipped_admin_messages(begin, end);
                 self.send_sequence_reset(begin, end).await;
                 reset_start = None;
             }
@@ -633,14 +630,26 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
                 message.encode(&self.message_config).unwrap(),
             )
             .await;
-            debug!(sequence_number, "resent message");
+
+            if enabled!(tracing::Level::DEBUG) {
+                let m = String::from_utf8(msg.clone()).unwrap();
+                debug!(sequence_number, message = m, "resent message");
+            }
         }
 
         if let Some(begin) = reset_start {
             // the final reset if needed
             let end = sequence_number;
+            Self::log_skipped_admin_messages(begin, end);
             self.send_sequence_reset(begin, end).await;
         }
+    }
+
+    fn log_skipped_admin_messages(begin: u64, end: u64) {
+        info!(
+            begin,
+            end, "skipped admin message(s) during resend, requesting reset for these"
+        );
     }
 
     fn reset_heartbeat_timer(&mut self) {
