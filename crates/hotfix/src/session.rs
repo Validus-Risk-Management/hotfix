@@ -361,6 +361,10 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     }
 
     async fn on_resend_request(&mut self, message: &Message) -> Result<()> {
+        if !self.state.is_connected() {
+            warn!("received resend request while disconnected, ignoring");
+        }
+
         let begin_seq_number: u64 = match message.get(fix44::BEGIN_SEQ_NO) {
             Ok(seq_number) => seq_number,
             Err(_) => {
