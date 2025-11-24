@@ -370,3 +370,43 @@ async fn test_message_with_sending_time_too_old_is_rejected() {
     when(&session).requests_disconnect().await;
     then(&mut counterparty).gets_disconnected().await;
 }
+
+/// Tests that a message with PossDupFlag=Y but missing OrigSendingTime is rejected.
+///
+/// When PossDupFlag is set to Y, OrigSendingTime (tag 122) is required.
+/// The session should reject with SessionRejectReason = 1 (RequiredTagMissing).
+#[tokio::test]
+async fn test_scenario_2g_possdup_without_orig_sending_time() {
+    let (mut session, mut counterparty) = given_an_active_session().await;
+
+    // a valid execution report is sent and processed normally
+    let seq_number = counterparty.next_target_sequence_number();
+    when(&mut counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
+        .await;
+    then(&mut session)
+        .target_sequence_number_reaches(seq_number)
+        .await;
+
+    // the message is resent with PossDupFlag=Y but without OrigSendingTime
+    when(&mut counterparty)
+        .sends_raw_message(build_execution_report_with_missing_orig_sending_time(
+            seq_number,
+        ))
+        .await;
+
+    // then we send a reject with SessionRejectReason = 1 (RequiredTagMissing)
+    then(&mut counterparty)
+        .receives(|msg| {
+            assert_msg_type(msg, MsgType::Reject);
+            assert_eq!(
+                msg.get::<SessionRejectReason>(SESSION_REJECT_REASON)
+                    .unwrap(),
+                SessionRejectReason::RequiredTagMissing
+            );
+        })
+        .await;
+
+    when(&session).requests_disconnect().await;
+    then(&mut counterparty).gets_disconnected().await;
+}
