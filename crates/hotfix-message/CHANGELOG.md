@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-message-v0.2.5...hotfix-message-v0.2.6) - 2025-11-24
+
+### Other
+
+- add test case for processing correct duplicate message ([#235](https://github.com/Validus-Risk-Management/hotfix/pull/235))
+
 ## [0.2.5](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-message-v0.2.4...hotfix-message-v0.2.5) - 2025-11-12
 
 ### Added

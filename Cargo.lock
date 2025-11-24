@@ -1292,7 +1292,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix"
-version = "0.2.8"
+version = "0.2.9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1351,7 +1351,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-message"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1367,7 +1367,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-status"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "askama",
  "async-trait",

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.9](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.2.8...hotfix-v0.2.9) - 2025-11-24
+
+### Added
+
+- better handling of resend requests ([#237](https://github.com/Validus-Risk-Management/hotfix/pull/237))
+
+### Other
+
+- add session-level test case for OrigSendingTime missing in dup message ([#238](https://github.com/Validus-Risk-Management/hotfix/pull/238))
+- add test case for processing correct duplicate message ([#235](https://github.com/Validus-Risk-Management/hotfix/pull/235))
+
 ## [0.2.8](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.2.7...hotfix-v0.2.8) - 2025-11-19
 
 ### Added
