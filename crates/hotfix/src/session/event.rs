@@ -1,15 +1,12 @@
 use tokio::sync::oneshot;
 
 use crate::message::parser::RawFixMessage;
-use crate::session::info::SessionInfo;
 use crate::transport::writer::WriterRef;
 
 #[derive(Debug)]
-pub enum SessionEvent<M> {
+pub enum SessionEvent {
     /// Tell the session we have received a new FIX message from the reader.
     FixMessageReceived(RawFixMessage),
-    /// Ask the session to send a message from the application.
-    SendMessage(M),
     /// Let the session know we've been disconnected.
     Disconnected(String),
     /// Register a new writer connected to the other side.
@@ -18,10 +15,6 @@ pub enum SessionEvent<M> {
     ShouldReconnect(oneshot::Sender<bool>),
     /// Ask the session to notify us when the session is active.
     AwaitingActiveSession(oneshot::Sender<AwaitingActiveSessionResponse>),
-    /// Ask the session for a report on its state
-    SessionInfoRequested(oneshot::Sender<SessionInfo>),
-    /// Ask the session to shut down.
-    ShutdownRequested,
 }
 
 /// The response sent by the session to AwaitingActiveSession messages.
