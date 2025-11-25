@@ -8,5 +8,9 @@ pub enum AdminRequest {
     /// Ask the session for a report on its state
     RequestSessionInfo(oneshot::Sender<SessionInfo>),
     /// Set the session to reset sequence numbers on the next logon as a one-off.
+    ///
+    /// This is an override for the configuration's persistent setting for `ResetOnLogon`,
+    /// which can be used to re-synchronise our state with the counterparty in
+    /// unfortunate scenarios where such drastic recover is required.
     ResetSequenceNumbersOnNextLogon,
 }

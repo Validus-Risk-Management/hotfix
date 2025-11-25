@@ -52,6 +52,22 @@ where
         }
     }
 
+    pub async fn reconnect(&mut self, reset_store: bool) {
+        let (writer_ref, receiver) = Self::create_writer();
+        let (reader_ref, dc_sender) = Self::create_reader();
+        let connection = FixConnection::new(writer_ref, reader_ref);
+
+        self.receiver = receiver;
+        self._dc_sender = dc_sender;
+        self.session_ref
+            .register_writer(connection.get_writer())
+            .await;
+
+        if reset_store {
+            self.sent_messages.clear();
+        }
+    }
+
     pub async fn push_previously_sent_message(&mut self, message: impl FixMessage) {
         let raw_message = generate_message(
             &self.session_config.begin_string,

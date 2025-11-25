@@ -12,6 +12,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [features]
+default = ["test-utils"]
 redb = ["dep:redb"]
 mongodb = ["dep:mongodb"]
 test-utils = []

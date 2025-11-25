@@ -13,10 +13,7 @@ pub fn when<T>(target: T) -> When<T> {
 
 impl When<&SessionSpy> {
     pub async fn requests_disconnect(self) {
-        self.target
-            .session_ref()
-            .disconnect("Test Session Finished".to_string())
-            .await;
+        self.target.session_handle().shutdown(false).await;
     }
 
     pub async fn sends_message(self, message: TestMessage) {
@@ -55,6 +52,10 @@ impl When<&mut FakeCounterparty<TestMessage>> {
 
     pub async fn sends_logon(&mut self) {
         self.target.send_logon().await;
+    }
+
+    pub async fn gets_reconnected(&mut self, reset_store: bool) {
+        self.target.reconnect(reset_store).await;
     }
 }
 
