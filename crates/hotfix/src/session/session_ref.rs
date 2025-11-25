@@ -11,7 +11,7 @@ use tracing::debug;
 
 #[derive(Clone)]
 pub struct InternalSessionRef<M> {
-    event_sender: mpsc::Sender<SessionEvent>,
+    pub(crate) event_sender: mpsc::Sender<SessionEvent>,
     pub(crate) outbound_message_sender: mpsc::Sender<M>,
     pub(crate) admin_request_sender: mpsc::Sender<AdminRequest>,
 }

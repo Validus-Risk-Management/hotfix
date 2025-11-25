@@ -1,5 +1,5 @@
-mod admin_request;
-mod event;
+pub(crate) mod admin_request;
+pub(crate) mod event;
 mod info;
 mod session_handle;
 pub mod session_ref;
