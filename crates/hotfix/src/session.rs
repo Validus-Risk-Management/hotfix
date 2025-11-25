@@ -819,10 +819,10 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
 
     async fn handle_admin_request(&mut self, request: AdminRequest) {
         match request {
-            AdminRequest::InitiateGracefulShutdown => {
+            AdminRequest::InitiateGracefulShutdown { reconnect } => {
                 // TODO: revisit logout & shutdown flows once logout timeouts are implemented
                 self.logout_and_terminate("shutdown requested").await;
-                self.state = SessionState::new_disconnected(false, "shutdown requested");
+                self.state = SessionState::new_disconnected(reconnect, "shutdown requested");
             }
             AdminRequest::RequestSessionInfo(responder) => {
                 if responder.send(self.get_session_info()).is_err() {

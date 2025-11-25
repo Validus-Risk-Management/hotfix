@@ -25,9 +25,9 @@ impl<M> SessionHandle<M> {
             .expect("message to send successfully");
     }
 
-    pub async fn shutdown(&self) {
+    pub async fn shutdown(&self, reconnect: bool) {
         self.admin_request_sender
-            .send(AdminRequest::InitiateGracefulShutdown)
+            .send(AdminRequest::InitiateGracefulShutdown { reconnect })
             .await
             .unwrap();
     }

@@ -82,7 +82,7 @@ async fn run_load_test(message_count: u32, database: Database) {
     info!("completed run in {duration:?} seconds");
 
     initiator
-        .shutdown()
+        .shutdown(false)
         .await
         .expect("graceful shutdown to succeed");
 }

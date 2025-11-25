@@ -74,7 +74,7 @@ async fn main() {
     user_loop(&initiator).await;
     status_service_token.cancel();
     initiator
-        .shutdown()
+        .shutdown(false)
         .await
         .expect("graceful shutdown to succeed");
 }
