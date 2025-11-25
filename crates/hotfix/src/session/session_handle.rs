@@ -3,6 +3,12 @@ use crate::session::{InternalSessionRef, SessionInfo};
 use anyhow::anyhow;
 use tokio::sync::{mpsc, oneshot};
 
+/// A public handle to the session that can be used to interact with the session.
+///
+/// This wraps a subset of the channels of [`InternalSessionRef`].
+/// Whilst [`InternalSessionRef`] is intended for internal use within the engine,
+/// such as inbound message processing and disconnects, [`SessionHandle`] is public
+/// and only exposes APIs intended for consumers of the engine.
 #[derive(Clone, Debug)]
 pub struct SessionHandle<M> {
     outbound_message_sender: mpsc::Sender<M>,
