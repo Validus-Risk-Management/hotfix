@@ -61,6 +61,7 @@ struct Session<A, M, S> {
     application: A,
     store: S,
     schedule_check_timer: Pin<Box<Sleep>>,
+    reset_on_next_logon: bool,
     _phantom: std::marker::PhantomData<fn() -> M>,
 }
 
@@ -83,6 +84,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
             application,
             store,
             schedule_check_timer: Box::pin(schedule_check_timer),
+            reset_on_next_logon: false,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -753,12 +755,14 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     }
 
     async fn send_logon(&mut self) {
-        let reset_config = if self.config.reset_on_logon {
+        let reset_config = if self.config.reset_on_logon || self.reset_on_next_logon {
             self.store.reset().await.unwrap();
             ResetSeqNumConfig::Reset
         } else {
             ResetSeqNumConfig::NoReset(Some(self.store.next_target_seq_number()))
         };
+        self.reset_on_next_logon = false;
+
         let logon = Logon::new(self.config.heartbeat_interval, reset_config);
 
         self.send_message(logon).await;
@@ -815,7 +819,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
 
     async fn handle_admin_request(&mut self, request: AdminRequest) {
         match request {
-            AdminRequest::RequestGracefulShutdown => {
+            AdminRequest::InitiateGracefulShutdown => {
                 // TODO: revisit logout & shutdown flows once logout timeouts are implemented
                 self.logout_and_terminate("shutdown requested").await;
                 self.state = SessionState::new_disconnected(false, "shutdown requested");
@@ -824,6 +828,9 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
                 if responder.send(self.get_session_info()).is_err() {
                     error!("failed to respond to session info request");
                 }
+            }
+            AdminRequest::ResetSequenceNumbersOnNextLogon => {
+                self.reset_on_next_logon = true;
             }
         }
     }

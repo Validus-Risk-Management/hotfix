@@ -27,7 +27,7 @@ impl<M> SessionHandle<M> {
 
     pub async fn shutdown(&self) {
         self.admin_request_sender
-            .send(AdminRequest::RequestGracefulShutdown)
+            .send(AdminRequest::InitiateGracefulShutdown)
             .await
             .unwrap();
     }
