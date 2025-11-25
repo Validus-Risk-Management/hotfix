@@ -122,7 +122,7 @@ async fn send_message(session: &Initiator<Message>) {
     };
     let msg = Message::NewOrderSingle(order);
 
-    session.send_message(msg).await;
+    session.send_message(msg).await.unwrap();
 }
 
 async fn start_session(

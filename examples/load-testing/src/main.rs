@@ -134,7 +134,10 @@ async fn submit_message(session_handle: &SessionHandle<Message>) {
     };
     let msg = Message::NewOrderSingle(order);
 
-    session_handle.send_message(msg).await
+    session_handle
+        .send_message(msg)
+        .await
+        .expect("session to accept message");
 }
 
 async fn listen_for_reports(mut rx: UnboundedReceiver<ExecutionReport>, message_count: u32) {

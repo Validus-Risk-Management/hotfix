@@ -20,7 +20,11 @@ impl When<&SessionSpy> {
     }
 
     pub async fn sends_message(self, message: TestMessage) {
-        self.target.session_handle().send_message(message).await;
+        self.target
+            .session_handle()
+            .send_message(message)
+            .await
+            .expect("message to be sent successfully");
     }
 }
 

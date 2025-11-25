@@ -1,5 +1,6 @@
 use crate::AppState;
 use crate::data_provider::DataProvider;
+use crate::error::AppResult;
 use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
@@ -30,8 +31,8 @@ struct SessionInfoResponse {
 
 async fn get_session_info<P: DataProvider>(
     State(state): State<AppState<P>>,
-) -> Json<SessionInfoResponse> {
-    let session_info = state.data_provider.get_session_info().await;
+) -> AppResult<Json<SessionInfoResponse>> {
+    let session_info = state.data_provider.get_session_info().await?;
 
-    Json(SessionInfoResponse { session_info })
+    Ok(Json(SessionInfoResponse { session_info }))
 }

@@ -3,6 +3,8 @@ use axum::response::{IntoResponse, Response};
 
 #[derive(Debug, displaydoc::Display, thiserror::Error)]
 pub enum AppError {
+    /// General anyhow errors
+    Anyhow(#[from] anyhow::Error),
     #[cfg(feature = "ui")]
     /// could not render the template
     Render(#[from] askama::Error),

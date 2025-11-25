@@ -1,5 +1,6 @@
 use crate::session::admin_request::AdminRequest;
 use crate::session::{InternalSessionRef, SessionInfo};
+use anyhow::anyhow;
 use tokio::sync::{mpsc, oneshot};
 
 #[derive(Clone, Debug)]
@@ -9,20 +10,21 @@ pub struct SessionHandle<M> {
 }
 
 impl<M> SessionHandle<M> {
-    pub async fn get_session_info(&self) -> SessionInfo {
+    pub async fn get_session_info(&self) -> anyhow::Result<SessionInfo> {
         let (sender, receiver) = oneshot::channel::<SessionInfo>();
         self.admin_request_sender
             .send(AdminRequest::RequestSessionInfo(sender))
-            .await
-            .unwrap();
-        receiver.await.expect("to receive a response")
+            .await?;
+        Ok(receiver.await?)
     }
 
-    pub async fn send_message(&self, msg: M) {
+    pub async fn send_message(&self, msg: M) -> anyhow::Result<()> {
         self.outbound_message_sender
             .send(msg)
             .await
-            .expect("message to send successfully");
+            .map_err(|_| anyhow!("failed to send message"))?;
+
+        Ok(())
     }
 
     pub async fn shutdown(&self, reconnect: bool) {
@@ -30,6 +32,14 @@ impl<M> SessionHandle<M> {
             .send(AdminRequest::InitiateGracefulShutdown { reconnect })
             .await
             .unwrap();
+    }
+
+    pub async fn request_reset_on_next_logon(&self) -> anyhow::Result<()> {
+        self.admin_request_sender
+            .send(AdminRequest::ResetSequenceNumbersOnNextLogon)
+            .await?;
+
+        Ok(())
     }
 }
 

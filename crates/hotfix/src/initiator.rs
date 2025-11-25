@@ -48,8 +48,10 @@ impl<M: FixMessage> Initiator<M> {
         }
     }
 
-    pub async fn send_message(&self, msg: M) {
-        self.session_handle.send_message(msg).await;
+    pub async fn send_message(&self, msg: M) -> anyhow::Result<()> {
+        self.session_handle.send_message(msg).await?;
+
+        Ok(())
     }
 
     pub fn is_interested(&self, sender_comp_id: &str, target_comp_id: &str) -> bool {

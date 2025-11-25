@@ -19,7 +19,7 @@ struct DashboardTemplate<'a> {
 pub(crate) async fn dashboard_handler<P: DataProvider>(
     State(state): State<AppState<P>>,
 ) -> AppResult<impl IntoResponse> {
-    let session_info = state.data_provider.get_session_info().await;
+    let session_info = state.data_provider.get_session_info().await?;
     let timestamp_string = Utc::now().to_rfc3339();
 
     let template = DashboardTemplate {

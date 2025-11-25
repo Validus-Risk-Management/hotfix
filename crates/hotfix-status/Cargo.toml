@@ -20,6 +20,7 @@ ui = ["askama", "mime_guess", "rust-embed"]
 [dependencies]
 hotfix = { version = "0.2.9", path = "../hotfix" }
 
+anyhow = { workspace = true }
 askama = { workspace = true, features = ["serde_json"], optional = true }
 async-trait = { workspace = true }
 axum = { workspace = true }

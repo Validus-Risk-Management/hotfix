@@ -55,8 +55,8 @@ mod tests {
 
     #[async_trait::async_trait]
     impl DataProvider for FakeDataProvider {
-        async fn get_session_info(&self) -> SessionInfo {
-            self.session_info.clone()
+        async fn get_session_info(&self) -> anyhow::Result<SessionInfo> {
+            Ok(self.session_info.clone())
         }
     }
 
