@@ -147,7 +147,7 @@ mod tests {
         }
     }
 
-    /// Tests that the reader correctly splits the bytes into messages.
+    /// Test that the reader correctly splits the bytes into messages.
     #[tokio::test]
     async fn test_multiple_messages_in_single_read() {
         let (mut writer, reader) = duplex(1024);
@@ -182,7 +182,7 @@ mod tests {
         }
     }
 
-    /// Tests that the reader correctly handles messages that are split across multiple reads.
+    /// Test that the reader correctly handles messages that are split across multiple reads.
     #[tokio::test]
     async fn test_partial_message_handling() {
         let (mut writer, reader) = duplex(1024);
@@ -228,6 +228,7 @@ mod tests {
         }
     }
 
+    /// Test that EOF triggers a disconnect event.
     #[tokio::test]
     async fn test_eof_triggers_disconnect() {
         let (writer, reader) = duplex(1024);
