@@ -9,7 +9,7 @@ use hotfix::field_types::{Date, Timestamp};
 use hotfix::initiator::Initiator;
 use hotfix::message::fix44;
 use hotfix::message::fix44::OrdType;
-use hotfix::session::SessionRef;
+use hotfix::session::SessionHandle;
 use std::time::Instant;
 use tokio::runtime::Builder;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
@@ -71,7 +71,7 @@ async fn run_load_test(message_count: u32, database: Database) {
     }
 
     let start = Instant::now();
-    let messages_handler = tokio::spawn(submit_messages(initiator.session_ref(), message_count));
+    let messages_handler = tokio::spawn(submit_messages(initiator.session_handle(), message_count));
     let report_handler = tokio::spawn(listen_for_reports(rx, message_count));
 
     messages_handler.await.unwrap();
@@ -110,13 +110,13 @@ async fn start_session(
     }
 }
 
-async fn submit_messages(session_ref: SessionRef<Message>, message_count: u32) {
+async fn submit_messages(session_handle: SessionHandle<Message>, message_count: u32) {
     for _ in 0..message_count {
-        submit_message(&session_ref).await;
+        submit_message(&session_handle).await;
     }
 }
 
-async fn submit_message(session_ref: &SessionRef<Message>) {
+async fn submit_message(session_handle: &SessionHandle<Message>) {
     let mut order_id = format!("{}", uuid::Uuid::new_v4());
     order_id.truncate(12);
     let order = NewOrderSingle {
@@ -134,7 +134,7 @@ async fn submit_message(session_ref: &SessionRef<Message>) {
     };
     let msg = Message::NewOrderSingle(order);
 
-    session_ref.send_message(msg).await
+    session_handle.send_message(msg).await
 }
 
 async fn listen_for_reports(mut rx: UnboundedReceiver<ExecutionReport>, message_count: u32) {

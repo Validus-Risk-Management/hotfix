@@ -1,6 +1,6 @@
 use crate::common::fakes::{FakeCounterparty, SessionSpy};
 use crate::common::test_messages::TestMessage;
-use hotfix::session::SessionRef;
+use hotfix::session::SessionHandle;
 use hotfix::session::Status;
 use hotfix_message::fix44::{MSG_TYPE, MsgType};
 use hotfix_message::message::Message;
@@ -18,8 +18,8 @@ pub fn then<T>(target: T) -> Then<T> {
 }
 
 impl Then<&mut SessionSpy> {
-    fn session(&self) -> &SessionRef<TestMessage> {
-        self.target.session_ref()
+    fn session_handle(&self) -> &SessionHandle<TestMessage> {
+        self.target.session_handle()
     }
 
     pub async fn receives<F>(self, assertion: F)
@@ -36,13 +36,13 @@ impl Then<&mut SessionSpy> {
         let deadline = tokio::time::Instant::now() + timeout;
         let retry_interval = Duration::from_millis(1);
 
-        let mut session_info = self.session().get_session_info().await;
+        let mut session_info = self.session_handle().get_session_info().await;
         while tokio::time::Instant::now() < deadline {
             if session_info.next_target_seq_number - 1 == expected_target_sequence_number {
                 return;
             }
             tokio::time::sleep(retry_interval).await;
-            session_info = self.session().get_session_info().await;
+            session_info = self.session_handle().get_session_info().await;
         }
 
         let actual_target_seq_number = session_info.next_target_seq_number - 1;
@@ -60,13 +60,13 @@ impl Then<&mut SessionSpy> {
         let deadline = tokio::time::Instant::now() + timeout;
         let retry_interval = Duration::from_millis(1);
 
-        let mut session_info = self.session().get_session_info().await;
+        let mut session_info = self.session_handle().get_session_info().await;
         while tokio::time::Instant::now() < deadline {
             if session_info.status == expected_status {
                 return;
             }
             tokio::time::sleep(retry_interval).await;
-            session_info = self.session().get_session_info().await;
+            session_info = self.session_handle().get_session_info().await;
         }
 
         let actual_status = session_info.status;

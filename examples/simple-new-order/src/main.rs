@@ -8,7 +8,7 @@ use hotfix::config::Config;
 use hotfix::field_types::{Date, Timestamp};
 use hotfix::initiator::Initiator;
 use hotfix::message::fix44;
-use hotfix::session::SessionRef;
+use hotfix::session::SessionHandle;
 use hotfix::store::mongodb::Client;
 use hotfix_status::build_router;
 use std::path::Path;
@@ -67,7 +67,7 @@ async fn main() {
 
     let status_service_token = CancellationToken::new();
     tokio::spawn(start_status_service(
-        initiator.session_ref(),
+        initiator.session_handle(),
         status_service_token.child_token(),
     ));
 
@@ -154,10 +154,10 @@ async fn start_session(
 }
 
 async fn start_status_service(
-    session_ref: SessionRef<Message>,
+    session_handle: SessionHandle<Message>,
     cancellation_token: CancellationToken,
 ) {
-    let status_router = build_router(session_ref);
+    let status_router = build_router(session_handle);
     let host_and_port = std::env::var("HOST_AND_PORT").unwrap_or("0.0.0.0:9881".to_string());
     let listener = tokio::net::TcpListener::bind(&host_and_port).await.unwrap();
 

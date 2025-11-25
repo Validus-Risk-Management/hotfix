@@ -15,14 +15,14 @@ use tracing::{debug, warn};
 use crate::application::Application;
 use crate::config::SessionConfig;
 use crate::message::FixMessage;
-use crate::session::SessionRef;
+use crate::session::{InternalSessionRef, SessionHandle};
 use crate::store::MessageStore;
 use crate::transport::connect;
 
 #[derive(Clone)]
 pub struct Initiator<M> {
     pub config: SessionConfig,
-    session: SessionRef<M>,
+    session_handle: SessionHandle<M>,
     completion_rx: watch::Receiver<bool>,
 }
 
@@ -32,7 +32,7 @@ impl<M: FixMessage> Initiator<M> {
         application: impl Application<M>,
         store: impl MessageStore + Send + Sync + 'static,
     ) -> Self {
-        let session_ref = SessionRef::new(config.clone(), application, store);
+        let session_ref = InternalSessionRef::new(config.clone(), application, store);
         let (completion_tx, completion_rx) = watch::channel(false);
 
         tokio::spawn({
@@ -43,25 +43,25 @@ impl<M: FixMessage> Initiator<M> {
 
         Self {
             config,
-            session: session_ref,
+            session_handle: session_ref.into(),
             completion_rx,
         }
     }
 
     pub async fn send_message(&self, msg: M) {
-        self.session.send_message(msg).await;
+        self.session_handle.send_message(msg).await;
     }
 
     pub fn is_interested(&self, sender_comp_id: &str, target_comp_id: &str) -> bool {
         self.config.sender_comp_id == sender_comp_id && self.config.target_comp_id == target_comp_id
     }
 
-    pub fn session_ref(&self) -> SessionRef<M> {
-        self.session.clone()
+    pub fn session_handle(&self) -> SessionHandle<M> {
+        self.session_handle.clone()
     }
 
     pub async fn shutdown(self) -> Result<(), Elapsed> {
-        self.session.shutdown().await;
+        self.session_handle.shutdown().await;
         tokio::time::timeout(Duration::from_secs(5), self.wait_for_shutdown()).await
     }
 
@@ -84,7 +84,7 @@ impl<M: FixMessage> Initiator<M> {
 
 async fn establish_connection<M: FixMessage>(
     config: SessionConfig,
-    session_ref: SessionRef<M>,
+    session_ref: InternalSessionRef<M>,
     completion_tx: watch::Sender<bool>,
 ) {
     loop {

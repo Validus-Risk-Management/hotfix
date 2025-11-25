@@ -1,8 +1,8 @@
 use crate::config::SessionConfig;
 use crate::message::{FixMessage, RawFixMessage};
+use crate::session::Session;
 use crate::session::admin_request::AdminRequest;
 use crate::session::event::{AwaitingActiveSessionResponse, SessionEvent};
-use crate::session::{Session, SessionInfo};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
 use crate::{Application, session};
@@ -10,13 +10,13 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::debug;
 
 #[derive(Clone)]
-pub struct SessionRef<M> {
+pub struct InternalSessionRef<M> {
     event_sender: mpsc::Sender<SessionEvent>,
-    outbound_message_sender: mpsc::Sender<M>,
-    admin_request_sender: mpsc::Sender<AdminRequest>,
+    pub(crate) outbound_message_sender: mpsc::Sender<M>,
+    pub(crate) admin_request_sender: mpsc::Sender<AdminRequest>,
 }
 
-impl<M: FixMessage> SessionRef<M> {
+impl<M: FixMessage> InternalSessionRef<M> {
     pub fn new(
         config: SessionConfig,
         application: impl Application<M>,
@@ -61,13 +61,6 @@ impl<M: FixMessage> SessionRef<M> {
             .expect("be able to send disconnect");
     }
 
-    pub async fn send_message(&self, msg: M) {
-        self.outbound_message_sender
-            .send(msg)
-            .await
-            .expect("message to send successfully");
-    }
-
     pub async fn should_reconnect(&self) -> bool {
         let (sender, receiver) = oneshot::channel();
         self.event_sender
@@ -86,21 +79,5 @@ impl<M: FixMessage> SessionRef<M> {
             .unwrap();
         receiver.await.expect("to receive a response");
         debug!("resuming connection as session is active");
-    }
-
-    pub async fn get_session_info(&self) -> SessionInfo {
-        let (sender, receiver) = oneshot::channel::<SessionInfo>();
-        self.admin_request_sender
-            .send(AdminRequest::RequestSessionInfo(sender))
-            .await
-            .unwrap();
-        receiver.await.expect("to receive a response")
-    }
-
-    pub async fn shutdown(&self) {
-        self.admin_request_sender
-            .send(AdminRequest::RequestGracefulShutdown)
-            .await
-            .unwrap();
     }
 }

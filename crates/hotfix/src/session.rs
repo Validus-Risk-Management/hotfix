@@ -1,7 +1,8 @@
 mod admin_request;
 mod event;
 mod info;
-mod session_ref;
+mod session_handle;
+pub mod session_ref;
 mod state;
 
 use crate::config::SessionConfig;
@@ -23,26 +24,31 @@ use tokio::sync::mpsc;
 use tokio::time::{Duration, Instant, Sleep, sleep, sleep_until};
 use tracing::{debug, enabled, error, info, warn};
 
+use crate::Application;
+use crate::application::{InboundDecision, OutboundDecision};
 use crate::error::{CompIdType, MessageVerificationError};
 use crate::message::logout::Logout;
+use crate::message::reject::Reject;
 use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
+use crate::message::verification::verify_message;
 use crate::message_utils::{is_admin, prepare_message_for_resend};
+use crate::session::admin_request::AdminRequest;
+use crate::session::state::SessionState;
 use crate::session::state::{AwaitingResendTransitionOutcome, TestRequestId};
 use crate::session_schedule::SessionSchedule;
 use event::SessionEvent;
 use hotfix_message::fix44::SessionRejectReason;
 use hotfix_message::parsed_message::{InvalidReason, ParsedMessage};
-use state::SessionState;
 
-use crate::Application;
-use crate::application::{InboundDecision, OutboundDecision};
-use crate::message::reject::Reject;
-use crate::message::verification::verify_message;
-use crate::session::admin_request::AdminRequest;
-pub use info::{SessionInfo, Status};
-pub use session_ref::SessionRef;
+#[cfg(not(feature = "test-utils"))]
+pub(crate) use crate::session::session_ref::InternalSessionRef;
+#[cfg(feature = "test-utils")]
+pub use crate::session::session_ref::InternalSessionRef;
+
+pub use crate::session::info::{SessionInfo, Status};
+pub use crate::session::session_handle::SessionHandle;
 
 const SCHEDULE_CHECK_INTERVAL: u64 = 1;
 

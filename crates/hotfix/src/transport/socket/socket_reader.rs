@@ -4,12 +4,12 @@ use tracing::debug;
 
 use crate::message::FixMessage;
 use crate::message::parser::Parser;
-use crate::session::SessionRef;
+use crate::session::InternalSessionRef;
 use crate::transport::reader::ReaderRef;
 
 pub fn spawn_socket_reader(
     reader: ReadHalf<impl AsyncRead + Send + 'static>,
-    session_ref: SessionRef<impl FixMessage>,
+    session_ref: InternalSessionRef<impl FixMessage>,
 ) -> ReaderRef {
     let (dc_sender, dc_receiver) = oneshot::channel();
     let actor = ReaderActor::new(reader, session_ref, dc_sender);
@@ -20,14 +20,14 @@ pub fn spawn_socket_reader(
 
 struct ReaderActor<M, R> {
     reader: ReadHalf<R>,
-    session_ref: SessionRef<M>,
+    session_ref: InternalSessionRef<M>,
     dc_sender: oneshot::Sender<()>,
 }
 
 impl<M, R: AsyncRead> ReaderActor<M, R> {
     fn new(
         reader: ReadHalf<R>,
-        session_ref: SessionRef<M>,
+        session_ref: InternalSessionRef<M>,
         dc_sender: oneshot::Sender<()>,
     ) -> Self {
         Self {

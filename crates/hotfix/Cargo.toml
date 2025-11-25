@@ -14,6 +14,7 @@ categories.workspace = true
 [features]
 redb = ["dep:redb"]
 mongodb = ["dep:mongodb"]
+test-utils = []
 
 [lints]
 workspace = true

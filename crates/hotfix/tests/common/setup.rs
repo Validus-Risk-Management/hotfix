@@ -3,7 +3,7 @@ use crate::common::assertions::then;
 use crate::common::fakes::{FakeApplication, FakeCounterparty, SessionSpy};
 use crate::common::test_messages::TestMessage;
 use hotfix::config::SessionConfig;
-use hotfix::session::SessionRef;
+use hotfix::session::InternalSessionRef;
 use hotfix::session::Status;
 use hotfix::store::in_memory::InMemoryMessageStore;
 use hotfix_message::Part;
@@ -27,7 +27,7 @@ pub async fn given_a_connected_session_with_store(
     let counterparty_config = create_counterparty_session_config(config.clone());
 
     let (message_tx, message_rx) = tokio::sync::mpsc::unbounded_channel();
-    let session = SessionRef::new(config, FakeApplication::new(message_tx), message_store);
+    let session = InternalSessionRef::new(config, FakeApplication::new(message_tx), message_store);
 
     let session_spy = SessionSpy::new(session.clone(), message_rx);
     let mock_counterparty = FakeCounterparty::start(session.clone(), counterparty_config).await;

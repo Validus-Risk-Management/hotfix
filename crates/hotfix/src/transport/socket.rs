@@ -6,7 +6,7 @@ pub mod tls;
 use std::io;
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::session::SessionRef;
+use crate::session::InternalSessionRef;
 use crate::{
     config::SessionConfig,
     message::FixMessage,
@@ -19,7 +19,7 @@ use crate::{
 /// Connect over TCP/TLS and return a FixConnection
 pub async fn connect(
     config: &SessionConfig,
-    session_ref: SessionRef<impl FixMessage>,
+    session_ref: InternalSessionRef<impl FixMessage>,
 ) -> io::Result<FixConnection> {
     let use_tls = config.tls_config.is_some();
 
@@ -34,7 +34,10 @@ pub async fn connect(
     Ok(conn)
 }
 
-async fn _create_io_refs<M, Stream>(session_ref: SessionRef<M>, stream: Stream) -> FixConnection
+async fn _create_io_refs<M, Stream>(
+    session_ref: InternalSessionRef<M>,
+    stream: Stream,
+) -> FixConnection
 where
     M: FixMessage,
     Stream: AsyncRead + AsyncWrite + Send + 'static,
