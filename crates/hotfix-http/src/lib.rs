@@ -1,8 +1,6 @@
 mod data_provider;
 mod endpoints;
 mod error;
-#[cfg(feature = "ui")]
-mod ui;
 
 use crate::data_provider::{DataProvider, SessionDataProvider};
 use crate::endpoints::build_api_router;
@@ -11,39 +9,65 @@ use hotfix::message::FixMessage;
 use hotfix::session::SessionHandle;
 
 #[derive(Clone)]
-struct AppState<P> {
-    data_provider: P,
+pub(crate) struct AppState<P> {
+    pub(crate) data_provider: P,
 }
 
+/// Configuration for the HTTP router
+#[derive(Clone, Debug, Default)]
+pub struct RouterConfig {
+    /// Enable admin endpoints (/api/shutdown, /api/reset)
+    pub enable_admin_endpoints: bool,
+}
+
+/// Build a router with default configuration (admin endpoints disabled)
 pub fn build_router<M: FixMessage>(session_handle: SessionHandle<M>) -> Router {
+    build_router_with_config(session_handle, RouterConfig::default())
+}
+
+/// Build a router with custom configuration
+pub fn build_router_with_config<M: FixMessage>(
+    session_handle: SessionHandle<M>,
+    config: RouterConfig,
+) -> Router {
     let data_provider = SessionDataProvider { session_handle };
-    build_router_with_provider(data_provider)
+    build_router_with_provider(data_provider, config)
 }
 
 #[cfg(feature = "ui")]
-fn build_router_with_provider(data_provider: impl DataProvider + 'static) -> Router {
+fn build_router_with_provider<P>(data_provider: P, config: RouterConfig) -> Router
+where
+    P: DataProvider + hotfix_dashboard::DashboardDataProvider + 'static,
+    P: axum::extract::FromRef<AppState<P>>,
+{
     let state = AppState { data_provider };
     Router::new()
-        .nest("/api", build_api_router())
-        .merge(ui::builder_ui_router())
+        .nest("/api", build_api_router(config))
+        .merge(hotfix_dashboard::build_ui_router::<AppState<P>, P>())
         .with_state(state)
 }
 
 #[cfg(not(feature = "ui"))]
-fn build_router_with_provider(data_provider: impl DataProvider + 'static) -> Router {
+fn build_router_with_provider(
+    data_provider: impl DataProvider + 'static,
+    config: RouterConfig,
+) -> Router {
     let state = AppState { data_provider };
     Router::new()
-        .nest("/api", build_api_router())
+        .nest("/api", build_api_router(config))
         .with_state(state)
 }
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "ui")]
+    use crate::AppState;
+    use crate::RouterConfig;
     use crate::build_router_with_provider;
     use crate::data_provider::DataProvider;
+    use axum::Router;
     use axum::body::Body;
     use axum::http::{Method, Request, StatusCode};
-    use axum::Router;
     use hotfix::session::{SessionInfo, Status};
     use serde_json::Value;
     use std::sync::{Arc, Mutex};
@@ -115,24 +139,49 @@ mod tests {
         }
     }
 
+    // Implement DashboardDataProvider for the test provider
+    #[cfg(feature = "ui")]
+    #[async_trait::async_trait]
+    impl hotfix_dashboard::DashboardDataProvider for FakeDataProvider {
+        async fn get_session_info(&self) -> anyhow::Result<SessionInfo> {
+            // Reuse the DataProvider implementation
+            DataProvider::get_session_info(self).await
+        }
+    }
+
+    // Allow extracting FakeDataProvider from AppState for hotfix-dashboard
+    #[cfg(feature = "ui")]
+    impl axum::extract::FromRef<AppState<FakeDataProvider>> for FakeDataProvider {
+        fn from_ref(state: &AppState<FakeDataProvider>) -> Self {
+            state.data_provider.clone()
+        }
+    }
+
     struct TestContext {
         router: Router,
         data_provider: FakeDataProvider,
+        config: RouterConfig,
     }
 
     impl TestContext {
         fn new() -> Self {
+            Self::with_config(RouterConfig::default())
+        }
+
+        fn with_config(config: RouterConfig) -> Self {
             let data_provider = FakeDataProvider::new();
-            let router = build_router_with_provider(data_provider.clone());
+            let router = build_router_with_provider(data_provider.clone(), config.clone());
             Self {
                 router,
                 data_provider,
+                config,
             }
         }
 
         fn with_session_info(mut self, session_info: SessionInfo) -> Self {
             self.data_provider = self.data_provider.with_session_info(session_info);
-            self.router = build_router_with_provider(self.data_provider.clone());
+            self.router =
+                build_router_with_provider(self.data_provider.clone(), self.config.clone());
             self
         }
 
@@ -177,7 +226,8 @@ mod tests {
 
         fn assert_status(&self, expected: StatusCode) -> &Self {
             assert_eq!(
-                self.status, expected,
+                self.status,
+                expected,
                 "Expected status {}, got {}. Body: {}",
                 expected,
                 self.status,
@@ -238,10 +288,12 @@ mod tests {
         assert_eq!(body["session_info"]["status"], "AwaitingLogon");
     }
 
-    #[cfg(feature = "admin")]
     #[tokio::test]
     async fn test_reset_endpoint_triggers_reset_request() {
-        let mut ctx = TestContext::new();
+        let config = RouterConfig {
+            enable_admin_endpoints: true,
+        };
+        let mut ctx = TestContext::with_config(config);
 
         let response = ctx.post("/api/reset").await;
 
@@ -250,10 +302,12 @@ mod tests {
         assert!(state.reset_requested, "Reset should have been requested");
     }
 
-    #[cfg(feature = "admin")]
     #[tokio::test]
     async fn test_shutdown_endpoint_calls_shutdown_with_reconnect() {
-        let mut ctx = TestContext::new();
+        let config = RouterConfig {
+            enable_admin_endpoints: true,
+        };
+        let mut ctx = TestContext::with_config(config);
 
         let response = ctx.post("/api/shutdown").await;
 
@@ -265,5 +319,16 @@ mod tests {
             Some(true),
             "Shutdown should be called with reconnect=true"
         );
+    }
+
+    #[tokio::test]
+    async fn test_admin_endpoints_disabled_by_default() {
+        let mut ctx = TestContext::new(); // Default config has admin disabled
+
+        let response = ctx.post("/api/reset").await;
+        response.assert_status(StatusCode::NOT_FOUND);
+
+        let response = ctx.post("/api/shutdown").await;
+        response.assert_status(StatusCode::NOT_FOUND);
     }
 }

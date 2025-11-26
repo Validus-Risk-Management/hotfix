@@ -1,4 +1,5 @@
-use axum::http::{StatusCode, Uri, header};
+use axum::extract::Path;
+use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use rust_embed::Embed;
 
@@ -6,13 +7,7 @@ use rust_embed::Embed;
 #[folder = "assets/"]
 struct Assets;
 
-pub(crate) async fn static_handler(uri: Uri) -> impl IntoResponse {
-    let mut path = uri.path().trim_start_matches('/').to_string();
-
-    if path.starts_with("static/") {
-        path = path.replace("static/", "");
-    }
-
+pub(crate) async fn static_handler(Path(path): Path<String>) -> impl IntoResponse {
     StaticFile(path)
 }
 

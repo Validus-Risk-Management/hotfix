@@ -1,5 +1,6 @@
 [package]
 name = "hotfix-dashboard"
+description = "Web-based dashboard for the HotFIX engine"
 version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
@@ -11,6 +12,17 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
+hotfix = { version = "0.3.0", path = "../hotfix" }
+
+anyhow = { workspace = true }
+askama = { workspace = true, features = ["serde_json"] }
+async-trait = { workspace = true }
+axum = { workspace = true }
+chrono = { workspace = true }
+displaydoc = { workspace = true }
+mime_guess = { workspace = true }
+rust-embed = { workspace = true, features = ["axum-ex"] }
+thiserror = { workspace = true }
 
 [lints]
 workspace = true

@@ -15,20 +15,16 @@ categories.workspace = true
 workspace = true
 
 [features]
-admin = []
-ui = ["askama", "mime_guess", "rust-embed"]
+ui = ["dep:hotfix-dashboard"]
 
 [dependencies]
 hotfix = { version = "0.3.0", path = "../hotfix" }
+hotfix-dashboard = { version = "0.1.0", path = "../hotfix-dashboard", optional = true }
 
 anyhow = { workspace = true }
-askama = { workspace = true, features = ["serde_json"], optional = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
-chrono = { workspace = true }
 displaydoc = { workspace = true }
-mime_guess = { workspace = true, optional = true }
-rust-embed = { workspace = true, features = ["axum-ex"], optional = true }
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 

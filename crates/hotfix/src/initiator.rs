@@ -8,7 +8,6 @@
 //! `HotFIX` supports plain TCP and encrypted TLS over TCP connections.
 use std::time::Duration;
 use tokio::sync::watch;
-use tokio::time::error::Elapsed;
 use tokio::time::sleep;
 use tracing::{debug, warn};
 

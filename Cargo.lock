@@ -1330,6 +1330,18 @@ dependencies = [
 [[package]]
 name = "hotfix-dashboard"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "askama",
+ "async-trait",
+ "axum",
+ "chrono",
+ "displaydoc",
+ "hotfix",
+ "mime_guess",
+ "rust-embed",
+ "thiserror 2.0.12",
+]
 
 [[package]]
 name = "hotfix-derive"
@@ -1358,14 +1370,11 @@ name = "hotfix-http"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "askama",
  "async-trait",
  "axum",
- "chrono",
  "displaydoc",
  "hotfix",
- "mime_guess",
- "rust-embed",
+ "hotfix-dashboard",
  "serde",
  "serde_json",
  "thiserror 2.0.12",

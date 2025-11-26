@@ -1,8 +1,7 @@
-use crate::AppState;
-use crate::data_provider::DataProvider;
-use crate::error::AppResult;
+use crate::DashboardDataProvider;
+use crate::error::DashboardResult;
 use askama::Template;
-use axum::extract::State;
+use axum::extract::{FromRef, State};
 use axum::response::{Html, IntoResponse};
 use chrono::Utc;
 use hotfix::session::SessionInfo;
@@ -16,10 +15,14 @@ struct DashboardTemplate<'a> {
     timestamp_string: &'a str,
 }
 
-pub(crate) async fn dashboard_handler<P: DataProvider>(
-    State(state): State<AppState<P>>,
-) -> AppResult<impl IntoResponse> {
-    let session_info = state.data_provider.get_session_info().await?;
+pub(crate) async fn dashboard_handler<S, P>(
+    State(data_provider): State<P>,
+) -> DashboardResult<impl IntoResponse>
+where
+    S: Clone + Send + Sync + 'static,
+    P: DashboardDataProvider + FromRef<S>,
+{
+    let session_info = data_provider.get_session_info().await?;
     let timestamp_string = Utc::now().to_rfc3339();
 
     let template = DashboardTemplate {
