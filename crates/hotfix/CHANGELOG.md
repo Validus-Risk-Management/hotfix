@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.2.9...hotfix-v0.3.0) - 2025-11-26
+
+### Added
+
+- allow one off restarts with sequence number reset ([#241](https://github.com/Validus-Risk-Management/hotfix/pull/241))
+
 ## [0.2.9](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.2.8...hotfix-v0.2.9) - 2025-11-24
 
 ### Added
