@@ -1,13 +1,13 @@
+use crate::session_controller::SessionController;
 use crate::AppState;
-use crate::data_provider::DataProvider;
 use crate::error::AppResult;
 use axum::Json;
 use axum::extract::State;
 
-pub(crate) async fn shutdown<P: DataProvider>(
-    State(state): State<AppState<P>>,
+pub(crate) async fn shutdown<C: SessionController>(
+    State(state): State<AppState<C>>,
 ) -> AppResult<Json<()>> {
-    state.data_provider.shutdown(true).await?;
+    state.controller.shutdown(true).await?;
 
     Ok(Json(()))
 }

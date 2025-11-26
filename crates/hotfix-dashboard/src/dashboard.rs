@@ -1,4 +1,4 @@
-use crate::DashboardDataProvider;
+use crate::SessionInfoProvider;
 use crate::error::DashboardResult;
 use askama::Template;
 use axum::extract::{FromRef, State};
@@ -16,13 +16,13 @@ struct DashboardTemplate<'a> {
 }
 
 pub(crate) async fn dashboard_handler<S, P>(
-    State(data_provider): State<P>,
+    State(provider): State<P>,
 ) -> DashboardResult<impl IntoResponse>
 where
     S: Clone + Send + Sync + 'static,
-    P: DashboardDataProvider + FromRef<S>,
+    P: SessionInfoProvider + FromRef<S>,
 {
-    let session_info = data_provider.get_session_info().await?;
+    let session_info = provider.get_session_info().await?;
     let timestamp_string = Utc::now().to_rfc3339();
 
     let template = DashboardTemplate {

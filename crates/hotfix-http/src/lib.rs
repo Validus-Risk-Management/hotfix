@@ -1,16 +1,16 @@
-mod data_provider;
 mod endpoints;
 mod error;
+mod session_controller;
 
-use crate::data_provider::{DataProvider, SessionDataProvider};
 use crate::endpoints::build_api_router;
+use crate::session_controller::{HttpSessionController, SessionController};
 use axum::Router;
 use hotfix::message::FixMessage;
 use hotfix::session::SessionHandle;
 
 #[derive(Clone)]
-pub(crate) struct AppState<P> {
-    pub(crate) data_provider: P,
+pub(crate) struct AppState<C> {
+    pub(crate) controller: C,
 }
 
 /// Configuration for the HTTP router
@@ -30,29 +30,29 @@ pub fn build_router_with_config<M: FixMessage>(
     session_handle: SessionHandle<M>,
     config: RouterConfig,
 ) -> Router {
-    let data_provider = SessionDataProvider { session_handle };
-    build_router_with_provider(data_provider, config)
+    let controller = HttpSessionController { session_handle };
+    build_router_with_controller(controller, config)
 }
 
 #[cfg(feature = "ui")]
-fn build_router_with_provider<P>(data_provider: P, config: RouterConfig) -> Router
+fn build_router_with_controller<C>(controller: C, config: RouterConfig) -> Router
 where
-    P: DataProvider + hotfix_dashboard::DashboardDataProvider + 'static,
-    P: axum::extract::FromRef<AppState<P>>,
+    C: SessionController + hotfix_dashboard::SessionInfoProvider + 'static,
+    C: axum::extract::FromRef<AppState<C>>,
 {
-    let state = AppState { data_provider };
+    let state = AppState { controller };
     Router::new()
         .nest("/api", build_api_router(config))
-        .merge(hotfix_dashboard::build_ui_router::<AppState<P>, P>())
+        .merge(hotfix_dashboard::build_ui_router::<AppState<C>, C>())
         .with_state(state)
 }
 
 #[cfg(not(feature = "ui"))]
-fn build_router_with_provider(
-    data_provider: impl DataProvider + 'static,
+fn build_router_with_controller(
+    controller: impl SessionController + 'static,
     config: RouterConfig,
 ) -> Router {
-    let state = AppState { data_provider };
+    let state = AppState { controller };
     Router::new()
         .nest("/api", build_api_router(config))
         .with_state(state)
@@ -63,8 +63,8 @@ mod tests {
     #[cfg(feature = "ui")]
     use crate::AppState;
     use crate::RouterConfig;
-    use crate::build_router_with_provider;
-    use crate::data_provider::DataProvider;
+    use crate::build_router_with_controller;
+    use crate::session_controller::SessionController;
     use axum::Router;
     use axum::body::Body;
     use axum::http::{Method, Request, StatusCode};
@@ -97,11 +97,11 @@ mod tests {
     }
 
     #[derive(Clone)]
-    struct FakeDataProvider {
+    struct FakeSessionController {
         state: Arc<Mutex<FakeDataState>>,
     }
 
-    impl FakeDataProvider {
+    impl FakeSessionController {
         fn new() -> Self {
             Self {
                 state: Arc::new(Mutex::new(FakeDataState::default())),
@@ -119,7 +119,7 @@ mod tests {
     }
 
     #[async_trait::async_trait]
-    impl DataProvider for FakeDataProvider {
+    impl SessionController for FakeSessionController {
         async fn get_session_info(&self) -> anyhow::Result<SessionInfo> {
             let state = self.state.lock().unwrap();
             Ok(state.session_info.clone())
@@ -139,27 +139,27 @@ mod tests {
         }
     }
 
-    // Implement DashboardDataProvider for the test provider
+    // Implement SessionInfoProvider for the test controller
     #[cfg(feature = "ui")]
     #[async_trait::async_trait]
-    impl hotfix_dashboard::DashboardDataProvider for FakeDataProvider {
+    impl hotfix_dashboard::SessionInfoProvider for FakeSessionController {
         async fn get_session_info(&self) -> anyhow::Result<SessionInfo> {
-            // Reuse the DataProvider implementation
-            DataProvider::get_session_info(self).await
+            // Reuse the SessionController implementation
+            SessionController::get_session_info(self).await
         }
     }
 
-    // Allow extracting FakeDataProvider from AppState for hotfix-dashboard
+    // Allow extracting FakeSessionController from AppState for hotfix-dashboard
     #[cfg(feature = "ui")]
-    impl axum::extract::FromRef<AppState<FakeDataProvider>> for FakeDataProvider {
-        fn from_ref(state: &AppState<FakeDataProvider>) -> Self {
-            state.data_provider.clone()
+    impl axum::extract::FromRef<AppState<FakeSessionController>> for FakeSessionController {
+        fn from_ref(state: &AppState<FakeSessionController>) -> Self {
+            state.controller.clone()
         }
     }
 
     struct TestContext {
         router: Router,
-        data_provider: FakeDataProvider,
+        controller: FakeSessionController,
         config: RouterConfig,
     }
 
@@ -169,19 +169,19 @@ mod tests {
         }
 
         fn with_config(config: RouterConfig) -> Self {
-            let data_provider = FakeDataProvider::new();
-            let router = build_router_with_provider(data_provider.clone(), config.clone());
+            let controller = FakeSessionController::new();
+            let router = build_router_with_controller(controller.clone(), config.clone());
             Self {
                 router,
-                data_provider,
+                controller,
                 config,
             }
         }
 
         fn with_session_info(mut self, session_info: SessionInfo) -> Self {
-            self.data_provider = self.data_provider.with_session_info(session_info);
+            self.controller = self.controller.with_session_info(session_info);
             self.router =
-                build_router_with_provider(self.data_provider.clone(), self.config.clone());
+                build_router_with_controller(self.controller.clone(), self.config.clone());
             self
         }
 
@@ -205,7 +205,7 @@ mod tests {
         }
 
         fn get_state(&self) -> FakeDataState {
-            self.data_provider.get_state()
+            self.controller.get_state()
         }
     }
 
