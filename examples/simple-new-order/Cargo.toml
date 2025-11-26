@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 hotfix = { path = "../../crates/hotfix", features = ["mongodb", "redb"] }
-hotfix-status = { path = "../../crates/hotfix-status", features = ["ui"] }
+hotfix-http = { path = "../../crates/hotfix-http", features = ["ui"] }
 
 async-trait.workspace = true
 axum.workspace = true

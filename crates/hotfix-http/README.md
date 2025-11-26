@@ -1,28 +1,24 @@
 <div align="center">
 
-# hotfix-status
+# hotfix-http
 
-**Status APIs and UI for the HotFIX engine.**
+**Management endpoints and UI for the HotFIX engine.**
 
 </div>
 
 This crate is an add-on for the [HotFIX engine](https://github.com/Validus-Risk-Management/hotfix)
-to provide useful APIs about the FIX session state and health.
+to provide useful APIs for admin actions, retrieving FIX session state and health information.
 
 Optionally, it also provides a web-based UI to view and manage the session state.
 
 ## Usage
 
-`hotfix-status` build an `axum` router you can embed in your application in any way you like.
+`hotfix-http` build an `axum` router you can embed in your application in any way you like.
 
 To build the router, just call `build_router` with the HotFIX session ref:
 
 ```rust
-...
-
 use hotfix_status::build_router;
-
-...
 
 async fn start_status_service(session_ref: SessionRef<Message>) {
     let status_router = build_router(session_ref);

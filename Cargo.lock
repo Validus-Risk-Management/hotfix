@@ -1350,24 +1350,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "hotfix-message"
-version = "0.2.6"
-dependencies = [
- "anyhow",
- "chrono",
- "criterion",
- "hotfix-codegen",
- "hotfix-derive",
- "hotfix-dictionary",
- "indexmap 2.12.0",
- "quickcheck",
- "quickcheck_macros",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "hotfix-status"
-version = "0.1.15"
+name = "hotfix-http"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -1383,6 +1367,22 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tower",
+]
+
+[[package]]
+name = "hotfix-message"
+version = "0.2.6"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "criterion",
+ "hotfix-codegen",
+ "hotfix-derive",
+ "hotfix-dictionary",
+ "indexmap 2.12.0",
+ "quickcheck",
+ "quickcheck_macros",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -3129,7 +3129,7 @@ dependencies = [
  "axum",
  "clap",
  "hotfix",
- "hotfix-status",
+ "hotfix-http",
  "tokio",
  "tokio-util",
  "tracing",
