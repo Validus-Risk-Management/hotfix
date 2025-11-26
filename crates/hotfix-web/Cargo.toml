@@ -1,6 +1,6 @@
 [package]
-name = "hotfix-http"
-description = "HTTP endpoints and an optional web-based dashboard for the HotFIX engine"
+name = "hotfix-web"
+description = "Web API and optional dashboard for the HotFIX engine"
 version = "0.1.0"
 authors.workspace = true
 edition.workspace = true

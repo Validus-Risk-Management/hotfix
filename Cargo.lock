@@ -1366,23 +1366,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hotfix-http"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum",
- "displaydoc",
- "hotfix",
- "hotfix-dashboard",
- "serde",
- "serde_json",
- "thiserror 2.0.12",
- "tokio",
- "tower",
-]
-
-[[package]]
 name = "hotfix-message"
 version = "0.2.6"
 dependencies = [
@@ -1396,6 +1379,23 @@ dependencies = [
  "quickcheck",
  "quickcheck_macros",
  "thiserror 2.0.12",
+]
+
+[[package]]
+name = "hotfix-web"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "displaydoc",
+ "hotfix",
+ "hotfix-dashboard",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "tokio",
+ "tower",
 ]
 
 [[package]]
@@ -3142,7 +3142,7 @@ dependencies = [
  "axum",
  "clap",
  "hotfix",
- "hotfix-http",
+ "hotfix-web",
  "tokio",
  "tokio-util",
  "tracing",

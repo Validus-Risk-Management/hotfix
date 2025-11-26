@@ -10,7 +10,7 @@ use hotfix::initiator::Initiator;
 use hotfix::message::fix44;
 use hotfix::session::SessionHandle;
 use hotfix::store::mongodb::Client;
-use hotfix_http::build_router;
+use hotfix_web::build_router;
 use std::path::Path;
 use tokio::select;
 use tokio::task::spawn_blocking;
