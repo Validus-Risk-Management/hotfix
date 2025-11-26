@@ -24,5 +24,9 @@ mime_guess = { workspace = true }
 rust-embed = { workspace = true, features = ["axum-ex"] }
 thiserror = { workspace = true }
 
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }
+
 [lints]
 workspace = true

@@ -13,7 +13,7 @@ pub fn when<T>(target: T) -> When<T> {
 
 impl When<&SessionSpy> {
     pub async fn requests_disconnect(self) {
-        self.target.session_handle().shutdown(false).await;
+        self.target.session_handle().shutdown(false).await.unwrap();
     }
 
     pub async fn sends_message(self, message: TestMessage) {
