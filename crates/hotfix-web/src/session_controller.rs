@@ -30,18 +30,18 @@ impl<M: FixMessage> SessionController for HttpSessionController<M> {
     }
 }
 
-// Implement hotfix-dashboard's SessionInfoProvider for HttpSessionController
+// Implement hotfix-web-ui's SessionInfoProvider for HttpSessionController
 // Note: We can't use a blanket impl due to Rust's orphan rules (can't impl foreign trait for generic type)
 #[cfg(feature = "ui")]
 #[async_trait::async_trait]
-impl<M: FixMessage> hotfix_dashboard::SessionInfoProvider for HttpSessionController<M> {
+impl<M: FixMessage> hotfix_web_ui::SessionInfoProvider for HttpSessionController<M> {
     async fn get_session_info(&self) -> anyhow::Result<SessionInfo> {
         // Reuse the SessionController implementation
         SessionController::get_session_info(self).await
     }
 }
 
-// Allow extracting HttpSessionController from AppState for hotfix-dashboard
+// Allow extracting HttpSessionController from AppState for hotfix-web-ui
 #[cfg(feature = "ui")]
 impl<M> axum::extract::FromRef<crate::AppState<HttpSessionController<M>>> for HttpSessionController<M>
 where

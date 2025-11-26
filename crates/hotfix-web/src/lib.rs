@@ -37,13 +37,13 @@ pub fn build_router_with_config<M: FixMessage>(
 #[cfg(feature = "ui")]
 fn build_router_with_controller<C>(controller: C, config: RouterConfig) -> Router
 where
-    C: SessionController + hotfix_dashboard::SessionInfoProvider + 'static,
+    C: SessionController + hotfix_web_ui::SessionInfoProvider + 'static,
     C: axum::extract::FromRef<AppState<C>>,
 {
     let state = AppState { controller };
     Router::new()
         .nest("/api", build_api_router(config))
-        .merge(hotfix_dashboard::build_ui_router::<AppState<C>, C>())
+        .merge(hotfix_web_ui::build_ui_router::<AppState<C>, C>())
         .with_state(state)
 }
 
@@ -142,14 +142,14 @@ mod tests {
     // Implement SessionInfoProvider for the test controller
     #[cfg(feature = "ui")]
     #[async_trait::async_trait]
-    impl hotfix_dashboard::SessionInfoProvider for FakeSessionController {
+    impl hotfix_web_ui::SessionInfoProvider for FakeSessionController {
         async fn get_session_info(&self) -> anyhow::Result<SessionInfo> {
             // Reuse the SessionController implementation
             SessionController::get_session_info(self).await
         }
     }
 
-    // Allow extracting FakeSessionController from AppState for hotfix-dashboard
+    // Allow extracting FakeSessionController from AppState for hotfix-web-ui
     #[cfg(feature = "ui")]
     impl axum::extract::FromRef<AppState<FakeSessionController>> for FakeSessionController {
         fn from_ref(state: &AppState<FakeSessionController>) -> Self {

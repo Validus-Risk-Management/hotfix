@@ -1328,22 +1328,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hotfix-dashboard"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "askama",
- "async-trait",
- "axum",
- "chrono",
- "displaydoc",
- "hotfix",
- "mime_guess",
- "rust-embed",
- "thiserror 2.0.12",
-]
-
-[[package]]
 name = "hotfix-derive"
 version = "0.1.2"
 dependencies = [
@@ -1390,12 +1374,28 @@ dependencies = [
  "axum",
  "displaydoc",
  "hotfix",
- "hotfix-dashboard",
+ "hotfix-web-ui",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
  "tokio",
  "tower",
+]
+
+[[package]]
+name = "hotfix-web-ui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "askama",
+ "async-trait",
+ "axum",
+ "chrono",
+ "displaydoc",
+ "hotfix",
+ "mime_guess",
+ "rust-embed",
+ "thiserror 2.0.12",
 ]
 
 [[package]]

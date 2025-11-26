@@ -1,6 +1,6 @@
 [package]
-name = "hotfix-dashboard"
-description = "Web-based dashboard for the HotFIX engine"
+name = "hotfix-web-ui"
+description = "Web dashboard UI components for the HotFIX engine"
 version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
