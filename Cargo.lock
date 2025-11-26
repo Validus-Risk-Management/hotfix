@@ -1328,6 +1328,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "hotfix-dashboard"
+version = "0.1.0"
+
+[[package]]
 name = "hotfix-derive"
 version = "0.1.2"
 dependencies = [
