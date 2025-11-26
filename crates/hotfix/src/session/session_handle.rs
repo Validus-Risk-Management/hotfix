@@ -33,11 +33,12 @@ impl<M> SessionHandle<M> {
         Ok(())
     }
 
-    pub async fn shutdown(&self, reconnect: bool) {
+    pub async fn shutdown(&self, reconnect: bool) -> anyhow::Result<()> {
         self.admin_request_sender
             .send(AdminRequest::InitiateGracefulShutdown { reconnect })
-            .await
-            .unwrap();
+            .await?;
+
+        Ok(())
     }
 
     pub async fn request_reset_on_next_logon(&self) -> anyhow::Result<()> {

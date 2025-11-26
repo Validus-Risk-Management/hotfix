@@ -58,6 +58,14 @@ mod tests {
         async fn get_session_info(&self) -> anyhow::Result<SessionInfo> {
             Ok(self.session_info.clone())
         }
+
+        async fn request_reset_on_next_logon(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn shutdown(&self, reconnect: bool) -> anyhow::Result<()> {
+            Ok(())
+        }
     }
 
     const DATA_PROVIDER: &FakeDataProvider = &FakeDataProvider {
