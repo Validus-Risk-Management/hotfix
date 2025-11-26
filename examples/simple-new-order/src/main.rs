@@ -10,7 +10,7 @@ use hotfix::initiator::Initiator;
 use hotfix::message::fix44;
 use hotfix::session::SessionHandle;
 use hotfix::store::mongodb::Client;
-use hotfix_web::build_router;
+use hotfix_web::{RouterConfig, build_router_with_config};
 use std::path::Path;
 use tokio::select;
 use tokio::task::spawn_blocking;
@@ -66,7 +66,7 @@ async fn main() {
     let initiator = start_session(&args.config, &db_config, app).await;
 
     let status_service_token = CancellationToken::new();
-    tokio::spawn(start_status_service(
+    tokio::spawn(start_web_service(
         initiator.session_handle(),
         status_service_token.child_token(),
     ));
@@ -153,18 +153,21 @@ async fn start_session(
     }
 }
 
-async fn start_status_service(
+async fn start_web_service(
     session_handle: SessionHandle<Message>,
     cancellation_token: CancellationToken,
 ) {
-    let status_router = build_router(session_handle);
+    let config = RouterConfig {
+        enable_admin_endpoints: true,
+    };
+    let router = build_router_with_config(session_handle, config);
     let host_and_port = std::env::var("HOST_AND_PORT").unwrap_or("0.0.0.0:9881".to_string());
     let listener = tokio::net::TcpListener::bind(&host_and_port).await.unwrap();
 
-    info!("starting status service on http://{host_and_port}");
+    info!("starting web interface on http://{host_and_port}");
 
     select! {
-        result = axum::serve(listener, status_router) => {
+        result = axum::serve(listener, router) => {
             if let Err(e) = result {
                 tracing::error!("status service error: {}", e);
             }

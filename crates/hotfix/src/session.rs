@@ -821,15 +821,18 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
         match request {
             AdminRequest::InitiateGracefulShutdown { reconnect } => {
                 // TODO: revisit logout & shutdown flows once logout timeouts are implemented
+                warn!("initiating shutdown on request from admin..");
                 self.logout_and_terminate("shutdown requested").await;
                 self.state = SessionState::new_disconnected(reconnect, "shutdown requested");
             }
             AdminRequest::RequestSessionInfo(responder) => {
+                info!("session info requested");
                 if responder.send(self.get_session_info()).is_err() {
                     error!("failed to respond to session info request");
                 }
             }
             AdminRequest::ResetSequenceNumbersOnNextLogon => {
+                warn!("resetting sequence numbers on next logon");
                 self.reset_on_next_logon = true;
             }
         }
