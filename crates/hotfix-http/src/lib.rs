@@ -1,12 +1,12 @@
-mod api;
 mod data_provider;
+mod endpoints;
 #[cfg(feature = "ui")]
 mod error;
 #[cfg(feature = "ui")]
 mod ui;
 
-use crate::api::build_api_router;
 use crate::data_provider::{DataProvider, SessionDataProvider};
+use crate::endpoints::build_api_router;
 use axum::Router;
 use hotfix::message::FixMessage;
 use hotfix::session::SessionHandle;
