@@ -62,9 +62,11 @@ impl<M: FixMessage> Initiator<M> {
         self.session_handle.clone()
     }
 
-    pub async fn shutdown(self, reconnect: bool) -> Result<(), Elapsed> {
-        self.session_handle.shutdown(reconnect).await;
-        tokio::time::timeout(Duration::from_secs(5), self.wait_for_shutdown()).await
+    pub async fn shutdown(self, reconnect: bool) -> anyhow::Result<()> {
+        self.session_handle.shutdown(reconnect).await?;
+        tokio::time::timeout(Duration::from_secs(5), self.wait_for_shutdown()).await?;
+
+        Ok(())
     }
 
     pub async fn wait_for_shutdown(&self) {
