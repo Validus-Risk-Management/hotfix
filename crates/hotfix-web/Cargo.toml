@@ -18,7 +18,7 @@ workspace = true
 ui = ["dep:hotfix-web-ui"]
 
 [dependencies]
-hotfix = { version = "0.3.0", path = "../hotfix" }
+hotfix = { version = "0.3.1", path = "../hotfix" }
 hotfix-web-ui = { version = "0.1.0", path = "../hotfix-web-ui", optional = true }
 
 anyhow = { workspace = true }

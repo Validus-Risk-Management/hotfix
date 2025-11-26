@@ -12,7 +12,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-hotfix = { version = "0.3.0", path = "../hotfix" }
+hotfix = { version = "0.3.1", path = "../hotfix" }
 
 anyhow = { workspace = true }
 askama = { workspace = true, features = ["serde_json"] }

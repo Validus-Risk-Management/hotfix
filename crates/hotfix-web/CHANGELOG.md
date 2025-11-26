@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0](https://github.com/Validus-Risk-Management/hotfix/releases/tag/hotfix-web-v0.1.0) - 2025-11-26
+
+### Added
+
+- support admin actions through HTTP interface ([#244](https://github.com/Validus-Risk-Management/hotfix/pull/244))
+
 ## [0.1.15](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-status-v0.1.14...hotfix-status-v0.1.15) - 2025-11-26
 
 ### Added
