@@ -1,7 +1,7 @@
-use crate::session_controller::SessionController;
 use crate::AppState;
 use crate::endpoints::admin::reset::reset_on_next_logon;
 use crate::endpoints::admin::shutdown::shutdown;
+use crate::session_controller::SessionController;
 use axum::Router;
 use axum::routing::post;
 

@@ -12,7 +12,9 @@ mod session_info;
 
 use admin::register_admin_endpoints;
 
-pub fn build_api_router<C: SessionController + 'static>(config: RouterConfig) -> Router<AppState<C>> {
+pub fn build_api_router<C: SessionController + 'static>(
+    config: RouterConfig,
+) -> Router<AppState<C>> {
     let mut router = Router::new()
         .route("/health", get(get_health))
         .route("/session-info", get(get_session_info));

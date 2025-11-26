@@ -43,7 +43,8 @@ impl<M: FixMessage> hotfix_web_ui::SessionInfoProvider for HttpSessionController
 
 // Allow extracting HttpSessionController from AppState for hotfix-web-ui
 #[cfg(feature = "ui")]
-impl<M> axum::extract::FromRef<crate::AppState<HttpSessionController<M>>> for HttpSessionController<M>
+impl<M> axum::extract::FromRef<crate::AppState<HttpSessionController<M>>>
+    for HttpSessionController<M>
 where
     M: FixMessage,
 {
