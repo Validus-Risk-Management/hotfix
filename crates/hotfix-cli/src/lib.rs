@@ -4,11 +4,16 @@ use owo_colors::OwoColorize;
 use serde::Deserialize;
 
 #[derive(Parser)]
-#[command(name = "hotfix-cli")]
+#[command(name = "hotfix")]
 #[command(about = "CLI tool for managing hotfix sessions", long_about = None)]
 pub struct Cli {
     /// Base URL of the hotfix web server
-    #[arg(short, long, env = "HOTFIX_WEB_URL", default_value = "http://localhost:9881")]
+    #[arg(
+        short,
+        long,
+        env = "HOTFIX_WEB_URL",
+        default_value = "http://localhost:9881"
+    )]
     pub url: String,
 
     #[command(subcommand)]
@@ -254,7 +259,12 @@ mod tests {
 
         let result = run(cli).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Reset request failed"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Reset request failed")
+        );
     }
 
     #[tokio::test]
@@ -274,10 +284,12 @@ mod tests {
 
         let result = run(cli).await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Shutdown request failed"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Shutdown request failed")
+        );
     }
 
     #[tokio::test]
@@ -297,10 +309,12 @@ mod tests {
 
         let result = run(cli).await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Failed to parse health response"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Failed to parse health response")
+        );
     }
 
     #[tokio::test]
@@ -320,10 +334,12 @@ mod tests {
 
         let result = run(cli).await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Failed to parse session-info response"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Failed to parse session-info response")
+        );
     }
 
     #[tokio::test]

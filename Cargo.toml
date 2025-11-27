@@ -17,6 +17,7 @@ categories = ["finance", "encoding", "parsing"]
 
 [workspace.dependencies]
 anyhow = "^1.0.75"
+assert_cmd = "2"
 askama = "0.14"
 async-trait = "0.1.89"
 axum = "^0.8"
@@ -34,6 +35,7 @@ indoc = "2"
 mime_guess = "2.0.5"
 mongodb = "3.3"
 owo-colors = "4"
+predicates = "3"
 proc-macro-crate = "3"
 proc-macro2 = "1"
 quickcheck = "1"
