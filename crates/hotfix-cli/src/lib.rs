@@ -146,3 +146,230 @@ pub async fn run(cli: Cli) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn test_health_command_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/health"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "status": "healthy"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let cli = Cli {
+            url: mock_server.uri(),
+            command: Command::Health,
+        };
+
+        let result = run(cli).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_session_info_command_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/session-info"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "session_info": {
+                    "next_sender_seq_number": 42,
+                    "next_target_seq_number": 99,
+                    "status": "Active"
+                }
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let cli = Cli {
+            url: mock_server.uri(),
+            command: Command::SessionInfo,
+        };
+
+        let result = run(cli).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_reset_command_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/reset"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .mount(&mock_server)
+            .await;
+
+        let cli = Cli {
+            url: mock_server.uri(),
+            command: Command::Reset,
+        };
+
+        let result = run(cli).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_command_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/shutdown"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .mount(&mock_server)
+            .await;
+
+        let cli = Cli {
+            url: mock_server.uri(),
+            command: Command::Shutdown,
+        };
+
+        let result = run(cli).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_reset_command_handles_error() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/reset"))
+            .respond_with(ResponseTemplate::new(404).set_body_string("Not found"))
+            .mount(&mock_server)
+            .await;
+
+        let cli = Cli {
+            url: mock_server.uri(),
+            command: Command::Reset,
+        };
+
+        let result = run(cli).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Reset request failed"));
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_command_handles_error() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/shutdown"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("Internal server error"))
+            .mount(&mock_server)
+            .await;
+
+        let cli = Cli {
+            url: mock_server.uri(),
+            command: Command::Shutdown,
+        };
+
+        let result = run(cli).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Shutdown request failed"));
+    }
+
+    #[tokio::test]
+    async fn test_health_command_handles_invalid_json() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/health"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("invalid json"))
+            .mount(&mock_server)
+            .await;
+
+        let cli = Cli {
+            url: mock_server.uri(),
+            command: Command::Health,
+        };
+
+        let result = run(cli).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Failed to parse health response"));
+    }
+
+    #[tokio::test]
+    async fn test_session_info_command_handles_invalid_json() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/session-info"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("invalid json"))
+            .mount(&mock_server)
+            .await;
+
+        let cli = Cli {
+            url: mock_server.uri(),
+            command: Command::SessionInfo,
+        };
+
+        let result = run(cli).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Failed to parse session-info response"));
+    }
+
+    #[tokio::test]
+    async fn test_url_trailing_slash_is_trimmed() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/health"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "status": "healthy"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let url_with_slash = format!("{}/", mock_server.uri());
+        let cli = Cli {
+            url: url_with_slash,
+            command: Command::Health,
+        };
+
+        let result = run(cli).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_session_info_with_different_status_values() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/session-info"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "session_info": {
+                    "next_sender_seq_number": 1,
+                    "next_target_seq_number": 1,
+                    "status": "AwaitingLogon"
+                }
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let cli = Cli {
+            url: mock_server.uri(),
+            command: Command::SessionInfo,
+        };
+
+        let result = run(cli).await;
+        assert!(result.is_ok());
+    }
+}
