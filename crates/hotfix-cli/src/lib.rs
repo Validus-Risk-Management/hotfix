@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use owo_colors::OwoColorize;
 use serde::Deserialize;
 
 #[derive(Parser)]
@@ -7,7 +8,7 @@ use serde::Deserialize;
 #[command(about = "CLI tool for managing hotfix sessions", long_about = None)]
 pub struct Cli {
     /// Base URL of the hotfix web server
-    #[arg(short, long, default_value = "http://localhost:3000")]
+    #[arg(short, long, default_value = "http://localhost:9881")]
     pub url: String,
 
     #[command(subcommand)]
@@ -62,8 +63,8 @@ pub async fn run(cli: Cli) -> Result<()> {
                 .await
                 .context("Failed to parse health response")?;
 
-            println!("Status: {}", status);
-            println!("Health: {}", health.status);
+            println!("{} {}", "Status:".bold(), status.to_string().bright_blue());
+            println!("{} {}", "Health:".bold(), health.status.green());
         }
         Command::SessionInfo => {
             let url = format!("{}/api/session-info", base_url);
@@ -79,11 +80,23 @@ pub async fn run(cli: Cli) -> Result<()> {
                 .await
                 .context("Failed to parse session-info response")?;
 
-            println!("Status: {}", status);
-            println!("Session Info:");
-            println!("  Next Sender Seq Number: {}", info.session_info.next_sender_seq_number);
-            println!("  Next Target Seq Number: {}", info.session_info.next_target_seq_number);
-            println!("  Status: {}", info.session_info.status);
+            println!("{} {}", "Status:".bold(), status.to_string().bright_blue());
+            println!("{}", "Session Info:".bold().underline());
+            println!(
+                "  {}: {}",
+                "Next Sender Seq Number".cyan(),
+                info.session_info.next_sender_seq_number
+            );
+            println!(
+                "  {}: {}",
+                "Next Target Seq Number".cyan(),
+                info.session_info.next_target_seq_number
+            );
+            println!(
+                "  {}: {}",
+                "Status".cyan(),
+                info.session_info.status.yellow()
+            );
         }
         Command::Reset => {
             let url = format!("{}/api/reset", base_url);
@@ -95,11 +108,16 @@ pub async fn run(cli: Cli) -> Result<()> {
 
             let status = response.status();
             if status.is_success() {
-                println!("Status: {}", status);
-                println!("Reset requested successfully");
+                println!("{} {}", "Status:".bold(), status.to_string().bright_blue());
+                println!("{}", "Reset requested successfully".green());
             } else {
                 let text = response.text().await.unwrap_or_default();
-                anyhow::bail!("Reset request failed with status {}: {}", status, text);
+                anyhow::bail!(
+                    "{} with status {}: {}",
+                    "Reset request failed".red(),
+                    status,
+                    text
+                );
             }
         }
         Command::Shutdown => {
@@ -112,11 +130,16 @@ pub async fn run(cli: Cli) -> Result<()> {
 
             let status = response.status();
             if status.is_success() {
-                println!("Status: {}", status);
-                println!("Shutdown requested successfully");
+                println!("{} {}", "Status:".bold(), status.to_string().bright_blue());
+                println!("{}", "Shutdown requested successfully".green());
             } else {
                 let text = response.text().await.unwrap_or_default();
-                anyhow::bail!("Shutdown request failed with status {}: {}", status, text);
+                anyhow::bail!(
+                    "{} with status {}: {}",
+                    "Shutdown request failed".red(),
+                    status,
+                    text
+                );
             }
         }
     }
