@@ -8,7 +8,7 @@ use serde::Deserialize;
 #[command(about = "CLI tool for managing hotfix sessions", long_about = None)]
 pub struct Cli {
     /// Base URL of the hotfix web server
-    #[arg(short, long, default_value = "http://localhost:9881")]
+    #[arg(short, long, env = "HOTFIX_WEB_URL", default_value = "http://localhost:9881")]
     pub url: String,
 
     #[command(subcommand)]

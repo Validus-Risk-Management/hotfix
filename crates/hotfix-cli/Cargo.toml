@@ -12,7 +12,7 @@ categories.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-clap = { workspace = true, features = ["derive"] }
+clap = { workspace = true, features = ["derive", "env"] }
 owo-colors.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
