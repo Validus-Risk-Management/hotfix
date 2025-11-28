@@ -2,7 +2,7 @@ use assert_cmd::assert::OutputAssertExt;
 use assert_cmd::cargo_bin;
 use predicates::prelude::*;
 use std::process::Command;
-use wiremock::matchers::{method, path};
+use wiremock::matchers::{body_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[tokio::test]
@@ -82,6 +82,7 @@ async fn test_cli_shutdown_command_integration() {
 
     Mock::given(method("POST"))
         .and(path("/api/shutdown"))
+        .and(body_json(serde_json::json!({"reconnect": true})))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
         .mount(&mock_server)
         .await;
@@ -90,6 +91,28 @@ async fn test_cli_shutdown_command_integration() {
     cmd.arg("--url")
         .arg(mock_server.uri())
         .arg("shutdown")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Shutdown requested successfully"));
+}
+
+#[tokio::test]
+async fn test_cli_shutdown_command_with_reconnect_false() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/api/shutdown"))
+        .and(body_json(serde_json::json!({"reconnect": false})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+        .mount(&mock_server)
+        .await;
+
+    let mut cmd = Command::new(cargo_bin!("hotfix"));
+    cmd.arg("--url")
+        .arg(mock_server.uri())
+        .arg("shutdown")
+        .arg("--reconnect")
+        .arg("false")
         .assert()
         .success()
         .stdout(predicate::str::contains("Shutdown requested successfully"));

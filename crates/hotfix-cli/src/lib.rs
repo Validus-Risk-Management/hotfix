@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use owo_colors::OwoColorize;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]
 #[command(name = "hotfix")]
@@ -29,7 +29,11 @@ pub enum Command {
     /// Request a reset on next logon
     Reset,
     /// Shutdown the session
-    Shutdown,
+    Shutdown {
+        /// Whether to reconnect after shutdown
+        #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+        reconnect: bool,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -47,6 +51,11 @@ pub struct SessionInfo {
     pub next_sender_seq_number: u64,
     pub next_target_seq_number: u64,
     pub status: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ShutdownRequest {
+    pub reconnect: bool,
 }
 
 pub async fn run(cli: Cli) -> Result<()> {
@@ -125,10 +134,12 @@ pub async fn run(cli: Cli) -> Result<()> {
                 );
             }
         }
-        Command::Shutdown => {
+        Command::Shutdown { reconnect } => {
             let url = format!("{}/api/shutdown", base_url);
+            let body = ShutdownRequest { reconnect };
             let response = client
                 .post(&url)
+                .json(&body)
                 .send()
                 .await
                 .context("Failed to send shutdown request")?;
@@ -235,7 +246,7 @@ mod tests {
 
         let cli = Cli {
             url: mock_server.uri(),
-            command: Command::Shutdown,
+            command: Command::Shutdown { reconnect: true },
         };
 
         let result = run(cli).await;
@@ -279,7 +290,7 @@ mod tests {
 
         let cli = Cli {
             url: mock_server.uri(),
-            command: Command::Shutdown,
+            command: Command::Shutdown { reconnect: true },
         };
 
         let result = run(cli).await;

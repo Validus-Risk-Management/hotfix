@@ -193,6 +193,19 @@ mod tests {
             self.request(Method::POST, path).await
         }
 
+        async fn post_json(&mut self, path: &str, json: Value) -> TestResponse {
+            let body = serde_json::to_string(&json).unwrap();
+            let request = Request::builder()
+                .method(Method::POST)
+                .uri(path)
+                .header("Content-Type", "application/json")
+                .body(Body::from(body))
+                .unwrap();
+
+            let response = self.router.clone().oneshot(request).await.unwrap();
+            TestResponse::new(response).await
+        }
+
         async fn request(&mut self, method: Method, path: &str) -> TestResponse {
             let request = Request::builder()
                 .method(method)
@@ -309,7 +322,9 @@ mod tests {
         };
         let mut ctx = TestContext::with_config(config);
 
-        let response = ctx.post("/api/shutdown").await;
+        let response = ctx
+            .post_json("/api/shutdown", serde_json::json!({"reconnect": true}))
+            .await;
 
         response.assert_status(StatusCode::OK);
         let state = ctx.get_state();
@@ -318,6 +333,27 @@ mod tests {
             state.shutdown_reconnect,
             Some(true),
             "Shutdown should be called with reconnect=true"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_endpoint_calls_shutdown_without_reconnect() {
+        let config = RouterConfig {
+            enable_admin_endpoints: true,
+        };
+        let mut ctx = TestContext::with_config(config);
+
+        let response = ctx
+            .post_json("/api/shutdown", serde_json::json!({"reconnect": false}))
+            .await;
+
+        response.assert_status(StatusCode::OK);
+        let state = ctx.get_state();
+        assert!(state.shutdown_called, "Shutdown should have been called");
+        assert_eq!(
+            state.shutdown_reconnect,
+            Some(false),
+            "Shutdown should be called with reconnect=false"
         );
     }
 
