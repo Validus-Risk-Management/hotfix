@@ -182,7 +182,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
         if let SessionState::AwaitingLogon { .. } = &mut self.state {
             // TODO: should this (and all inbound message processing) logic be pushed into the state?
             if message_type != "A" {
-                self.state.disconnect().await;
+                self.state.disconnect_writer().await;
                 return Ok(());
             }
         }
@@ -224,7 +224,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
                     InboundDecision::TerminateSession
                 ) {
                     error!("failed to send inbound message to application");
-                    self.state.disconnect().await;
+                    self.state.disconnect_writer().await;
                 }
                 self.store.increment_target_seq_number().await?;
             }
@@ -287,11 +287,8 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
             SessionState::Active { .. }
             | SessionState::AwaitingLogon { .. }
             | SessionState::AwaitingResend(_) => {
-                self.state.disconnect().await;
+                self.state.disconnect_writer().await;
                 self.state = SessionState::new_disconnected(true, &reason);
-            }
-            SessionState::LoggedOut { reconnect } => {
-                self.state = SessionState::new_disconnected(reconnect, "logged out");
             }
             SessionState::Disconnected { .. } => {
                 warn!("disconnect message was received, but the session is already disconnected")
@@ -326,15 +323,22 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     }
 
     async fn on_logout(&mut self) -> Result<()> {
-        if let SessionState::AwaitingLogout { .. } = &self.state {
-            self.state.disconnect().await;
-            self.state = SessionState::new_disconnected(true, "we logged out gracefully");
-        } else {
-            // TODO: reconnect = false isn't always valid, this should be more sophisticated
-            self.state.disconnect().await;
-            self.state = SessionState::LoggedOut { reconnect: false };
-            self.application.on_logout("peer has logged us out").await;
+        if self.state.is_logged_on() {
+            self.send_logout("Logout acknowledged").await;
         }
+
+        self.application.on_logout("peer has logged us out").await;
+
+        match self.state {
+            // if the session is already disconnected, we have nothing else to do
+            SessionState::Disconnected(..) => {}
+            // otherwise set the state to disconnected and assume it makes sense to try to reconnect
+            _ => {
+                self.state.disconnect_writer().await;
+                self.state = SessionState::new_disconnected(true, "peer has logged us out")
+            }
+        }
+
         self.store.increment_target_seq_number().await
     }
 
@@ -531,7 +535,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
         );
         let reason = format!("sequence number too low (actual {actual}, expected {expected})");
         self.logout_and_terminate(&reason).await;
-        self.state = SessionState::LoggedOut { reconnect: false };
+        self.state = SessionState::new_disconnected(false, &reason);
     }
 
     async fn handle_sequence_number_too_high(&mut self, expected: u64, actual: u64) {
@@ -549,14 +553,14 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
                 error!("failed to request resend: {reason}");
             }
             AwaitingResendTransitionOutcome::BeginSeqNumberTooLow => {
-                self.state.disconnect().await;
+                self.state.disconnect_writer().await;
                 self.state = SessionState::new_disconnected(
                     false,
                     "awaiting resend begin seq number unexpectedly lower than the previous resend request's",
                 );
             }
             AwaitingResendTransitionOutcome::AttemptsExceeded => {
-                self.state.disconnect().await;
+                self.state.disconnect_writer().await;
                 self.state = SessionState::new_disconnected(
                     false,
                     "resend request attempts exceeded, manual intervention required",
@@ -702,7 +706,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
             }
             OutboundDecision::TerminateSession => {
                 error!("failed to send message to application");
-                self.state.disconnect().await;
+                self.state.disconnect_writer().await;
             }
         }
     }
@@ -768,19 +772,19 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
         self.send_message(logon).await;
     }
 
-    async fn logout(&mut self, reason: &str) {
+    async fn send_logout(&mut self, reason: &str) {
         let logout = Logout::with_reason(reason.to_string());
         self.send_message(logout).await;
     }
 
     async fn logout_and_terminate(&mut self, reason: &str) {
-        self.logout(reason).await;
-        self.state.disconnect().await;
+        self.send_logout(reason).await;
+        self.state.disconnect_writer().await;
     }
 
     async fn initiate_graceful_logout(&mut self, reason: &str) {
         if self.state.try_transition_to_awaiting_logout() {
-            self.logout(reason).await;
+            self.send_logout(reason).await;
         }
     }
 
@@ -793,6 +797,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
                     let reason = err.to_string();
                     error!(reason, "fatal error in message processing");
                     self.logout_and_terminate("internal error").await;
+                    self.state = SessionState::new_disconnected(true, &reason);
                 }
             }
             SessionEvent::Disconnected(reason) => {
@@ -820,7 +825,6 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     async fn handle_admin_request(&mut self, request: AdminRequest) {
         match request {
             AdminRequest::InitiateGracefulShutdown { reconnect } => {
-                // TODO: revisit logout & shutdown flows once logout timeouts are implemented
                 warn!("initiating shutdown on request from admin..");
                 self.logout_and_terminate("shutdown requested").await;
                 self.state = SessionState::new_disconnected(reconnect, "shutdown requested");
@@ -848,7 +852,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
             self.logout_and_terminate("peer timeout").await;
         } else if self.state.is_awaiting_logon() {
             warn!("peer didn't respond to our Logon, disconnecting..");
-            self.state.disconnect().await;
+            self.state.disconnect_writer().await;
         } else {
             let req_id = format!("TEST_{}", self.store.next_target_seq_number());
             info!("sending TestRequest due to peer timer expiring");

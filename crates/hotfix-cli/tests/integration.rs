@@ -17,7 +17,7 @@ async fn test_cli_health_command_integration() {
         .mount(&mock_server)
         .await;
 
-    let mut cmd = Command::new(cargo_bin!());
+    let mut cmd = Command::new(cargo_bin!("hotfix"));
     cmd.arg("--url")
         .arg(mock_server.uri())
         .arg("health")
@@ -43,7 +43,7 @@ async fn test_cli_session_info_command_integration() {
         .mount(&mock_server)
         .await;
 
-    let mut cmd = Command::new(cargo_bin!());
+    let mut cmd = Command::new(cargo_bin!("hotfix"));
     cmd.arg("--url")
         .arg(mock_server.uri())
         .arg("session-info")
@@ -67,7 +67,7 @@ async fn test_cli_reset_command_integration() {
         .mount(&mock_server)
         .await;
 
-    let mut cmd = Command::new(cargo_bin!());
+    let mut cmd = Command::new(cargo_bin!("hotfix"));
     cmd.arg("--url")
         .arg(mock_server.uri())
         .arg("reset")
@@ -86,7 +86,7 @@ async fn test_cli_shutdown_command_integration() {
         .mount(&mock_server)
         .await;
 
-    let mut cmd = Command::new(cargo_bin!());
+    let mut cmd = Command::new(cargo_bin!("hotfix"));
     cmd.arg("--url")
         .arg(mock_server.uri())
         .arg("shutdown")
@@ -97,7 +97,7 @@ async fn test_cli_shutdown_command_integration() {
 
 #[tokio::test]
 async fn test_cli_help_command() {
-    let mut cmd = Command::new(cargo_bin!());
+    let mut cmd = Command::new(cargo_bin!("hotfix"));
     cmd.arg("--help")
         .assert()
         .success()
@@ -120,7 +120,7 @@ async fn test_cli_error_handling() {
         .mount(&mock_server)
         .await;
 
-    let mut cmd = Command::new(cargo_bin!());
+    let mut cmd = Command::new(cargo_bin!("hotfix"));
     cmd.arg("--url")
         .arg(mock_server.uri())
         .arg("reset")
@@ -141,7 +141,7 @@ async fn test_cli_with_env_var() {
         .mount(&mock_server)
         .await;
 
-    let mut cmd = Command::new(cargo_bin!());
+    let mut cmd = Command::new(cargo_bin!("hotfix"));
     cmd.env("HOTFIX_WEB_URL", mock_server.uri())
         .arg("health")
         .assert()

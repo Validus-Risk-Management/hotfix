@@ -27,8 +27,6 @@ pub enum SessionState {
     AwaitingLogout { writer: WriterRef }, // we need the writer so we can disconnect it on successful logout
     /// The session is active, we have connected and mutually logged on.
     Active(ActiveState),
-    /// The peer has logged us out.
-    LoggedOut { reconnect: bool },
     /// The TCP connection has been dropped.
     ///
     /// This is also the state we're in if we purposefully disconnected due to the current
@@ -100,7 +98,7 @@ impl SessionState {
         }
     }
 
-    pub async fn disconnect(&self) {
+    pub async fn disconnect_writer(&self) {
         match self {
             Self::Active(ActiveState { writer, .. })
             | Self::AwaitingLogon { writer, .. }
@@ -118,10 +116,6 @@ impl SessionState {
             | Self::AwaitingResend(AwaitingResendState { writer, .. }) => Some(writer),
             _ => None,
         }
-    }
-
-    pub fn is_connected(&self) -> bool {
-        self.get_writer().is_some()
     }
 
     pub fn try_transition_to_awaiting_logout(&mut self) -> bool {
@@ -157,12 +151,10 @@ impl SessionState {
             SessionState::AwaitingLogout { .. } => AwaitingResendTransitionOutcome::InvalidState(
                 "trying to request a resend while we are already logging out".to_string(),
             ),
-            SessionState::LoggedOut { .. } | SessionState::Disconnected(_) => {
-                AwaitingResendTransitionOutcome::InvalidState(
-                    "trying to transition to awaiting resend without an established connection"
-                        .to_string(),
-                )
-            }
+            SessionState::Disconnected(_) => AwaitingResendTransitionOutcome::InvalidState(
+                "trying to transition to awaiting resend without an established connection"
+                    .to_string(),
+            ),
         }
     }
 
@@ -259,6 +251,15 @@ impl SessionState {
         }
     }
 
+    pub fn is_connected(&self) -> bool {
+        self.get_writer().is_some()
+    }
+
+    pub fn is_logged_on(&self) -> bool {
+        matches!(self, SessionState::Active(_))
+            || matches!(self, SessionState::AwaitingResend { .. })
+    }
+
     pub fn is_expecting_test_response(&self) -> bool {
         self.expected_test_response_id().is_some()
     }
@@ -282,7 +283,6 @@ impl SessionState {
             },
             SessionState::AwaitingLogout { .. } => SessionInfoStatus::AwaitingLogout,
             SessionState::Active(_) => SessionInfoStatus::Active,
-            SessionState::LoggedOut { .. } => SessionInfoStatus::LoggedOut,
             SessionState::Disconnected(_) => SessionInfoStatus::Disconnected,
         }
     }
@@ -420,17 +420,6 @@ mod tests {
         assert!(matches!(
             result,
             AwaitingResendTransitionOutcome::AttemptsExceeded
-        ));
-    }
-
-    #[test]
-    fn test_awaiting_resend_transition_when_logged_out_is_prevented() {
-        let mut state = SessionState::LoggedOut { reconnect: false };
-
-        let result = state.try_transition_to_awaiting_resend(1, 5);
-        assert!(matches!(
-            result,
-            AwaitingResendTransitionOutcome::InvalidState(_)
         ));
     }
 
