@@ -23,4 +23,10 @@ You need to have a running hotfix FIX engine instance with the web interface exp
 The tool tries to connect to the web interface using the default address `http://localhost:9881`.
 You can override this using either the explicit CLI argument `--url` or the environment variable `HOTFIX_CLI_URL`.
 
-For the full list of available commands, run `hotfix-cli --help`.
+With everything set up, you can use the tool to run commands, e.g.
+
+```shell
+hotfix session-info
+```
+
+For the full list of available commands, run `hotfix --help`.
