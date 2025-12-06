@@ -1,5 +1,6 @@
 use crate::common::actions::when;
 use crate::common::assertions::{assert_msg_type, then};
+use crate::common::cleanup::finally;
 use crate::common::setup::{HEARTBEAT_INTERVAL, given_an_active_session};
 use hotfix::message::test_request::TestRequest;
 use hotfix_message::Part;
@@ -27,8 +28,7 @@ async fn test_heartbeats() {
         .receives(|msg| assert_msg_type(msg, MsgType::Heartbeat))
         .await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }
 
 /// Tests the peer timeout and disconnection mechanism:
@@ -83,6 +83,5 @@ async fn test_heartbeat_in_response_to_test_request() {
         })
         .await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }

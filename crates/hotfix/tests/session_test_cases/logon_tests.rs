@@ -1,5 +1,6 @@
 use crate::common::actions::when;
 use crate::common::assertions::{assert_msg_type, then};
+use crate::common::cleanup::finally;
 use crate::common::setup::{
     LOGON_TIMEOUT, given_a_connected_session, given_a_connected_session_with_store,
 };
@@ -29,8 +30,7 @@ async fn test_happy_logon() {
     when(&mut mock_counterparty).sends_logon().await;
     then(&mut session).status_changes_to(Status::Active).await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut mock_counterparty).gets_disconnected().await;
+    finally(&session, &mut mock_counterparty).disconnect().await;
 }
 
 /// Tests that sending a non-logon message (execution report) in response to a logon
@@ -129,8 +129,7 @@ async fn test_logon_response_with_sequence_number_too_high() {
     when(&mut counterparty).sends_gap_fill(2, 3).await; // the logon is gap filled
     then(&mut session).status_changes_to(Status::Active).await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }
 
 /// Tests the scenario where the counterparty does not respond to our logon message

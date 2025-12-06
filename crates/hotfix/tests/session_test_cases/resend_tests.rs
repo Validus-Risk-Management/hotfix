@@ -1,5 +1,6 @@
 use crate::common::actions::when;
 use crate::common::assertions::{assert_msg_type, then};
+use crate::common::cleanup::finally;
 use crate::common::setup::{HEARTBEAT_INTERVAL, given_an_active_session};
 use crate::common::test_messages::{
     TestMessage, build_execution_report_with_incorrect_body_length, build_invalid_resend_request,
@@ -41,8 +42,7 @@ async fn test_message_sequence_number_too_high() {
     when(&mut counterparty).resends_message(3).await; // the second message is resent
     then(&mut session).status_changes_to(Status::Active).await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }
 
 /// Tests that when a counterparty repeatedly resends garbled messages that cannot be processed,
@@ -140,8 +140,7 @@ async fn test_resent_message_previously_received_is_ignored() {
         })
         .await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }
 
 /// Tests that when a counterparty sends a resend request without the required field,
@@ -165,8 +164,7 @@ async fn test_invalid_resend_request_gets_rejected() {
             .receives(|msg| assert_msg_type(msg, MsgType::Reject))
             .await;
 
-        when(&session).requests_disconnect().await;
-        then(&mut counterparty).gets_disconnected().await;
+        finally(&session, &mut counterparty).disconnect().await;
     }
 }
 
@@ -218,6 +216,5 @@ async fn test_resend_request_with_gap_fill_for_admin_messages() {
         .receives(|msg| assert_msg_type(msg, MsgType::ExecutionReport))
         .await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }

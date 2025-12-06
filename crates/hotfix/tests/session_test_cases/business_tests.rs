@@ -1,5 +1,6 @@
 use crate::common::actions::when;
 use crate::common::assertions::then;
+use crate::common::cleanup::finally;
 use crate::common::setup::given_an_active_session;
 use crate::common::test_messages::TestMessage;
 use hotfix::message::FixMessage;
@@ -27,6 +28,5 @@ async fn test_new_order_single() {
         .receives(|msg| assert_eq!(msg.message_type(), MsgType::ExecutionReport.to_string()))
         .await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }

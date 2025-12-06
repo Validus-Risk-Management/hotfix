@@ -1,5 +1,6 @@
 use crate::common::actions::when;
 use crate::common::assertions::{assert_msg_type, then};
+use crate::common::cleanup::finally;
 use crate::common::setup::{COUNTERPARTY_COMP_ID, OUR_COMP_ID, given_an_active_session};
 use crate::common::test_messages::{
     ExecutionReportWithInvalidField, TestMessage, build_execution_report_with_comp_id,
@@ -28,8 +29,7 @@ async fn test_message_with_invalid_field_gets_rejected() {
         .receives(|msg| assert_msg_type(msg, MsgType::Reject))
         .await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }
 
 /// Tests that when a counterparty sends a garbled message with an invalid body length,
@@ -63,8 +63,7 @@ async fn test_garbled_message_with_invalid_target_comp_id_gets_ignored() {
         })
         .await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }
 
 /// Tests that when a counterparty sends a message with an invalid BeginString,
@@ -165,8 +164,7 @@ async fn test_message_with_invalid_msg_type() {
         .target_sequence_number_reaches(sequence_number)
         .await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }
 
 /// Tests that a message with a sequence number lower than the expected one
@@ -226,8 +224,7 @@ async fn test_message_with_sequence_number_too_low_possdup_ignored() {
         .target_sequence_number_reaches(second_seq)
         .await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }
 
 /// Tests that a message with `OrigSendingTime` after `SendingTime` is rejected
@@ -262,8 +259,7 @@ async fn test_message_with_incorrect_orig_sending_time_is_rejected() {
         })
         .await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }
 
 /// Tests that a message with missing `OrigSendingTime` is rejected.
@@ -299,8 +295,7 @@ async fn test_message_with_missing_orig_sending_time_is_rejected() {
         })
         .await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }
 
 /// Tests that a message with missing `SendingTime` is rejected.
@@ -333,8 +328,7 @@ async fn test_message_with_missing_sending_time_is_rejected() {
         .target_sequence_number_reaches(seq_number)
         .await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }
 
 /// Tests that a message with `SendingTime` too far in the past is rejected.
@@ -367,8 +361,7 @@ async fn test_message_with_sending_time_too_old_is_rejected() {
         .target_sequence_number_reaches(seq_number)
         .await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }
 
 /// Tests that a message with PossDupFlag=Y but missing OrigSendingTime is rejected.
@@ -407,6 +400,5 @@ async fn test_scenario_2g_possdup_without_orig_sending_time() {
         })
         .await;
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }

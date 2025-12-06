@@ -1,5 +1,6 @@
 use crate::common::actions::when;
 use crate::common::assertions::{assert_msg_type, then};
+use crate::common::cleanup::finally;
 use crate::common::setup::given_an_active_session;
 use hotfix::session::Status;
 use hotfix_message::Part;
@@ -40,8 +41,7 @@ async fn test_reset_sequence_numbers_once() {
         .expect("reset request to succeed");
 
     // the counterparty is disconnected
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 
     // a new connection is established to the counterparty
     when(&mut counterparty).gets_reconnected(true).await;
@@ -70,6 +70,5 @@ async fn test_reset_sequence_numbers_once() {
         "target sequence number should be 2 (after receiving logon)"
     );
 
-    when(&session).requests_disconnect().await;
-    then(&mut counterparty).gets_disconnected().await;
+    finally(&session, &mut counterparty).disconnect().await;
 }
