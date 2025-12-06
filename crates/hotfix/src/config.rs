@@ -52,6 +52,10 @@ fn default_logon_timeout() -> u64 {
     10
 }
 
+fn default_logout_timeout() -> u64 {
+    2
+}
+
 /// The configuration of a single FIX session.
 #[derive(Clone, Debug, Deserialize)]
 pub struct SessionConfig {
@@ -86,6 +90,10 @@ pub struct SessionConfig {
     /// The time we wait in seconds for Logon responses before timing out.
     #[serde(default = "default_logon_timeout")]
     pub logon_timeout: u64,
+
+    /// The time we wait in seconds for Logon responses before timing out.
+    #[serde(default = "default_logout_timeout")]
+    pub logout_timeout: u64,
 
     /// The interval we should attempt to reconnect at in seconds.
     #[serde(default = "default_reconnect_interval")]

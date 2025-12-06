@@ -783,7 +783,10 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     }
 
     async fn initiate_graceful_logout(&mut self, reason: &str) {
-        if self.state.try_transition_to_awaiting_logout() {
+        if self
+            .state
+            .try_transition_to_awaiting_logout(Duration::from_secs(self.config.logout_timeout))
+        {
             self.send_logout(reason).await;
         }
     }
@@ -852,6 +855,9 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
             self.logout_and_terminate("peer timeout").await;
         } else if self.state.is_awaiting_logon() {
             warn!("peer didn't respond to our Logon, disconnecting..");
+            self.state.disconnect_writer().await;
+        } else if self.state.is_awaiting_logout() {
+            warn!("peer didn't respond to our Logout, disconnecting..");
             self.state.disconnect_writer().await;
         } else {
             let req_id = format!("TEST_{}", self.store.next_target_seq_number());

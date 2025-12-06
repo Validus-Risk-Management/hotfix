@@ -191,6 +191,7 @@ mod tests {
             tls_config: None,
             heartbeat_interval: 0,
             logon_timeout: 0,
+            logout_timeout: 0,
             reconnect_interval: 0,
             reset_on_logon: false,
             schedule: None,
