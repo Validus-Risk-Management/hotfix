@@ -27,6 +27,7 @@ pub enum SessionState {
     AwaitingLogout {
         writer: WriterRef, // we need the writer so we can disconnect it on successful logout
         logout_timeout: Instant,
+        reconnect: bool, // we carry this forward for the subsequent disconnected state
     },
     /// The session is active, we have connected and mutually logged on.
     Active(ActiveState),
@@ -121,7 +122,11 @@ impl SessionState {
         }
     }
 
-    pub fn try_transition_to_awaiting_logout(&mut self, logout_timeout: Duration) -> bool {
+    pub fn try_transition_to_awaiting_logout(
+        &mut self,
+        logout_timeout: Duration,
+        reconnect: bool,
+    ) -> bool {
         if matches!(self, SessionState::AwaitingLogout { .. }) {
             debug!("already in awaiting logout state");
             return false;
@@ -131,6 +136,7 @@ impl SessionState {
             *self = SessionState::AwaitingLogout {
                 writer: writer.clone(),
                 logout_timeout: Instant::now() + logout_timeout,
+                reconnect,
             };
             true
         } else {
@@ -437,6 +443,7 @@ mod tests {
         let mut state = SessionState::AwaitingLogout {
             writer: create_writer_ref(),
             logout_timeout: Instant::now(),
+            reconnect: false,
         };
 
         let result = state.try_transition_to_awaiting_resend(1, 5);
