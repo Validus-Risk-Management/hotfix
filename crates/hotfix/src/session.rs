@@ -774,11 +774,23 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
         self.send_message(logout).await;
     }
 
+    /// Sends a logout message and immediately disconnects the counterparty.
+    ///
+    /// This should be used sparingly in scenarios where there is a major issue
+    /// requiring operational intervention, such as the sequence number being lower
+    /// than expected, or some other key header field containing an invalid value.
+    ///
+    /// In other scenarios, [`initiate_graceful_logout`] should be preferred.
     async fn logout_and_terminate(&mut self, reason: &str) {
         self.send_logout(reason).await;
         self.state.disconnect_writer().await;
     }
 
+    /// Sends a logout message and puts the session state into an [`AwaitingLogout`] state.
+    ///
+    /// The session waits for a configurable timeout period for the counterparty to
+    /// respond with a `Logout` message. If no response is received within the timeout
+    /// period, it disconnects the counterparty.
     async fn initiate_graceful_logout(&mut self, reason: &str, reconnect: bool) {
         if self.state.try_transition_to_awaiting_logout(
             Duration::from_secs(self.config.logout_timeout),
