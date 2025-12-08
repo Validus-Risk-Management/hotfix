@@ -117,9 +117,14 @@ where
         }
     }
 
-    pub async fn send_gap_fill(&mut self, start_seq_no: u64, new_seq_no: u64) {
+    pub async fn send_sequence_reset(
+        &mut self,
+        start_seq_no: u64,
+        new_seq_no: u64,
+        gap_fill: bool,
+    ) {
         let sequence_reset = SequenceReset {
-            gap_fill: true,
+            gap_fill,
             new_seq_no,
         };
         let raw_message = generate_message(

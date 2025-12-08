@@ -47,7 +47,15 @@ impl When<&mut FakeCounterparty<TestMessage>> {
     }
 
     pub async fn sends_gap_fill(&mut self, start_seq_no: u64, new_seq_no: u64) {
-        self.target.send_gap_fill(start_seq_no, new_seq_no).await;
+        self.target
+            .send_sequence_reset(start_seq_no, new_seq_no, true)
+            .await;
+    }
+
+    pub async fn sends_sequence_reset(&mut self, start_seq_no: u64, new_seq_no: u64) {
+        self.target
+            .send_sequence_reset(start_seq_no, new_seq_no, false)
+            .await;
     }
 
     pub async fn sends_logon(&mut self) {

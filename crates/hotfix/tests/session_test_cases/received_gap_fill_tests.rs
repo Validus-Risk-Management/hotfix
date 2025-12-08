@@ -2,6 +2,9 @@
 //!
 //! These tests are only concerned with gap fills,
 //! that is `SequenceReset` messages with the `GapFillFlag` set to `Y`.
+//!
+//! These correspond to the test cases in
+//! [Scenario 10](https://www.fixtrading.org/standards/fix-session-testcases-online/#scenario-10-receive-sequence-reset-gap-fill).
 use crate::common::actions::when;
 use crate::common::assertions::{assert_msg_type, then};
 use crate::common::cleanup::finally;
