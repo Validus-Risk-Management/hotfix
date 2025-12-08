@@ -436,7 +436,11 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     }
 
     async fn on_sequence_reset(&mut self, message: &Message) -> Result<()> {
-        let is_gap_fill: bool = message.get(fix44::GAP_FILL_FLAG).unwrap();
+        let msg_seq_num = message
+            .header()
+            .get(fix44::MSG_SEQ_NUM)
+            .map_err(|_| anyhow!("failed to get seq number"))?;
+        let is_gap_fill: bool = message.get(fix44::GAP_FILL_FLAG).unwrap_or(false);
         if let Err(err) = self.verify_message(message, is_gap_fill) {
             self.handle_verification_error(err).await;
             return Ok(());
@@ -449,18 +453,29 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
                     "received sequence reset message without new sequence number: {:?}",
                     err
                 );
-                let reject = Reject::new(
-                    message
-                        .header()
-                        .get(fix44::MSG_SEQ_NUM)
-                        .map_err(|_| anyhow!("failed to get seq number"))?,
-                )
-                .session_reject_reason(SessionRejectReason::RequiredTagMissing)
-                .text("missing NewSeqNo tag in sequence reset message");
+                let reject = Reject::new(msg_seq_num)
+                    .session_reject_reason(SessionRejectReason::RequiredTagMissing)
+                    .text("missing NewSeqNo tag in sequence reset message");
                 self.send_message(reject).await;
                 return Ok(());
             }
         };
+
+        // sequence resets cannot move the target seq number backwards
+        // regardless of whether the message is a gap fill or not
+        if end <= self.store.next_target_seq_number() {
+            error!(
+                "received sequence reset message which would move target seq number backwards: {end}",
+            );
+            let text =
+                format!("attempt to lower sequence number, invalid value NewSeqNo(36)={end}");
+            let reject = Reject::new(msg_seq_num)
+                .session_reject_reason(SessionRejectReason::ValueIsIncorrect)
+                .text(&text);
+            self.send_message(reject).await;
+            return Ok(());
+        }
+
         self.store.set_target_seq_number(end - 1).await
     }
 

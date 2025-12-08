@@ -5,13 +5,13 @@
 //!
 //! These correspond to the test cases in
 //! [Scenario 11](https://www.fixtrading.org/standards/fix-session-testcases-online/#scenario-11-receive-sequence-reset-reset).
-use tokio::test;
-
 use crate::common::actions::when;
-use crate::common::assertions::then;
+use crate::common::assertions::{assert_msg_type, then};
 use crate::common::cleanup::finally;
 use crate::common::setup::given_an_active_session;
 use crate::common::test_messages::TestMessage;
+use hotfix_message::fix44::MsgType;
+use tokio::test;
 
 /// Tests that the session correctly processes an inbound SequenceReset message
 /// with `NewSeqNo` higher than the current target sequence number.
@@ -59,6 +59,42 @@ async fn test_sequence_number_is_ignored_in_resets() {
         .await;
     then(&mut session)
         .target_sequence_number_reaches(new_sequence_number - 1)
+        .await;
+
+    finally(&session, &mut counterparty).disconnect().await;
+}
+
+#[test]
+async fn test_reset_moving_sequence_number_back_is_rejected() {
+    let (mut session, mut counterparty) = given_an_active_session().await;
+
+    // the counterparty sends a valid message
+    let sequence_number = counterparty.next_target_sequence_number();
+    when(&mut counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
+        .await;
+    then(&mut session)
+        .target_sequence_number_reaches(sequence_number)
+        .await;
+
+    // the counterparty then tries to reset our sequence number back to a value
+    // lower than what we think it should be
+    when(&mut counterparty)
+        .sends_sequence_reset(sequence_number + 1, 1)
+        .await;
+
+    // which gets rejected
+    then(&mut counterparty)
+        .receives(|msg| assert_msg_type(msg, MsgType::Reject))
+        .await;
+
+    // but the session remains active, and we're able to process subsequent messages
+    let sequence_number = counterparty.next_target_sequence_number();
+    when(&mut counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
+        .await;
+    then(&mut session)
+        .target_sequence_number_reaches(sequence_number)
         .await;
 
     finally(&session, &mut counterparty).disconnect().await;
