@@ -4,5 +4,6 @@ mod heartbeat_tests;
 mod invalid_message_tests;
 mod logon_tests;
 mod logout_tests;
+mod received_gap_fill_tests;
+mod received_reset_tests;
 mod resend_tests;
-mod sequence_reset_tests;
