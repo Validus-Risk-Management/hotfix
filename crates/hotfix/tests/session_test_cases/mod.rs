@@ -5,3 +5,4 @@ mod invalid_message_tests;
 mod logon_tests;
 mod logout_tests;
 mod resend_tests;
+mod sequence_reset_tests;
