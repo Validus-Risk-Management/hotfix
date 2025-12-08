@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.3.2...hotfix-v0.4.0) - 2025-12-08
+
+### Added
+
+- support logout timeouts ([#252](https://github.com/Validus-Risk-Management/hotfix/pull/252))
+
+### Other
+
+- revise use of logout_and_terminate ([#253](https://github.com/Validus-Risk-Management/hotfix/pull/253))
+
 ## [0.3.2](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.3.1...hotfix-v0.3.2) - 2025-11-28
 
 ### Added

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-cli-v0.2.0...hotfix-cli-v0.2.1) - 2025-12-08
+
+### Other
+
+- update Cargo.lock dependencies
+
 ## [0.2.0](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-cli-v0.1.0...hotfix-cli-v0.2.0) - 2025-11-28
 
 ### Added
