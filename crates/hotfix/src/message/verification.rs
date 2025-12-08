@@ -13,7 +13,7 @@ const SENDING_TIME_THRESHOLD: u64 = 120;
 pub(crate) fn verify_message(
     message: &Message,
     config: &SessionConfig,
-    expected_seq_number: u64,
+    expected_seq_number: Option<u64>,
 ) -> Result<(), MessageVerificationError> {
     check_begin_string(message, config.begin_string.as_str())?;
     let actual_seq_number: u64 = message.header().get(fix44::MSG_SEQ_NUM).unwrap_or_default();
@@ -33,7 +33,9 @@ pub(crate) fn verify_message(
         check_original_sending_time(message, actual_seq_number, sending_time)?;
     }
 
-    check_sequence_number(actual_seq_number, expected_seq_number, possible_duplicate)?;
+    if let Some(expected_seq_number) = expected_seq_number {
+        check_sequence_number(actual_seq_number, expected_seq_number, possible_duplicate)?;
+    }
 
     Ok(())
 }
@@ -217,7 +219,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 42);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(result.is_ok());
     }
@@ -227,7 +229,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.2", "TARGET", "SENDER", 42);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -243,7 +245,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "WRONG_SENDER", "SENDER", 42);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -269,7 +271,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "TARGET", "WRONG_TARGET", 42);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -295,7 +297,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 40);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -321,7 +323,7 @@ mod tests {
         msg.header_mut()
             .set(fix44::ORIG_SENDING_TIME, Timestamp::utc_now());
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -344,7 +346,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 50);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -363,7 +365,7 @@ mod tests {
         msg.header_mut().set(fix44::POSS_DUP_FLAG, true);
         // Don't set OrigSendingTime
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -388,7 +390,7 @@ mod tests {
         msg.header_mut().pop(fix44::SENDING_TIME);
         msg.header_mut().set(fix44::SENDING_TIME, sending_time);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(result.is_ok());
     }
@@ -407,7 +409,7 @@ mod tests {
         msg.header_mut().pop(fix44::SENDING_TIME);
         msg.header_mut().set(fix44::SENDING_TIME, sending_time);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -437,7 +439,7 @@ mod tests {
         msg.header_mut().pop(fix44::SENDING_TIME);
         msg.header_mut().set(fix44::SENDING_TIME, timestamp);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         // equal timestamps should be valid (orig <= sending)
         assert!(result.is_ok());
@@ -455,7 +457,7 @@ mod tests {
         // remove begin string, which is automatically added by `Message::new`
         msg.header_mut().pop(fix44::BEGIN_STRING);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -471,7 +473,7 @@ mod tests {
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
         msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -490,7 +492,7 @@ mod tests {
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
         msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -509,7 +511,7 @@ mod tests {
         msg.set(fix44::TARGET_COMP_ID, "SENDER");
         msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         // missing seq num defaults to 0, which will be too low
         assert!(matches!(
@@ -523,7 +525,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 0);
 
-        let result = verify_message(&msg, &config, 1);
+        let result = verify_message(&msg, &config, Some(1));
 
         assert!(matches!(
             result,
@@ -536,7 +538,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 1);
 
-        let result = verify_message(&msg, &config, 1);
+        let result = verify_message(&msg, &config, Some(1));
 
         assert!(result.is_ok());
     }
@@ -547,7 +549,7 @@ mod tests {
         // wrong begin string AND wrong seq num - begin string error should come first
         let msg = build_test_message("FIX.4.2", "TARGET", "SENDER", 100);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -561,7 +563,7 @@ mod tests {
         // wrong sender and wrong target - sender error should come first
         let msg = build_test_message("FIX.4.4", "WRONG_SENDER", "WRONG_TARGET", 42);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -580,7 +582,7 @@ mod tests {
         msg.set(fix44::TARGET_COMP_ID, "SENDER");
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -607,7 +609,7 @@ mod tests {
         let past_timestamp: Timestamp = past_time.naive_utc().into();
         msg.set(fix44::SENDING_TIME, past_timestamp);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -634,7 +636,7 @@ mod tests {
         let future_timestamp: Timestamp = future_time.naive_utc().into();
         msg.set(fix44::SENDING_TIME, future_timestamp);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(matches!(
             result,
@@ -661,7 +663,7 @@ mod tests {
         let boundary_timestamp: Timestamp = boundary_time.naive_utc().into();
         msg.set(fix44::SENDING_TIME, boundary_timestamp);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(result.is_ok());
     }
@@ -682,7 +684,7 @@ mod tests {
         let valid_timestamp: Timestamp = valid_time.naive_utc().into();
         msg.set(fix44::SENDING_TIME, valid_timestamp);
 
-        let result = verify_message(&msg, &config, 42);
+        let result = verify_message(&msg, &config, Some(42));
 
         assert!(result.is_ok());
     }

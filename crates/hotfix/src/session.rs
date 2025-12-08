@@ -167,8 +167,6 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
         let message_type = message.header().get(fix44::MSG_TYPE)?;
 
         if let SessionState::AwaitingResend(state) = &mut self.state {
-            // TODO: consider what messages won't have a sequence number?
-            // e.g. SequenceReset?
             let seq_number: u64 = message
                 .header()
                 .get(fix44::MSG_SEQ_NUM)
@@ -216,7 +214,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     }
 
     async fn process_app_message(&mut self, message: &Message) -> Result<()> {
-        match self.verify_message(message) {
+        match self.verify_message(message, true) {
             Ok(_) => {
                 let parsed_message = M::parse(message);
                 if matches!(
@@ -268,8 +266,14 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     fn verify_message(
         &self,
         message: &Message,
+        verify_target_seq_number: bool,
     ) -> std::result::Result<(), MessageVerificationError> {
-        verify_message(message, &self.config, self.store.next_target_seq_number())
+        let expected_seq_number = if verify_target_seq_number {
+            Some(self.store.next_target_seq_number())
+        } else {
+            None
+        };
+        verify_message(message, &self.config, expected_seq_number)
     }
 
     async fn on_connect(&mut self, writer: WriterRef) {
@@ -300,9 +304,8 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     }
 
     async fn on_logon(&mut self, message: &Message) -> Result<()> {
-        // TODO: this should wait to see if a resend request is sent
         if let SessionState::AwaitingLogon { writer, .. } = &self.state {
-            match self.verify_message(message) {
+            match self.verify_message(message, true) {
                 Ok(_) => {
                     // happy logon flow, the session is now active
                     self.state =
@@ -433,13 +436,31 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     }
 
     async fn on_sequence_reset(&mut self, message: &Message) -> Result<()> {
-        let gap_fill: bool = message.get(fix44::GAP_FILL_FLAG).unwrap();
-        if !gap_fill {
-            // TODO: non gap fill is valid as well of course, but I don't yet know the use-case for it is
-            panic!("expected sequence reset with gap fill");
+        let is_gap_fill: bool = message.get(fix44::GAP_FILL_FLAG).unwrap();
+        if let Err(err) = self.verify_message(message, is_gap_fill) {
+            self.handle_verification_error(err).await;
+            return Ok(());
         }
 
-        let end: u64 = message.get(fix44::NEW_SEQ_NO).unwrap();
+        let end: u64 = match message.get(fix44::NEW_SEQ_NO) {
+            Ok(new_seq_no) => new_seq_no,
+            Err(err) => {
+                error!(
+                    "received sequence reset message without new sequence number: {:?}",
+                    err
+                );
+                let reject = Reject::new(
+                    message
+                        .header()
+                        .get(fix44::MSG_SEQ_NUM)
+                        .map_err(|_| anyhow!("failed to get seq number"))?,
+                )
+                .session_reject_reason(SessionRejectReason::RequiredTagMissing)
+                .text("missing NewSeqNo tag in sequence reset message");
+                self.send_message(reject).await;
+                return Ok(());
+            }
+        };
         self.store.set_target_seq_number(end - 1).await
     }
 
