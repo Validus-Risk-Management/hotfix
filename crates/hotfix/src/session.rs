@@ -457,6 +457,10 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
                     .session_reject_reason(SessionRejectReason::RequiredTagMissing)
                     .text("missing NewSeqNo tag in sequence reset message");
                 self.send_message(reject).await;
+
+                // note: we don't increment the target seq number here
+                // this is an ambiguous case in the specification, but leaving the
+                // sequence number as is feels the safest
                 return Ok(());
             }
         };

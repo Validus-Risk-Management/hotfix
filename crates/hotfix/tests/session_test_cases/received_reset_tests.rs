@@ -9,7 +9,7 @@ use crate::common::actions::when;
 use crate::common::assertions::{assert_msg_type, then};
 use crate::common::cleanup::finally;
 use crate::common::setup::given_an_active_session;
-use crate::common::test_messages::TestMessage;
+use crate::common::test_messages::{TestMessage, build_sequence_reset_without_new_seq_no};
 use hotfix_message::fix44::MsgType;
 use tokio::test;
 
@@ -89,6 +89,47 @@ async fn test_reset_moving_sequence_number_back_is_rejected() {
         .await;
 
     // but the session remains active, and we're able to process subsequent messages
+    let sequence_number = counterparty.next_target_sequence_number();
+    when(&mut counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
+        .await;
+    then(&mut session)
+        .target_sequence_number_reaches(sequence_number)
+        .await;
+
+    finally(&session, &mut counterparty).disconnect().await;
+}
+
+/// Tests that receiving a SequenceReset without the required `NewSeqNo` field
+/// results in a Reject message being sent.
+///
+/// In this case, our target sequence number is not incremented.
+/// This is an ambiguous area in the specification, but we think this option
+/// is the safest of handling invalid resets.
+#[test]
+async fn test_reject_sequence_reset_without_new_seq_no() {
+    let (mut session, mut counterparty) = given_an_active_session().await;
+
+    // the counterparty sends a SequenceReset without the required NewSeqNo field
+    let sequence_number = counterparty.next_target_sequence_number();
+    let invalid_reset = build_sequence_reset_without_new_seq_no(sequence_number);
+    when(&mut counterparty)
+        .sends_raw_message(invalid_reset)
+        .await;
+
+    // the session rejects this invalid SequenceReset with a Reject message
+    then(&mut counterparty)
+        .receives(|msg| {
+            assert_msg_type(msg, MsgType::Reject);
+        })
+        .await;
+
+    // verify the session remains active by sending a valid message
+    // note: since the invalid reset was rejected, the target sequence number wasn't incremented
+    // we need to delete the invalid reset from the counterparty's store first to send
+    // message with the same sequence number
+    counterparty.delete_last_message_from_store();
+
     let sequence_number = counterparty.next_target_sequence_number();
     when(&mut counterparty)
         .sends_message(TestMessage::dummy_execution_report())

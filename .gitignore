@@ -6,3 +6,4 @@
 /data/*
 flamegraph.svg
 tracing*
+lcov.info

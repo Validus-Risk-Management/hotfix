@@ -395,3 +395,14 @@ pub fn build_invalid_resend_request(
 
     msg.encode(&Config::default()).unwrap()
 }
+
+pub fn build_sequence_reset_without_new_seq_no(msg_seq_num: u64) -> Vec<u8> {
+    let mut msg = Message::new("FIX.4.4", "4"); // MsgType 4 = SequenceReset
+    msg.set(fix44::SENDER_COMP_ID, COUNTERPARTY_COMP_ID);
+    msg.set(fix44::TARGET_COMP_ID, OUR_COMP_ID);
+    msg.set(fix44::MSG_SEQ_NUM, msg_seq_num);
+    msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
+    // Deliberately omit NEW_SEQ_NO to create an invalid SequenceReset
+
+    msg.encode(&Config::default()).unwrap()
+}
