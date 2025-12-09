@@ -34,3 +34,6 @@ pub mod transport;
 pub use application::Application;
 pub use hotfix_message::field_types;
 pub use hotfix_message::message::Message;
+
+#[cfg(feature = "fix44")]
+pub use hotfix_message::fix44;

@@ -1,9 +1,12 @@
 use crate::config::SessionConfig;
 use crate::error::{CompIdType, MessageVerificationError};
+use hotfix_message::Part;
 use hotfix_message::field_types::Timestamp;
-use hotfix_message::fix44::{ORIG_SENDING_TIME, POSS_DUP_FLAG, SENDING_TIME};
 use hotfix_message::message::Message;
-use hotfix_message::{Part, fix44};
+use hotfix_message::session_fields::{
+    BEGIN_STRING, MSG_SEQ_NUM, ORIG_SENDING_TIME, POSS_DUP_FLAG, SENDER_COMP_ID, SENDING_TIME,
+    TARGET_COMP_ID,
+};
 use std::cmp::Ordering;
 use tracing::error;
 
@@ -16,7 +19,7 @@ pub(crate) fn verify_message(
     expected_seq_number: Option<u64>,
 ) -> Result<(), MessageVerificationError> {
     check_begin_string(message, config.begin_string.as_str())?;
-    let actual_seq_number: u64 = message.header().get(fix44::MSG_SEQ_NUM).unwrap_or_default();
+    let actual_seq_number: u64 = message.header().get(MSG_SEQ_NUM).unwrap_or_default();
 
     // our TargetCompId is always the same as the expected SenderCompId for them
     let expected_sender_comp_id: &str = config.target_comp_id.as_str();
@@ -44,7 +47,7 @@ fn check_begin_string(
     message: &Message,
     expected_begin_string: &str,
 ) -> Result<(), MessageVerificationError> {
-    let begin_string: &str = message.header().get(fix44::BEGIN_STRING).unwrap_or("");
+    let begin_string: &str = message.header().get(BEGIN_STRING).unwrap_or("");
     if begin_string != expected_begin_string {
         return Err(MessageVerificationError::IncorrectBeginString(
             begin_string.to_string(),
@@ -122,7 +125,7 @@ fn check_sender_comp_id(
     sequence_number: u64,
     expected_comp_id: &str,
 ) -> Result<(), MessageVerificationError> {
-    let actual_sender_comp_id: &str = message.header().get(fix44::SENDER_COMP_ID).unwrap_or("");
+    let actual_sender_comp_id: &str = message.header().get(SENDER_COMP_ID).unwrap_or("");
     if actual_sender_comp_id != expected_comp_id {
         return Err(MessageVerificationError::IncorrectCompId {
             comp_id: actual_sender_comp_id.to_string(),
@@ -163,7 +166,7 @@ fn check_target_comp_id(
     msg_seq_num: u64,
     expected_comp_id: &str,
 ) -> Result<(), MessageVerificationError> {
-    let actual_target_comp_id: &str = message.header().get(fix44::TARGET_COMP_ID).unwrap_or("");
+    let actual_target_comp_id: &str = message.header().get(TARGET_COMP_ID).unwrap_or("");
     if actual_target_comp_id != expected_comp_id {
         return Err(MessageVerificationError::IncorrectCompId {
             comp_id: actual_target_comp_id.to_string(),

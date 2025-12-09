@@ -1,6 +1,7 @@
 use crate::message::FixMessage;
+use hotfix_message::Part;
 use hotfix_message::message::Message;
-use hotfix_message::{Part, fix44};
+use hotfix_message::session_fields::{BEGIN_SEQ_NO, END_SEQ_NO};
 
 #[derive(Clone, Copy)]
 pub struct ResendRequest {
@@ -19,8 +20,8 @@ impl ResendRequest {
 
 impl FixMessage for ResendRequest {
     fn write(&self, msg: &mut Message) {
-        msg.set(fix44::BEGIN_SEQ_NO, self.begin_seq_no);
-        msg.set(fix44::END_SEQ_NO, self.end_seq_no);
+        msg.set(BEGIN_SEQ_NO, self.begin_seq_no);
+        msg.set(END_SEQ_NO, self.end_seq_no);
     }
 
     fn message_type(&self) -> &str {

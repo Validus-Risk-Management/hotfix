@@ -1,8 +1,8 @@
 //! FIX message abstractions to help with encoding and parsing of messages.
 use hotfix_message::error::EncodingError as EncodeError;
 pub use hotfix_message::field_types::Timestamp;
-pub use hotfix_message::fix44;
 pub(crate) use hotfix_message::message::{Config, Message};
+use hotfix_message::session_fields::{MSG_SEQ_NUM, SENDER_COMP_ID, SENDING_TIME, TARGET_COMP_ID};
 pub use hotfix_message::{Part, RepeatingGroup};
 
 pub mod heartbeat;
@@ -34,10 +34,10 @@ pub fn generate_message(
     message: impl FixMessage,
 ) -> Result<Vec<u8>, EncodeError> {
     let mut msg = Message::new(begin_string, message.message_type());
-    msg.set(fix44::SENDER_COMP_ID, sender_comp_id);
-    msg.set(fix44::TARGET_COMP_ID, target_comp_id.as_bytes());
-    msg.set(fix44::MSG_SEQ_NUM, msg_seq_num);
-    msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
+    msg.set(SENDER_COMP_ID, sender_comp_id);
+    msg.set(TARGET_COMP_ID, target_comp_id.as_bytes());
+    msg.set(MSG_SEQ_NUM, msg_seq_num);
+    msg.set(SENDING_TIME, Timestamp::utc_now());
 
     message.write(&mut msg);
 

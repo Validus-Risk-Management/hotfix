@@ -110,6 +110,7 @@ impl Dictionary {
     }
 
     /// Creates a new [`Dictionary`] for FIX 4.4.
+    #[cfg(feature = "fix44")]
     pub fn fix44() -> Self {
         let spec = include_str!("resources/quickfix/FIX-4.4.xml");
         Dictionary::from_quickfix_spec(spec).unwrap()
@@ -160,6 +161,7 @@ impl Dictionary {
             Self::fix42(),
             #[cfg(feature = "fix43")]
             Self::fix43(),
+            #[cfg(feature = "fix44")]
             Self::fix44(),
             #[cfg(feature = "fix50")]
             Self::fix50(),

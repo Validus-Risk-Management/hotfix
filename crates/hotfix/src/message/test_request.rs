@@ -1,7 +1,7 @@
-use hotfix_message::message::Message;
-use hotfix_message::{Part, fix44};
-
 use crate::message::FixMessage;
+use hotfix_message::Part;
+use hotfix_message::message::Message;
+use hotfix_message::session_fields::TEST_REQ_ID;
 
 #[derive(Clone, Debug)]
 pub struct TestRequest {
@@ -16,7 +16,7 @@ impl TestRequest {
 
 impl FixMessage for TestRequest {
     fn write(&self, msg: &mut Message) {
-        msg.set(fix44::TEST_REQ_ID, self.test_req_id.as_str());
+        msg.set(TEST_REQ_ID, self.test_req_id.as_str());
     }
 
     fn message_type(&self) -> &str {

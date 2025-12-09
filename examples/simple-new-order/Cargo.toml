@@ -7,7 +7,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
-hotfix = { path = "../../crates/hotfix", features = ["mongodb", "redb"] }
+hotfix = { path = "../../crates/hotfix", features = ["fix44", "mongodb", "redb"] }
 hotfix-web = { path = "../../crates/hotfix-web", features = ["ui"] }
 
 async-trait.workspace = true

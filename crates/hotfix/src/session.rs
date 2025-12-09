@@ -17,7 +17,7 @@ use anyhow::{Result, anyhow};
 use chrono::Utc;
 use hotfix_message::dict::Dictionary;
 use hotfix_message::message::{Config as MessageConfig, Message};
-use hotfix_message::{MessageBuilder, Part, fix44};
+use hotfix_message::{MessageBuilder, Part};
 use std::pin::Pin;
 use tokio::select;
 use tokio::sync::mpsc;
@@ -35,17 +35,19 @@ use crate::message::test_request::TestRequest;
 use crate::message::verification::verify_message;
 use crate::message_utils::{is_admin, prepare_message_for_resend};
 use crate::session::admin_request::AdminRequest;
-use crate::session::state::SessionState;
-use crate::session::state::{AwaitingResendTransitionOutcome, TestRequestId};
-use crate::session_schedule::SessionSchedule;
-use event::SessionEvent;
-use hotfix_message::fix44::SessionRejectReason;
-use hotfix_message::parsed_message::{InvalidReason, ParsedMessage};
-
 #[cfg(not(feature = "test-utils"))]
 pub(crate) use crate::session::session_ref::InternalSessionRef;
 #[cfg(feature = "test-utils")]
 pub use crate::session::session_ref::InternalSessionRef;
+use crate::session::state::SessionState;
+use crate::session::state::{AwaitingResendTransitionOutcome, TestRequestId};
+use crate::session_schedule::SessionSchedule;
+use event::SessionEvent;
+use hotfix_message::parsed_message::{InvalidReason, ParsedMessage};
+use hotfix_message::session_fields::{
+    BEGIN_SEQ_NO, END_SEQ_NO, GAP_FILL_FLAG, MSG_SEQ_NUM, MSG_TYPE, NEW_SEQ_NO,
+    SessionRejectReason, TEST_REQ_ID,
+};
 
 pub use crate::session::info::{SessionInfo, Status};
 pub use crate::session::session_handle::SessionHandle;
@@ -92,6 +94,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     fn get_data_dictionary(config: &SessionConfig) -> Dictionary {
         match &config.data_dictionary_path {
             None => match config.begin_string.as_str() {
+                #[cfg(feature = "fix44")]
                 "FIX.4.4" => Dictionary::fix44(),
                 _ => panic!("unsupported begin string: {}", config.begin_string),
             },
@@ -120,7 +123,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
             }
             ParsedMessage::Invalid { message, reason } => match reason {
                 InvalidReason::InvalidField(tag) | InvalidReason::InvalidGroup(tag) => {
-                    match message.header().get(fix44::MSG_SEQ_NUM) {
+                    match message.header().get(MSG_SEQ_NUM) {
                         Ok(msg_seq_num) => {
                             let reject = Reject::new(msg_seq_num)
                                 .session_reject_reason(SessionRejectReason::InvalidTagNumber)
@@ -140,7 +143,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
                     self.handle_invalid_msg_type(message, &msg_type).await;
                 }
                 InvalidReason::InvalidOrderInGroup { tag, .. } => {
-                    match message.header().get(fix44::MSG_SEQ_NUM) {
+                    match message.header().get(MSG_SEQ_NUM) {
                         Ok(msg_seq_num) => {
                             let reject = Reject::new(msg_seq_num)
                                 .session_reject_reason(
@@ -164,12 +167,12 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     }
 
     async fn process_message(&mut self, message: Message) -> Result<()> {
-        let message_type = message.header().get(fix44::MSG_TYPE)?;
+        let message_type = message.header().get(MSG_TYPE)?;
 
         if let SessionState::AwaitingResend(state) = &mut self.state {
             let seq_number: u64 = message
                 .header()
-                .get(fix44::MSG_SEQ_NUM)
+                .get(MSG_SEQ_NUM)
                 .map_err(|e| anyhow!("failed to get seq number: {:?}", e))?;
             if seq_number > state.end_seq_number {
                 state.inbound_queue.push_back(message);
@@ -250,7 +253,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
             // process queued messages and resume normal operation
             debug!("resend is done, processing backlog");
             while let Some(msg) = state.inbound_queue.pop_front() {
-                let seq_number: u64 = msg.get(fix44::MSG_SEQ_NUM).unwrap_or_else(|e| {
+                let seq_number: u64 = msg.get(MSG_SEQ_NUM).unwrap_or_else(|e| {
                     error!("failed to get seq number: {:?}", e);
                     0
                 });
@@ -345,7 +348,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     async fn on_heartbeat(&mut self, message: &Message) -> Result<()> {
         if let (Some(expected_req_id), Ok(message_req_id)) = (
             &self.state.expected_test_response_id(),
-            message.get::<&str>(fix44::TEST_REQ_ID),
+            message.get::<&str>(TEST_REQ_ID),
         ) && expected_req_id.as_str() == message_req_id
         {
             debug!("received response for TestRequest, resetting timer");
@@ -356,7 +359,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     }
 
     async fn on_test_request(&mut self, message: &Message) -> Result<()> {
-        let req_id: &str = message.get(fix44::TEST_REQ_ID).unwrap_or_else(|_| {
+        let req_id: &str = message.get(TEST_REQ_ID).unwrap_or_else(|_| {
             // TODO: send reject?
             todo!()
         });
@@ -374,13 +377,13 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
             warn!("received resend request while disconnected, ignoring");
         }
 
-        let begin_seq_number: u64 = match message.get(fix44::BEGIN_SEQ_NO) {
+        let begin_seq_number: u64 = match message.get(BEGIN_SEQ_NO) {
             Ok(seq_number) => seq_number,
             Err(_) => {
                 let reject = Reject::new(
                     message
                         .header()
-                        .get(fix44::MSG_SEQ_NUM)
+                        .get(MSG_SEQ_NUM)
                         .map_err(|_| anyhow!("failed to get seq number"))?,
                 )
                 .session_reject_reason(SessionRejectReason::RequiredTagMissing)
@@ -390,7 +393,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
             }
         };
 
-        let end_seq_number: u64 = match message.get(fix44::END_SEQ_NO) {
+        let end_seq_number: u64 = match message.get(END_SEQ_NO) {
             Ok(seq_number) => {
                 let last_seq_number = self.store.next_sender_seq_number() - 1;
                 if seq_number == 0 {
@@ -403,7 +406,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
                 let reject = Reject::new(
                     message
                         .header()
-                        .get(fix44::MSG_SEQ_NUM)
+                        .get(MSG_SEQ_NUM)
                         .map_err(|_| anyhow!("failed to get seq number"))?,
                 )
                 .session_reject_reason(SessionRejectReason::RequiredTagMissing)
@@ -426,7 +429,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     /// Returns whether the message should be processed as usual
     /// and whether the target sequence number should be incremented.
     async fn on_reject(&mut self, message: &Message) -> Result<()> {
-        if let Ok(seq_num) = message.get::<u64>(fix44::MSG_SEQ_NUM)
+        if let Ok(seq_num) = message.get::<u64>(MSG_SEQ_NUM)
             && seq_num == self.store.next_target_seq_number()
         {
             self.store.increment_target_seq_number().await?;
@@ -438,15 +441,15 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     async fn on_sequence_reset(&mut self, message: &Message) -> Result<()> {
         let msg_seq_num = message
             .header()
-            .get(fix44::MSG_SEQ_NUM)
+            .get(MSG_SEQ_NUM)
             .map_err(|_| anyhow!("failed to get seq number"))?;
-        let is_gap_fill: bool = message.get(fix44::GAP_FILL_FLAG).unwrap_or(false);
+        let is_gap_fill: bool = message.get(GAP_FILL_FLAG).unwrap_or(false);
         if let Err(err) = self.verify_message(message, is_gap_fill) {
             self.handle_verification_error(err).await;
             return Ok(());
         }
 
-        let end: u64 = match message.get(fix44::NEW_SEQ_NO) {
+        let end: u64 = match message.get(NEW_SEQ_NO) {
             Ok(new_seq_no) => new_seq_no,
             Err(err) => {
                 error!(
@@ -607,7 +610,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     }
 
     async fn handle_invalid_msg_type(&mut self, message: Message, msg_type: &str) {
-        match message.header().get(fix44::MSG_SEQ_NUM) {
+        match message.header().get(MSG_SEQ_NUM) {
             Ok(msg_seq_num) => {
                 let reject = Reject::new(msg_seq_num)
                     .session_reject_reason(SessionRejectReason::InvalidMsgtype)
@@ -615,7 +618,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
                 self.send_message(reject).await;
 
                 #[allow(clippy::collapsible_if)]
-                if let Ok(seq_num) = message.header().get::<u64>(fix44::MSG_SEQ_NUM)
+                if let Ok(seq_num) = message.header().get::<u64>(MSG_SEQ_NUM)
                     && self.store.next_target_seq_number() == seq_num
                 {
                     if let Err(err) = self.store.increment_target_seq_number().await {
@@ -669,12 +672,8 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
                 .build(msg.as_slice())
                 .into_message()
                 .unwrap();
-            sequence_number = message.header().get(fix44::MSG_SEQ_NUM).unwrap();
-            let message_type: String = message
-                .header()
-                .get::<&str>(fix44::MSG_TYPE)
-                .unwrap()
-                .to_string();
+            sequence_number = message.header().get(MSG_SEQ_NUM).unwrap();
+            let message_type: String = message.header().get::<&str>(MSG_TYPE).unwrap().to_string();
 
             if is_admin(message_type.as_str()) {
                 if reset_start.is_none() {

@@ -338,13 +338,13 @@ pub trait TestStoreFactory {
 }
 
 async fn create_test_store_factories() -> Vec<Box<dyn TestStoreFactory>> {
-    let mut stores: Vec<Box<dyn TestStoreFactory>> = Vec::new();
-
-    // Add in-memory store factory
-    stores.push(Box::new(InMemoryMessageStoreTestFactory {}) as Box<dyn TestStoreFactory>);
-
-    // Add file store factory
-    stores.push(Box::new(FileStoreTestFactory::new()) as Box<dyn TestStoreFactory>);
+    #[allow(unused_mut)]
+    let mut stores: Vec<Box<dyn TestStoreFactory>> = vec![
+        // Add in-memory store factory
+        Box::new(InMemoryMessageStoreTestFactory {}) as Box<dyn TestStoreFactory>,
+        // Add file store factory
+        Box::new(FileStoreTestFactory::new()) as Box<dyn TestStoreFactory>,
+    ];
 
     // Add redb store factory if the feature is enabled
     #[cfg(feature = "redb")]

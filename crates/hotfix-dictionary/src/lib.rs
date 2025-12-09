@@ -30,10 +30,12 @@ pub type TagU32 = std::num::NonZeroU32;
 #[cfg(test)]
 mod test {
     use super::*;
+    #[cfg(feature = "fix44")]
     use crate::layout::LayoutItemKind;
     use std::collections::HashSet;
 
     #[test]
+    #[cfg(feature = "fix44")]
     fn fix44_quickfix_is_ok() {
         let dict = Dictionary::fix44();
         let msg_heartbeat = dict.message_by_name("Heartbeat").unwrap();
@@ -77,6 +79,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "fix44")]
     fn fix44_field_28_has_three_variants() {
         let dict = Dictionary::fix44();
         let field_28 = dict.field_by_tag(28).unwrap();
@@ -85,6 +88,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "fix44")]
     fn fix44_field_36_has_no_variants() {
         let dict = Dictionary::fix44();
         let field_36 = dict.field_by_tag(36).unwrap();
@@ -93,6 +97,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "fix44")]
     fn fix44_field_167_has_eucorp_variant() {
         let dict = Dictionary::fix44();
         let field_167 = dict.field_by_tag(167).unwrap();

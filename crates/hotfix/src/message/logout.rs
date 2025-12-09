@@ -1,7 +1,7 @@
-use hotfix_message::message::Message;
-use hotfix_message::{Part, fix44};
-
 use crate::message::FixMessage;
+use hotfix_message::Part;
+use hotfix_message::message::Message;
+use hotfix_message::session_fields::TEXT;
 
 #[derive(Clone, Debug, Default)]
 pub struct Logout {
@@ -17,7 +17,7 @@ impl Logout {
 impl FixMessage for Logout {
     fn write(&self, msg: &mut Message) {
         if let Some(value) = &self.text {
-            msg.set(fix44::TEXT, value.as_str());
+            msg.set(TEXT, value.as_str());
         }
     }
 

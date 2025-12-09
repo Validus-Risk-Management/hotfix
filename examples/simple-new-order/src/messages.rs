@@ -1,6 +1,7 @@
 use hotfix::Message as HotfixMessage;
 use hotfix::field_types::{Date, Timestamp};
-use hotfix::message::{FixMessage, Part, RepeatingGroup, fix44};
+use hotfix::fix44;
+use hotfix::message::{FixMessage, Part, RepeatingGroup};
 
 #[derive(Debug, Clone)]
 pub struct NewOrderSingle {

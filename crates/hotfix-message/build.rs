@@ -9,11 +9,12 @@ use std::io::Write;
 use std::path::PathBuf;
 
 fn main() -> io::Result<()> {
-    // TODO: add other FIX versions
     #[cfg(feature = "fix42")]
     codegen(Dictionary::fix42(), "fix42.rs")?;
-    // FIX 4.4 is always enabled.
+    #[cfg(feature = "fix44")]
     codegen(Dictionary::fix44(), "fix44.rs")?;
+
+    codegen(Dictionary::fixt11(), "fixt11.rs")?;
     Ok(())
 }
 

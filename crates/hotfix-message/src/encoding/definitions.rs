@@ -45,9 +45,17 @@ pub mod fix42 {
     include!(concat!(env!("OUT_DIR"), "/fix42.rs"));
 }
 
+#[cfg(feature = "fix44")]
 #[allow(dead_code, unused, warnings, enum_variant_names)]
 #[rustfmt::skip]
 /// Field and message definitions for FIX.4.4.
 pub mod fix44 {
     include!(concat!(env!("OUT_DIR"), "/fix44.rs"));
+}
+
+#[allow(dead_code, unused, warnings, enum_variant_names)]
+#[rustfmt::skip]
+/// Field and message definitions for FIX.4.4.
+pub mod fixt11 {
+    include!(concat!(env!("OUT_DIR"), "/fixt11.rs"));
 }

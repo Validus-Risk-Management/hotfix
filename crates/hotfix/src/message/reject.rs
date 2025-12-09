@@ -1,7 +1,10 @@
 use crate::message::FixMessage;
-use hotfix_message::fix44::{MsgType, SessionRejectReason};
+use hotfix_message::Part;
 use hotfix_message::message::Message;
-use hotfix_message::{Part, fix44};
+use hotfix_message::session_fields::{
+    MsgType, REF_MSG_TYPE, REF_SEQ_NUM, REF_TAG_ID, SESSION_REJECT_REASON, SessionRejectReason,
+    TEXT,
+};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Reject {
@@ -51,19 +54,19 @@ impl Reject {
 
 impl FixMessage for Reject {
     fn write(&self, msg: &mut Message) {
-        msg.set(fix44::REF_SEQ_NUM, self.ref_seq_num);
+        msg.set(REF_SEQ_NUM, self.ref_seq_num);
 
         if let Some(ref_tag_id) = self.ref_tag_id {
-            msg.set(fix44::REF_TAG_ID, ref_tag_id);
+            msg.set(REF_TAG_ID, ref_tag_id);
         }
         if let Some(ref_msg_type) = self.ref_msg_type {
-            msg.set(fix44::REF_MSG_TYPE, ref_msg_type);
+            msg.set(REF_MSG_TYPE, ref_msg_type);
         }
         if let Some(session_reject_reason) = self.session_reject_reason {
-            msg.set(fix44::SESSION_REJECT_REASON, session_reject_reason);
+            msg.set(SESSION_REJECT_REASON, session_reject_reason);
         }
         if let Some(text) = &self.text {
-            msg.set(fix44::TEXT, text.as_str());
+            msg.set(TEXT, text.as_str());
         }
     }
 
@@ -73,11 +76,11 @@ impl FixMessage for Reject {
 
     fn parse(message: &Message) -> Self {
         Self {
-            ref_seq_num: message.get(fix44::REF_SEQ_NUM).unwrap(),
-            ref_tag_id: message.get(fix44::REF_TAG_ID).ok(),
-            ref_msg_type: message.get(fix44::REF_MSG_TYPE).ok(),
-            session_reject_reason: message.get(fix44::SESSION_REJECT_REASON).ok(),
-            text: message.get::<&str>(fix44::TEXT).ok().map(|s| s.to_string()),
+            ref_seq_num: message.get(REF_SEQ_NUM).unwrap(),
+            ref_tag_id: message.get(REF_TAG_ID).ok(),
+            ref_msg_type: message.get(REF_MSG_TYPE).ok(),
+            session_reject_reason: message.get(SESSION_REJECT_REASON).ok(),
+            text: message.get::<&str>(TEXT).ok().map(|s| s.to_string()),
         }
     }
 }
@@ -85,7 +88,6 @@ impl FixMessage for Reject {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hotfix_message::fix44::{MsgType, SessionRejectReason};
     use hotfix_message::message::Message;
 
     #[test]
@@ -95,14 +97,14 @@ mod tests {
         let mut msg = Message::new("FIX.4.4", "3");
         reject.write(&mut msg);
 
-        assert_eq!(msg.get::<u64>(fix44::REF_SEQ_NUM).unwrap(), 123);
-        assert!(msg.get::<u64>(fix44::REF_TAG_ID).is_err());
-        assert!(msg.get::<MsgType>(fix44::REF_MSG_TYPE).is_err());
+        assert_eq!(msg.get::<u64>(REF_SEQ_NUM).unwrap(), 123);
+        assert!(msg.get::<u64>(REF_TAG_ID).is_err());
+        assert!(msg.get::<MsgType>(REF_MSG_TYPE).is_err());
         assert!(
-            msg.get::<SessionRejectReason>(fix44::SESSION_REJECT_REASON)
+            msg.get::<SessionRejectReason>(SESSION_REJECT_REASON)
                 .is_err()
         );
-        assert!(msg.get::<&str>(fix44::TEXT).is_err());
+        assert!(msg.get::<&str>(TEXT).is_err());
     }
 
     #[test]
@@ -116,27 +118,24 @@ mod tests {
         let mut msg = Message::new("FIX.4.4", "3");
         reject.write(&mut msg);
 
-        assert_eq!(msg.get::<u64>(fix44::REF_SEQ_NUM).unwrap(), 456);
-        assert_eq!(msg.get::<u64>(fix44::REF_TAG_ID).unwrap(), 35);
+        assert_eq!(msg.get::<u64>(REF_SEQ_NUM).unwrap(), 456);
+        assert_eq!(msg.get::<u64>(REF_TAG_ID).unwrap(), 35);
         assert_eq!(
-            msg.get::<MsgType>(fix44::REF_MSG_TYPE).unwrap(),
+            msg.get::<MsgType>(REF_MSG_TYPE).unwrap(),
             MsgType::ExecutionReport
         );
         assert_eq!(
-            msg.get::<SessionRejectReason>(fix44::SESSION_REJECT_REASON)
+            msg.get::<SessionRejectReason>(SESSION_REJECT_REASON)
                 .unwrap(),
             SessionRejectReason::InvalidTagNumber
         );
-        assert_eq!(
-            msg.get::<&str>(fix44::TEXT).unwrap(),
-            "Invalid message format"
-        );
+        assert_eq!(msg.get::<&str>(TEXT).unwrap(), "Invalid message format");
     }
 
     #[test]
     fn test_parse_reject_with_required_fields_only() {
         let mut msg = Message::new("FIX.4.4", "3");
-        msg.set(fix44::REF_SEQ_NUM, 999u64);
+        msg.set(REF_SEQ_NUM, 999u64);
 
         let parsed = Reject::parse(&msg);
 
@@ -150,14 +149,14 @@ mod tests {
     #[test]
     fn test_parse_reject_with_all_fields() {
         let mut msg = Message::new("FIX.4.4", "3");
-        msg.set(fix44::REF_SEQ_NUM, 777u64);
-        msg.set(fix44::REF_TAG_ID, 40u64);
-        msg.set(fix44::REF_MSG_TYPE, MsgType::OrderSingle);
+        msg.set(REF_SEQ_NUM, 777u64);
+        msg.set(REF_TAG_ID, 40u64);
+        msg.set(REF_MSG_TYPE, MsgType::OrderSingle);
         msg.set(
-            fix44::SESSION_REJECT_REASON,
+            SESSION_REJECT_REASON,
             SessionRejectReason::TagNotDefinedForThisMessageType,
         );
-        msg.set(fix44::TEXT, "Field not allowed");
+        msg.set(TEXT, "Field not allowed");
 
         let parsed = Reject::parse(&msg);
 

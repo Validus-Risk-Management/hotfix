@@ -1,7 +1,8 @@
 use hotfix::Message as HotfixMessage;
 use hotfix::field_types::{Date, Timestamp};
-use hotfix::message::fix44::{ORDER_ID, OrdStatus, OrdType, Side};
-use hotfix::message::{FixMessage, Part, RepeatingGroup, fix44};
+use hotfix::fix44;
+use hotfix::fix44::{OrdStatus, OrdType, Side};
+use hotfix::message::{FixMessage, Part, RepeatingGroup};
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -46,7 +47,7 @@ pub enum Message {
 impl Message {
     fn parse_execution_report_ack(message: &HotfixMessage) -> Self {
         let report = ExecutionReport {
-            order_id: message.get::<&str>(ORDER_ID).unwrap().to_string(),
+            order_id: message.get::<&str>(fix44::ORDER_ID).unwrap().to_string(),
             cl_ord_id: message.get::<&str>(fix44::CL_ORD_ID).unwrap().to_string(),
             exec_id: message.get::<&str>(fix44::EXEC_ID).unwrap().to_string(),
             exec_type: message.get::<u32>(fix44::EXEC_TYPE).unwrap(),

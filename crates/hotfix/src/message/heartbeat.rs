@@ -1,7 +1,7 @@
-use hotfix_message::message::Message;
-use hotfix_message::{Part, fix44};
-
 use crate::message::FixMessage;
+use hotfix_message::Part;
+use hotfix_message::message::Message;
+use hotfix_message::session_fields::TEST_REQ_ID;
 
 #[derive(Clone, Debug, Default)]
 pub struct Heartbeat {
@@ -19,7 +19,7 @@ impl Heartbeat {
 impl FixMessage for Heartbeat {
     fn write(&self, msg: &mut Message) {
         if let Some(req_id) = &self.test_req_id {
-            msg.set(fix44::TEST_REQ_ID, req_id.as_str());
+            msg.set(TEST_REQ_ID, req_id.as_str());
         }
     }
 

@@ -1,12 +1,13 @@
 use std::io::Write;
 
 use crate::FieldType;
+use crate::HardCodedFixFieldDefinition;
 use crate::builder::SOH;
 use crate::encoder::Encode;
 use crate::error::EncodingResult;
 use crate::field_map::{Field, FieldMap};
 use crate::parts::{Body, Header, Part, RepeatingGroup, Trailer};
-use crate::{HardCodedFixFieldDefinition, fix44};
+use crate::session_fields::{BEGIN_STRING, BODY_LENGTH, CHECK_SUM, MSG_TYPE};
 use hotfix_dictionary::{FieldLocation, IsFieldDefinition};
 
 pub struct Message {
@@ -22,8 +23,8 @@ impl Message {
             body: Body::default(),
             trailer: Trailer::default(),
         };
-        msg.set(fix44::BEGIN_STRING, begin_string);
-        msg.set(fix44::MSG_TYPE, message_type);
+        msg.set(BEGIN_STRING, begin_string);
+        msg.set(MSG_TYPE, message_type);
 
         msg
     }
@@ -39,18 +40,14 @@ impl Message {
     pub fn encode(&mut self, config: &Config) -> EncodingResult<Vec<u8>> {
         let mut buffer = Vec::new();
 
-        self.trailer.pop(fix44::CHECK_SUM);
+        self.trailer.pop(CHECK_SUM);
         let body_length = self.header.calculate_length()
             + self.body.calculate_length()
             + self.trailer.calculate_length();
-        self.set(fix44::BODY_LENGTH, format!("{body_length}").as_str());
+        self.set(BODY_LENGTH, format!("{body_length}").as_str());
         let check_sum_start = buffer.len();
 
-        let starting_fields = vec![
-            fix44::BEGIN_STRING.tag(),
-            fix44::BODY_LENGTH.tag(),
-            fix44::MSG_TYPE.tag(),
-        ];
+        let starting_fields = vec![BEGIN_STRING.tag(), BODY_LENGTH.tag(), MSG_TYPE.tag()];
         self.header
             .fields
             .write(config, &mut buffer, &starting_fields)?;
@@ -61,7 +58,7 @@ impl Message {
             .iter()
             .fold(0u8, |acc, &x| acc.wrapping_add(x));
         let checksum_value = format!("{checksum:03}");
-        self.set(fix44::CHECK_SUM, checksum_value.as_str());
+        self.set(CHECK_SUM, checksum_value.as_str());
         buffer.write_all(b"10=")?;
         buffer.write_all(checksum_value.as_bytes())?;
         buffer.push(config.separator);

@@ -7,6 +7,9 @@ pub mod field_types;
 pub use buffer::{Buffer, BufferWriter};
 pub use field_access::{FieldType, FieldValueError};
 
+pub use definitions::HardCodedFixFieldDefinition;
 #[cfg(feature = "fix42")]
 pub use definitions::fix42;
-pub use definitions::{HardCodedFixFieldDefinition, fix44};
+#[cfg(feature = "fix44")]
+pub use definitions::fix44;
+pub use definitions::fixt11;
