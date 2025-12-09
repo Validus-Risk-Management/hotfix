@@ -22,7 +22,7 @@ test-utils = []
 workspace = true
 
 [dependencies]
-hotfix-message = { version = "0.2.6", path = "../hotfix-message", default-features = false, features = ["utils-chrono"] }
+hotfix-message = { version = "0.2.6", path = "../hotfix-message", features = ["utils-chrono"] }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }
