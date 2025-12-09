@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.7](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-message-v0.2.6...hotfix-message-v0.2.7) - 2025-12-09
+
+### Added
+
+- decouple hotfix session layer from FIX 4.4 ([#257](https://github.com/Validus-Risk-Management/hotfix/pull/257))
+
 ## [0.2.6](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-message-v0.2.5...hotfix-message-v0.2.6) - 2025-11-24
 
 ### Other
