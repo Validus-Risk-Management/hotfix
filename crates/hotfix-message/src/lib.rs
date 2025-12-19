@@ -18,6 +18,7 @@ pub use encoding::fix42;
 #[cfg(feature = "fix44")]
 pub use encoding::fix44;
 pub use encoding::{FieldValueError, HardCodedFixFieldDefinition};
+pub use field_map::{Field, FieldMap};
 pub use hotfix_derive::FieldType;
 pub use hotfix_dictionary::{self as dict, TagU32};
 pub use parts::{Part, RepeatingGroup};

@@ -4,6 +4,7 @@ use crate::parts::RepeatingGroup;
 use hotfix_dictionary::TagU32;
 use indexmap::IndexMap;
 
+#[derive(Clone, Debug)]
 pub struct Field {
     pub(crate) tag: TagU32,
     pub data: Vec<u8>,
@@ -19,7 +20,7 @@ impl Field {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct FieldMap {
     pub fields: IndexMap<TagU32, Field>,
     pub groups: IndexMap<TagU32, Vec<RepeatingGroup>>,

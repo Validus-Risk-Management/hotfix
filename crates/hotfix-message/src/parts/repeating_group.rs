@@ -4,7 +4,7 @@ use crate::parts::Part;
 use hotfix_dictionary::{IsFieldDefinition, TagU32};
 
 /// Represents a FIX repeating group, such as a party in the list of parties.
-#[allow(dead_code)]
+#[derive(Clone, Debug)]
 pub struct RepeatingGroup {
     pub(crate) start_tag: TagU32,
     pub(crate) delimiter_tag: TagU32,
