@@ -1,7 +1,7 @@
 use hotfix::Message as HotfixMessage;
 use hotfix::field_types::{Date, Timestamp};
 use hotfix::fix44;
-use hotfix::message::{FixMessage, Part, RepeatingGroup};
+use hotfix::message::{InboundMessage, OutboundMessage, Part, RepeatingGroup};
 
 #[derive(Debug, Clone)]
 pub struct NewOrderSingle {
@@ -26,7 +26,7 @@ pub enum Message {
     UnimplementedMessage(Vec<u8>),
 }
 
-impl FixMessage for Message {
+impl OutboundMessage for Message {
     fn write(&self, msg: &mut HotfixMessage) {
         match self {
             Self::NewOrderSingle(order) => {
@@ -56,7 +56,9 @@ impl FixMessage for Message {
             _ => unimplemented!(),
         }
     }
+}
 
+impl InboundMessage for Message {
     fn parse(message: &HotfixMessage) -> Self {
         let message_type: &str = message.header().get(fix44::MSG_TYPE).unwrap();
         Self::UnimplementedMessage(message_type.as_bytes().to_vec())

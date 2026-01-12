@@ -2,7 +2,7 @@ use hotfix::Message as HotfixMessage;
 use hotfix::field_types::{Date, Timestamp};
 use hotfix::fix44;
 use hotfix::fix44::{OrdStatus, OrdType, Side};
-use hotfix::message::{FixMessage, Part, RepeatingGroup};
+use hotfix::message::{InboundMessage, OutboundMessage, Part, RepeatingGroup};
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -62,7 +62,7 @@ impl Message {
     }
 }
 
-impl FixMessage for Message {
+impl OutboundMessage for Message {
     fn write(&self, msg: &mut HotfixMessage) {
         match self {
             Self::NewOrderSingle(order) => {
@@ -93,7 +93,9 @@ impl FixMessage for Message {
             _ => unimplemented!(),
         }
     }
+}
 
+impl InboundMessage for Message {
     fn parse(message: &HotfixMessage) -> Self {
         let message_type: &str = message.header().get(fix44::MSG_TYPE).unwrap();
         if message_type == "8" {
