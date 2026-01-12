@@ -2,7 +2,7 @@ mod application;
 mod messages;
 
 use crate::application::LoadTestingApplication;
-use crate::messages::{ExecutionReport, Message, NewOrderSingle};
+use crate::messages::{ExecutionReport, NewOrderSingle, OutboundMsg};
 use clap::{Parser, ValueEnum};
 use hotfix::config::SessionConfig;
 use hotfix::field_types::{Date, Timestamp};
@@ -91,7 +91,7 @@ async fn start_session(
     session_config: SessionConfig,
     db_config: Database,
     app: LoadTestingApplication,
-) -> Initiator<Message> {
+) -> Initiator<OutboundMsg> {
     match db_config {
         Database::Memory => {
             let store = hotfix::store::in_memory::InMemoryMessageStore::default();
@@ -110,16 +110,16 @@ async fn start_session(
     }
 }
 
-async fn submit_messages(session_handle: SessionHandle<Message>, message_count: u32) {
+async fn submit_messages(session_handle: SessionHandle<OutboundMsg>, message_count: u32) {
     for _ in 0..message_count {
         submit_message(&session_handle).await;
     }
 }
 
-async fn submit_message(session_handle: &SessionHandle<Message>) {
+async fn submit_message(session_handle: &SessionHandle<OutboundMsg>) {
     let mut order_id = format!("{}", uuid::Uuid::new_v4());
     order_id.truncate(12);
-    let order = NewOrderSingle {
+    let order = OutboundMsg::NewOrderSingle(NewOrderSingle {
         transact_time: Timestamp::utc_now(),
         symbol: "EUR/USD".to_string(),
         cl_ord_id: order_id,
@@ -131,11 +131,10 @@ async fn submit_message(session_handle: &SessionHandle<Message>) {
         number_of_allocations: 1,
         allocation_account: "acc1".to_string(),
         allocation_quantity: 230,
-    };
-    let msg = Message::NewOrderSingle(order);
+    });
 
     session_handle
-        .send_message(msg)
+        .send_message(order)
         .await
         .expect("session to accept message");
 }

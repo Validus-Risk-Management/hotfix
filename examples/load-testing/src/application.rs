@@ -1,4 +1,4 @@
-use crate::messages::{ExecutionReport, Message};
+use crate::messages::{ExecutionReport, InboundMsg, OutboundMsg};
 use hotfix::Application;
 use hotfix::application::{InboundDecision, OutboundDecision};
 use tokio::sync::mpsc::UnboundedSender;
@@ -15,17 +15,14 @@ impl LoadTestingApplication {
 }
 
 #[async_trait::async_trait]
-impl Application<Message, Message> for LoadTestingApplication {
-    async fn on_outbound_message(&self, _msg: &Message) -> OutboundDecision {
+impl Application<InboundMsg, OutboundMsg> for LoadTestingApplication {
+    async fn on_outbound_message(&self, _msg: &OutboundMsg) -> OutboundDecision {
         OutboundDecision::Send
     }
 
-    async fn on_inbound_message(&self, msg: Message) -> InboundDecision {
+    async fn on_inbound_message(&self, msg: InboundMsg) -> InboundDecision {
         match msg {
-            Message::NewOrderSingle(_) => {
-                unimplemented!("we should not receive orders");
-            }
-            Message::Unimplemented(data) => {
+            InboundMsg::Unimplemented(data) => {
                 let pretty_bytes: Vec<u8> = data
                     .iter()
                     .map(|b| if *b == b'\x01' { b'|' } else { *b })
@@ -33,7 +30,7 @@ impl Application<Message, Message> for LoadTestingApplication {
                 let s = std::str::from_utf8(&pretty_bytes).unwrap_or("invalid characters");
                 info!("received message: {:?}", s);
             }
-            Message::ExecutionReport(report) => {
+            InboundMsg::ExecutionReport(report) => {
                 if self.sender.send(report).is_err() {
                     return InboundDecision::TerminateSession;
                 }
