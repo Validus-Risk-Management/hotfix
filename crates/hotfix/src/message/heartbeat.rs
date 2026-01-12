@@ -1,4 +1,4 @@
-use crate::message::FixMessage;
+use crate::message::{InboundMessage, OutboundMessage};
 use hotfix_message::Part;
 use hotfix_message::message::Message;
 use hotfix_message::session_fields::TEST_REQ_ID;
@@ -16,7 +16,7 @@ impl Heartbeat {
     }
 }
 
-impl FixMessage for Heartbeat {
+impl OutboundMessage for Heartbeat {
     fn write(&self, msg: &mut Message) {
         if let Some(req_id) = &self.test_req_id {
             msg.set(TEST_REQ_ID, req_id.as_str());
@@ -26,7 +26,9 @@ impl FixMessage for Heartbeat {
     fn message_type(&self) -> &str {
         "0"
     }
+}
 
+impl InboundMessage for Heartbeat {
     fn parse(_message: &Message) -> Self {
         // TODO: this needs to be implemented properly when we're implementing Test Requests
         Heartbeat { test_req_id: None }

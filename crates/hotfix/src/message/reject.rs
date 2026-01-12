@@ -1,4 +1,4 @@
-use crate::message::FixMessage;
+use crate::message::{InboundMessage, OutboundMessage};
 use hotfix_message::Part;
 use hotfix_message::message::Message;
 use hotfix_message::session_fields::{
@@ -52,7 +52,7 @@ impl Reject {
     }
 }
 
-impl FixMessage for Reject {
+impl OutboundMessage for Reject {
     fn write(&self, msg: &mut Message) {
         msg.set(REF_SEQ_NUM, self.ref_seq_num);
 
@@ -73,7 +73,9 @@ impl FixMessage for Reject {
     fn message_type(&self) -> &str {
         "3"
     }
+}
 
+impl InboundMessage for Reject {
     fn parse(message: &Message) -> Self {
         Self {
             ref_seq_num: message.get(REF_SEQ_NUM).unwrap(),

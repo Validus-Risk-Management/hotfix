@@ -1,4 +1,4 @@
-use crate::message::FixMessage;
+use crate::message::OutboundMessage;
 use hotfix_message::message::Message;
 use hotfix_message::session_fields::{
     ENCRYPT_METHOD, HEART_BT_INT, NEXT_EXPECTED_MSG_SEQ_NUM, RESET_SEQ_NUM_FLAG,
@@ -33,7 +33,7 @@ impl Logon {
     }
 }
 
-impl FixMessage for Logon {
+impl OutboundMessage for Logon {
     fn write(&self, msg: &mut Message) {
         msg.set(ENCRYPT_METHOD, self.encrypt_method);
         msg.set(HEART_BT_INT, self.heartbeat_interval);
@@ -46,10 +46,6 @@ impl FixMessage for Logon {
 
     fn message_type(&self) -> &str {
         "A"
-    }
-
-    fn parse(_message: &Message) -> Self {
-        todo!()
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::message::FixMessage;
+use crate::message::OutboundMessage;
 use hotfix_message::Part;
 use hotfix_message::message::Message;
 use hotfix_message::session_fields::{BEGIN_SEQ_NO, END_SEQ_NO};
@@ -18,7 +18,7 @@ impl ResendRequest {
     }
 }
 
-impl FixMessage for ResendRequest {
+impl OutboundMessage for ResendRequest {
     fn write(&self, msg: &mut Message) {
         msg.set(BEGIN_SEQ_NO, self.begin_seq_no);
         msg.set(END_SEQ_NO, self.end_seq_no);
@@ -26,9 +26,5 @@ impl FixMessage for ResendRequest {
 
     fn message_type(&self) -> &str {
         "2"
-    }
-
-    fn parse(_message: &Message) -> Self {
-        todo!()
     }
 }

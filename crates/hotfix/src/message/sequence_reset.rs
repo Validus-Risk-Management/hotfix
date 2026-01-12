@@ -1,4 +1,4 @@
-use crate::message::FixMessage;
+use crate::message::OutboundMessage;
 use hotfix_message::Part;
 use hotfix_message::field_types::Timestamp;
 use hotfix_message::message::Message;
@@ -12,7 +12,7 @@ pub struct SequenceReset {
     pub new_seq_no: u64,
 }
 
-impl FixMessage for SequenceReset {
+impl OutboundMessage for SequenceReset {
     fn write(&self, msg: &mut Message) {
         msg.set(GAP_FILL_FLAG, self.gap_fill);
         msg.set(NEW_SEQ_NO, self.new_seq_no);
@@ -23,9 +23,5 @@ impl FixMessage for SequenceReset {
 
     fn message_type(&self) -> &str {
         "4"
-    }
-
-    fn parse(_message: &Message) -> Self {
-        todo!()
     }
 }

@@ -1,4 +1,4 @@
-use crate::message::FixMessage;
+use crate::message::OutboundMessage;
 use hotfix_message::Part;
 use hotfix_message::message::Message;
 use hotfix_message::session_fields::TEXT;
@@ -14,7 +14,7 @@ impl Logout {
     }
 }
 
-impl FixMessage for Logout {
+impl OutboundMessage for Logout {
     fn write(&self, msg: &mut Message) {
         if let Some(value) = &self.text {
             msg.set(TEXT, value.as_str());
@@ -23,9 +23,5 @@ impl FixMessage for Logout {
 
     fn message_type(&self) -> &str {
         "5"
-    }
-
-    fn parse(_message: &Message) -> Self {
-        unimplemented!()
     }
 }
