@@ -22,8 +22,32 @@ pub trait FixMessage: Clone + Send + 'static {
     fn write(&self, msg: &mut Message);
 
     fn message_type(&self) -> &str;
-
     fn parse(message: &Message) -> Self;
+}
+
+pub trait OutboundMessage: Clone + Send + 'static {
+    fn write(&self, msg: &mut Message);
+
+    fn message_type(&self) -> &str;
+}
+impl<M: FixMessage> OutboundMessage for M {
+    fn write(&self, msg: &mut Message) {
+        M::write(self, msg)
+    }
+
+    fn message_type(&self) -> &str {
+        M::message_type(self)
+    }
+}
+
+pub trait InboundMessage: Clone + Send + 'static {
+    fn parse(message: &Message) -> Self;
+}
+
+impl<M: FixMessage> InboundMessage for M {
+    fn parse(message: &Message) -> Self {
+        M::parse(message)
+    }
 }
 
 pub fn generate_message(
@@ -42,10 +66,4 @@ pub fn generate_message(
     message.write(&mut msg);
 
     msg.encode(&Config::default())
-}
-
-pub trait WriteMessage {
-    fn write(&self, msg: &mut Message);
-
-    fn message_type(&self) -> &str;
 }
