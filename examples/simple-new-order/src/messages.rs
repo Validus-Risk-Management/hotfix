@@ -21,15 +21,19 @@ pub struct NewOrderSingle {
 }
 
 #[derive(Debug, Clone)]
-pub enum Message {
-    NewOrderSingle(NewOrderSingle),
-    UnimplementedMessage(Vec<u8>),
+pub enum InboundMsg {
+    Unimplemented(Vec<u8>),
 }
 
-impl OutboundMessage for Message {
+#[derive(Debug, Clone)]
+pub enum OutboundMsg {
+    NewOrderSingle(NewOrderSingle),
+}
+
+impl OutboundMessage for OutboundMsg {
     fn write(&self, msg: &mut HotfixMessage) {
         match self {
-            Self::NewOrderSingle(order) => {
+            OutboundMsg::NewOrderSingle(order) => {
                 // order details
                 msg.set(fix44::TRANSACT_TIME, order.transact_time.clone());
                 msg.set(fix44::SYMBOL, order.symbol.as_str());
@@ -46,21 +50,19 @@ impl OutboundMessage for Message {
                 allocation.set(fix44::ALLOC_QTY, order.allocation_quantity);
                 msg.set_groups(vec![allocation]);
             }
-            _ => unimplemented!(),
         }
     }
 
     fn message_type(&self) -> &str {
         match self {
-            Self::NewOrderSingle(_) => "D",
-            _ => unimplemented!(),
+            OutboundMsg::NewOrderSingle(_) => "D",
         }
     }
 }
 
-impl InboundMessage for Message {
+impl InboundMessage for InboundMsg {
     fn parse(message: &HotfixMessage) -> Self {
         let message_type: &str = message.header().get(fix44::MSG_TYPE).unwrap();
-        Self::UnimplementedMessage(message_type.as_bytes().to_vec())
+        Self::Unimplemented(message_type.as_bytes().to_vec())
     }
 }

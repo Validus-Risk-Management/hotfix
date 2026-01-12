@@ -1,4 +1,4 @@
-use crate::messages::Message;
+use crate::messages::{InboundMsg, OutboundMsg};
 use hotfix::Application;
 use hotfix::application::{InboundDecision, OutboundDecision};
 use tracing::info;
@@ -7,17 +7,14 @@ use tracing::info;
 pub struct TestApplication {}
 
 #[async_trait::async_trait]
-impl Application<Message, Message> for TestApplication {
-    async fn on_outbound_message(&self, _msg: &Message) -> OutboundDecision {
+impl Application<InboundMsg, OutboundMsg> for TestApplication {
+    async fn on_outbound_message(&self, _msg: &OutboundMsg) -> OutboundDecision {
         OutboundDecision::Send
     }
 
-    async fn on_inbound_message(&self, msg: Message) -> InboundDecision {
+    async fn on_inbound_message(&self, msg: InboundMsg) -> InboundDecision {
         match msg {
-            Message::NewOrderSingle(_) => {
-                unimplemented!("we should not receive orders");
-            }
-            Message::UnimplementedMessage(data) => {
+            InboundMsg::Unimplemented(data) => {
                 let pretty_bytes: Vec<u8> = data
                     .iter()
                     .map(|b| if *b == b'\x01' { b'|' } else { *b })

@@ -2,7 +2,7 @@ mod application;
 mod messages;
 
 use crate::application::TestApplication;
-use crate::messages::{Message, NewOrderSingle};
+use crate::messages::{NewOrderSingle, OutboundMsg};
 use clap::{Parser, ValueEnum};
 use hotfix::config::Config;
 use hotfix::field_types::{Date, Timestamp};
@@ -79,7 +79,7 @@ async fn main() {
         .expect("graceful shutdown to succeed");
 }
 
-async fn user_loop(session: &Initiator<Message>) {
+async fn user_loop(session: &Initiator<OutboundMsg>) {
     loop {
         println!("(q) to quit, (s) to send message");
 
@@ -105,7 +105,7 @@ async fn user_loop(session: &Initiator<Message>) {
     }
 }
 
-async fn send_message(session: &Initiator<Message>) {
+async fn send_message(session: &Initiator<OutboundMsg>) {
     let mut order_id = format!("{}", uuid::Uuid::new_v4());
     order_id.truncate(12);
     let order = NewOrderSingle {
@@ -120,7 +120,7 @@ async fn send_message(session: &Initiator<Message>) {
         allocation_account: "acc1".to_string(),
         allocation_quantity: 230,
     };
-    let msg = Message::NewOrderSingle(order);
+    let msg = OutboundMsg::NewOrderSingle(order);
 
     session.send_message(msg).await.unwrap();
 }
@@ -129,7 +129,7 @@ async fn start_session(
     config_path: &str,
     db_config: &Database,
     app: TestApplication,
-) -> Initiator<Message> {
+) -> Initiator<OutboundMsg> {
     let mut config = Config::load_from_path(config_path);
     let session_config = config.sessions.pop().expect("config to include a session");
 
@@ -154,7 +154,7 @@ async fn start_session(
 }
 
 async fn start_web_service(
-    session_handle: SessionHandle<Message>,
+    session_handle: SessionHandle<OutboundMsg>,
     cancellation_token: CancellationToken,
 ) {
     let config = RouterConfig {
