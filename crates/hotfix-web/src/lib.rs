@@ -5,7 +5,7 @@ mod session_controller;
 use crate::endpoints::build_api_router;
 use crate::session_controller::{HttpSessionController, SessionController};
 use axum::Router;
-use hotfix::message::FixMessage;
+use hotfix::message::OutboundMessage;
 use hotfix::session::SessionHandle;
 
 #[derive(Clone)]
@@ -21,13 +21,13 @@ pub struct RouterConfig {
 }
 
 /// Build a router with default configuration (admin endpoints disabled)
-pub fn build_router<M: FixMessage>(session_handle: SessionHandle<M>) -> Router {
+pub fn build_router<Outbound: OutboundMessage>(session_handle: SessionHandle<Outbound>) -> Router {
     build_router_with_config(session_handle, RouterConfig::default())
 }
 
 /// Build a router with custom configuration
-pub fn build_router_with_config<M: FixMessage>(
-    session_handle: SessionHandle<M>,
+pub fn build_router_with_config<Outbound: OutboundMessage>(
+    session_handle: SessionHandle<Outbound>,
     config: RouterConfig,
 ) -> Router {
     let controller = HttpSessionController { session_handle };
