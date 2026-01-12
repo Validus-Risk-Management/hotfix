@@ -3,7 +3,7 @@ use crate::common::assertions::then;
 use crate::common::cleanup::finally;
 use crate::common::setup::given_an_active_session;
 use crate::common::test_messages::TestMessage;
-use hotfix::message::FixMessage;
+use hotfix::message::{InboundMessage, OutboundMessage};
 use hotfix_message::{FieldType, fix44::MsgType};
 
 #[tokio::test]

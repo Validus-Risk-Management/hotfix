@@ -22,6 +22,7 @@ pub trait FixMessage: Clone + Send + 'static {
     fn write(&self, msg: &mut Message);
 
     fn message_type(&self) -> &str;
+
     fn parse(message: &Message) -> Self;
 }
 

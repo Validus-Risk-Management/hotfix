@@ -1,7 +1,7 @@
 use hotfix::config::SessionConfig;
 use hotfix::message::logon::{Logon, ResetSeqNumConfig};
 use hotfix::message::sequence_reset::SequenceReset;
-use hotfix::message::{FixMessage, RawFixMessage, generate_message};
+use hotfix::message::{OutboundMessage, RawFixMessage, generate_message};
 use hotfix::session::InternalSessionRef;
 use hotfix::transport::FixConnection;
 use hotfix::transport::reader::ReaderRef;
@@ -14,11 +14,11 @@ use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 
-pub struct FakeCounterparty<M> {
+pub struct FakeCounterparty<Outbound> {
     receiver: Receiver<WriterMessage>,
     received_messages: Vec<Message>,
     sent_messages: Vec<Vec<u8>>,
-    session_ref: InternalSessionRef<M>,
+    session_ref: InternalSessionRef<Outbound>,
     session_config: SessionConfig,
     message_builder: MessageBuilder,
     message_config: MessageConfig,
@@ -26,11 +26,14 @@ pub struct FakeCounterparty<M> {
     _dc_sender: oneshot::Sender<()>,
 }
 
-impl<M> FakeCounterparty<M>
+impl<Outbound> FakeCounterparty<Outbound>
 where
-    M: FixMessage,
+    Outbound: OutboundMessage,
 {
-    pub async fn start(session_ref: InternalSessionRef<M>, session_config: SessionConfig) -> Self {
+    pub async fn start(
+        session_ref: InternalSessionRef<Outbound>,
+        session_config: SessionConfig,
+    ) -> Self {
         let (writer_ref, receiver) = Self::create_writer();
         let (reader_ref, dc_sender) = Self::create_reader();
         let connection = FixConnection::new(writer_ref, reader_ref);
@@ -68,7 +71,7 @@ where
         }
     }
 
-    pub async fn push_previously_sent_message(&mut self, message: impl FixMessage) {
+    pub async fn push_previously_sent_message(&mut self, message: impl OutboundMessage) {
         let raw_message = generate_message(
             &self.session_config.begin_string,
             &self.session_config.sender_comp_id,
@@ -148,7 +151,7 @@ where
         self.send_message(logon).await;
     }
 
-    pub async fn send_message(&mut self, message: impl FixMessage) {
+    pub async fn send_message(&mut self, message: impl OutboundMessage) {
         let raw_message = generate_message(
             &self.session_config.begin_string,
             &self.session_config.sender_comp_id,

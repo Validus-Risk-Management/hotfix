@@ -5,7 +5,7 @@ use crate::common::setup::{HEARTBEAT_INTERVAL, given_an_active_session};
 use crate::common::test_messages::{
     TestMessage, build_execution_report_with_incorrect_body_length, build_invalid_resend_request,
 };
-use hotfix::message::{FixMessage, ResendRequest};
+use hotfix::message::{OutboundMessage, ResendRequest};
 use hotfix::session::Status;
 use hotfix_message::fix44::{GAP_FILL_FLAG, MsgType, NEW_SEQ_NO};
 use hotfix_message::{FieldType, Part};

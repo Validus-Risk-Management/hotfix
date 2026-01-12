@@ -78,7 +78,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{FixMessage, Message};
+    use crate::message::Message;
     use crate::session::admin_request::AdminRequest;
     use crate::session::event::SessionEvent;
     use tokio::io::{AsyncWriteExt, duplex};
@@ -87,15 +87,11 @@ mod tests {
     #[derive(Clone, Debug, PartialEq)]
     struct TestMessage;
 
-    impl FixMessage for TestMessage {
+    impl OutboundMessage for TestMessage {
         fn write(&self, _msg: &mut Message) {}
 
         fn message_type(&self) -> &str {
             "TEST"
-        }
-
-        fn parse(_message: &Message) -> Self {
-            TestMessage
         }
     }
 

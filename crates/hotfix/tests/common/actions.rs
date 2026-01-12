@@ -1,6 +1,6 @@
 use crate::common::fakes::{FakeCounterparty, SessionSpy};
 use crate::common::test_messages::TestMessage;
-use hotfix::message::FixMessage;
+use hotfix::message::OutboundMessage;
 use std::time::Duration;
 
 pub struct When<T> {
@@ -26,7 +26,7 @@ impl When<&SessionSpy> {
 }
 
 impl When<&mut FakeCounterparty<TestMessage>> {
-    pub async fn has_previously_sent(&mut self, message: impl FixMessage) {
+    pub async fn has_previously_sent(&mut self, message: impl OutboundMessage) {
         self.target.push_previously_sent_message(message).await;
     }
 
@@ -38,7 +38,7 @@ impl When<&mut FakeCounterparty<TestMessage>> {
         self.target.resend_message(sequence_number, true).await;
     }
 
-    pub async fn sends_message(&mut self, message: impl FixMessage) {
+    pub async fn sends_message(&mut self, message: impl OutboundMessage) {
         self.target.send_message(message).await;
     }
 

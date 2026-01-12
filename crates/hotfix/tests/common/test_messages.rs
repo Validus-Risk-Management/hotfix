@@ -1,7 +1,7 @@
 use crate::common::setup::{COUNTERPARTY_COMP_ID, OUR_COMP_ID};
 use chrono::TimeDelta;
 use hotfix::Message as HotfixMessage;
-use hotfix::message::{FixMessage, generate_message};
+use hotfix::message::{InboundMessage, OutboundMessage, generate_message};
 use hotfix_message::dict::{FieldLocation, FixDatatype};
 use hotfix_message::field_types::Timestamp;
 use hotfix_message::message::{Config, Message};
@@ -63,7 +63,7 @@ impl TestMessage {
     }
 }
 
-impl FixMessage for TestMessage {
+impl OutboundMessage for TestMessage {
     fn write(&self, msg: &mut HotfixMessage) {
         match self {
             TestMessage::ExecutionReport {
@@ -109,7 +109,9 @@ impl FixMessage for TestMessage {
             TestMessage::NewOrderSingle { .. } => "D",
         }
     }
+}
 
+impl InboundMessage for TestMessage {
     fn parse(msg: &HotfixMessage) -> Self {
         let msg_type: &str = msg.header().get(fix44::MSG_TYPE).unwrap();
         match msg_type {
@@ -188,7 +190,7 @@ impl Default for ExecutionReportWithInvalidField {
     }
 }
 
-impl FixMessage for ExecutionReportWithInvalidField {
+impl OutboundMessage for ExecutionReportWithInvalidField {
     fn write(&self, msg: &mut Message) {
         msg.set(fix44::ORDER_ID, self.order_id.as_str());
         msg.set(fix44::EXEC_ID, self.exec_id.as_str());
@@ -205,11 +207,6 @@ impl FixMessage for ExecutionReportWithInvalidField {
 
     fn message_type(&self) -> &str {
         "D"
-    }
-
-    fn parse(_message: &Message) -> Self {
-        // we never parse this message
-        unimplemented!()
     }
 }
 
