@@ -13,7 +13,7 @@ use tracing::{debug, warn};
 
 use crate::application::Application;
 use crate::config::SessionConfig;
-use crate::message::{FixMessage, OutboundMessage};
+use crate::message::{InboundMessage, OutboundMessage};
 use crate::session::{InternalSessionRef, SessionHandle};
 use crate::store::MessageStore;
 use crate::transport::connect;
@@ -26,9 +26,9 @@ pub struct Initiator<Outbound> {
 }
 
 impl<Outbound: OutboundMessage> Initiator<Outbound> {
-    pub async fn start<M: FixMessage>(
+    pub async fn start<Inbound: InboundMessage>(
         config: SessionConfig,
-        application: impl Application<M, Outbound>,
+        application: impl Application<Inbound, Outbound>,
         store: impl MessageStore + Send + Sync + 'static,
     ) -> Self {
         let session_ref = InternalSessionRef::new(config.clone(), application, store);

@@ -1,5 +1,5 @@
 use crate::config::SessionConfig;
-use crate::message::{FixMessage, OutboundMessage, RawFixMessage};
+use crate::message::{InboundMessage, OutboundMessage, RawFixMessage};
 use crate::session::Session;
 use crate::session::admin_request::AdminRequest;
 use crate::session::event::{AwaitingActiveSessionResponse, SessionEvent};
@@ -17,9 +17,9 @@ pub struct InternalSessionRef<Outbound> {
 }
 
 impl<Outbound: OutboundMessage> InternalSessionRef<Outbound> {
-    pub fn new<M: FixMessage>(
+    pub fn new<Inbound: InboundMessage>(
         config: SessionConfig,
-        application: impl Application<M, Outbound>,
+        application: impl Application<Inbound, Outbound>,
         store: impl MessageStore + Send + Sync + 'static,
     ) -> Self {
         let (event_sender, event_receiver) = mpsc::channel::<SessionEvent>(100);

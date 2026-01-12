@@ -6,11 +6,11 @@ pub mod session_ref;
 mod state;
 
 use crate::config::SessionConfig;
-use crate::message::generate_message;
+use crate::message::OutboundMessage;
 use crate::message::heartbeat::Heartbeat;
 use crate::message::logon::{Logon, ResetSeqNumConfig};
 use crate::message::parser::RawFixMessage;
-use crate::message::{FixMessage, OutboundMessage};
+use crate::message::{InboundMessage, generate_message};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
 use anyhow::{Result, anyhow};
@@ -54,7 +54,7 @@ pub use crate::session::session_handle::SessionHandle;
 
 const SCHEDULE_CHECK_INTERVAL: u64 = 1;
 
-struct Session<A, M, O, S> {
+struct Session<A, I, O, S> {
     message_config: MessageConfig,
     config: SessionConfig,
     schedule: SessionSchedule,
@@ -64,21 +64,21 @@ struct Session<A, M, O, S> {
     store: S,
     schedule_check_timer: Pin<Box<Sleep>>,
     reset_on_next_logon: bool,
-    _phantom: std::marker::PhantomData<fn() -> (M, O)>,
+    _phantom: std::marker::PhantomData<fn() -> (I, O)>,
 }
 
-impl<App, M, Outbound, Store> Session<App, M, Outbound, Store>
+impl<App, Inbound, Outbound, Store> Session<App, Inbound, Outbound, Store>
 where
-    App: Application<M, Outbound>,
+    App: Application<Inbound, Outbound>,
+    Inbound: InboundMessage,
     Outbound: OutboundMessage,
-    M: FixMessage,
     Store: MessageStore,
 {
     fn new(
         config: SessionConfig,
         application: App,
         store: Store,
-    ) -> Session<App, M, Outbound, Store> {
+    ) -> Session<App, Inbound, Outbound, Store> {
         let schedule_check_timer = sleep(Duration::from_secs(SCHEDULE_CHECK_INTERVAL));
 
         let dictionary = Self::get_data_dictionary(&config);
@@ -229,7 +229,7 @@ where
     async fn process_app_message(&mut self, message: &Message) -> Result<()> {
         match self.verify_message(message, true) {
             Ok(_) => {
-                let parsed_message = M::parse(message);
+                let parsed_message = Inbound::parse(message);
                 if matches!(
                     self.application.on_inbound_message(parsed_message).await,
                     InboundDecision::TerminateSession
@@ -974,16 +974,16 @@ where
     }
 }
 
-async fn run_session<A, M, O, S>(
-    mut session: Session<A, M, O, S>,
+async fn run_session<App, Inbound, Outbound, Store>(
+    mut session: Session<App, Inbound, Outbound, Store>,
     mut event_receiver: mpsc::Receiver<SessionEvent>,
-    mut outbound_message_receiver: mpsc::Receiver<O>,
+    mut outbound_message_receiver: mpsc::Receiver<Outbound>,
     mut admin_request_receiver: mpsc::Receiver<AdminRequest>,
 ) where
-    A: Application<M, O>,
-    M: FixMessage,
-    O: OutboundMessage,
-    S: MessageStore + Send + 'static,
+    App: Application<Inbound, Outbound>,
+    Inbound: InboundMessage,
+    Outbound: OutboundMessage,
+    Store: MessageStore + Send + 'static,
 {
     loop {
         select! {
