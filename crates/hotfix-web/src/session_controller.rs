@@ -1,4 +1,4 @@
-use hotfix::message::FixMessage;
+use hotfix::message::OutboundMessage;
 use hotfix::session::{SessionHandle, SessionInfo};
 
 /// Controller for session operations, providing both read access and administrative actions
@@ -11,12 +11,12 @@ pub trait SessionController: Clone + Send + Sync {
 
 /// HTTP session controller implementation that wraps a SessionHandle
 #[derive(Clone)]
-pub struct HttpSessionController<M> {
-    pub(crate) session_handle: SessionHandle<M>,
+pub struct HttpSessionController<Outbound> {
+    pub(crate) session_handle: SessionHandle<Outbound>,
 }
 
 #[async_trait::async_trait]
-impl<M: FixMessage> SessionController for HttpSessionController<M> {
+impl<Outbound: OutboundMessage> SessionController for HttpSessionController<Outbound> {
     async fn get_session_info(&self) -> anyhow::Result<SessionInfo> {
         self.session_handle.get_session_info().await
     }
@@ -34,7 +34,9 @@ impl<M: FixMessage> SessionController for HttpSessionController<M> {
 // Note: We can't use a blanket impl due to Rust's orphan rules (can't impl foreign trait for generic type)
 #[cfg(feature = "ui")]
 #[async_trait::async_trait]
-impl<M: FixMessage> hotfix_web_ui::SessionInfoProvider for HttpSessionController<M> {
+impl<Outbound: OutboundMessage> hotfix_web_ui::SessionInfoProvider
+    for HttpSessionController<Outbound>
+{
     async fn get_session_info(&self) -> anyhow::Result<SessionInfo> {
         // Reuse the SessionController implementation
         SessionController::get_session_info(self).await
@@ -43,12 +45,12 @@ impl<M: FixMessage> hotfix_web_ui::SessionInfoProvider for HttpSessionController
 
 // Allow extracting HttpSessionController from AppState for hotfix-web-ui
 #[cfg(feature = "ui")]
-impl<M> axum::extract::FromRef<crate::AppState<HttpSessionController<M>>>
-    for HttpSessionController<M>
+impl<Outbound> axum::extract::FromRef<crate::AppState<HttpSessionController<Outbound>>>
+    for HttpSessionController<Outbound>
 where
-    M: FixMessage,
+    Outbound: OutboundMessage,
 {
-    fn from_ref(state: &crate::AppState<HttpSessionController<M>>) -> Self {
+    fn from_ref(state: &crate::AppState<HttpSessionController<Outbound>>) -> Self {
         state.controller.clone()
     }
 }
