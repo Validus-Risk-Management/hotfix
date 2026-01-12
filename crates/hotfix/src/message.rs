@@ -55,7 +55,7 @@ pub fn generate_message(
     sender_comp_id: &str,
     target_comp_id: &str,
     msg_seq_num: u64,
-    message: impl FixMessage,
+    message: impl OutboundMessage,
 ) -> Result<Vec<u8>, EncodeError> {
     let mut msg = Message::new(begin_string, message.message_type());
     msg.set(SENDER_COMP_ID, sender_comp_id);

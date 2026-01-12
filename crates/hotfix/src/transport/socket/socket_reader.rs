@@ -2,14 +2,14 @@ use tokio::io::{AsyncRead, AsyncReadExt, ReadHalf};
 use tokio::sync::oneshot;
 use tracing::debug;
 
-use crate::message::FixMessage;
+use crate::message::OutboundMessage;
 use crate::message::parser::Parser;
 use crate::session::InternalSessionRef;
 use crate::transport::reader::ReaderRef;
 
 pub fn spawn_socket_reader(
     reader: ReadHalf<impl AsyncRead + Send + 'static>,
-    session_ref: InternalSessionRef<impl FixMessage>,
+    session_ref: InternalSessionRef<impl OutboundMessage>,
 ) -> ReaderRef {
     let (dc_sender, dc_receiver) = oneshot::channel();
     let actor = ReaderActor::new(reader, session_ref, dc_sender);
@@ -38,9 +38,9 @@ impl<M, R: AsyncRead> ReaderActor<M, R> {
     }
 }
 
-async fn run_reader<M, R>(mut actor: ReaderActor<M, R>)
+async fn run_reader<Outbound, R>(mut actor: ReaderActor<Outbound, R>)
 where
-    M: FixMessage,
+    Outbound: OutboundMessage,
     R: AsyncRead,
 {
     let mut parser = Parser::default();

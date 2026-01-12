@@ -7,7 +7,7 @@ use tracing::info;
 pub struct TestApplication {}
 
 #[async_trait::async_trait]
-impl Application<Message> for TestApplication {
+impl Application<Message, Message> for TestApplication {
     async fn on_outbound_message(&self, _msg: &Message) -> OutboundDecision {
         OutboundDecision::Send
     }

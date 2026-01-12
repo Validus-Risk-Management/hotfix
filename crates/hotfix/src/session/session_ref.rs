@@ -1,5 +1,5 @@
 use crate::config::SessionConfig;
-use crate::message::{FixMessage, RawFixMessage};
+use crate::message::{FixMessage, OutboundMessage, RawFixMessage};
 use crate::session::Session;
 use crate::session::admin_request::AdminRequest;
 use crate::session::event::{AwaitingActiveSessionResponse, SessionEvent};
@@ -10,20 +10,20 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::debug;
 
 #[derive(Clone)]
-pub struct InternalSessionRef<M> {
+pub struct InternalSessionRef<Outbound> {
     pub(crate) event_sender: mpsc::Sender<SessionEvent>,
-    pub(crate) outbound_message_sender: mpsc::Sender<M>,
+    pub(crate) outbound_message_sender: mpsc::Sender<Outbound>,
     pub(crate) admin_request_sender: mpsc::Sender<AdminRequest>,
 }
 
-impl<M: FixMessage> InternalSessionRef<M> {
-    pub fn new(
+impl<Outbound: OutboundMessage> InternalSessionRef<Outbound> {
+    pub fn new<M: FixMessage>(
         config: SessionConfig,
-        application: impl Application<M>,
+        application: impl Application<M, Outbound>,
         store: impl MessageStore + Send + Sync + 'static,
     ) -> Self {
         let (event_sender, event_receiver) = mpsc::channel::<SessionEvent>(100);
-        let (outbound_message_sender, outbound_message_receiver) = mpsc::channel::<M>(10);
+        let (outbound_message_sender, outbound_message_receiver) = mpsc::channel::<Outbound>(10);
         let (admin_request_sender, admin_request_receiver) = mpsc::channel::<AdminRequest>(10);
         let session = Session::new(config, application, store);
         tokio::spawn(session::run_session(

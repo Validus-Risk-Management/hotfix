@@ -13,22 +13,22 @@ use tracing::{debug, warn};
 
 use crate::application::Application;
 use crate::config::SessionConfig;
-use crate::message::FixMessage;
+use crate::message::{FixMessage, OutboundMessage};
 use crate::session::{InternalSessionRef, SessionHandle};
 use crate::store::MessageStore;
 use crate::transport::connect;
 
 #[derive(Clone)]
-pub struct Initiator<M> {
+pub struct Initiator<Outbound> {
     pub config: SessionConfig,
-    session_handle: SessionHandle<M>,
+    session_handle: SessionHandle<Outbound>,
     completion_rx: watch::Receiver<bool>,
 }
 
-impl<M: FixMessage> Initiator<M> {
-    pub async fn start(
+impl<Outbound: OutboundMessage> Initiator<Outbound> {
+    pub async fn start<M: FixMessage>(
         config: SessionConfig,
-        application: impl Application<M>,
+        application: impl Application<M, Outbound>,
         store: impl MessageStore + Send + Sync + 'static,
     ) -> Self {
         let session_ref = InternalSessionRef::new(config.clone(), application, store);
@@ -47,7 +47,7 @@ impl<M: FixMessage> Initiator<M> {
         }
     }
 
-    pub async fn send_message(&self, msg: M) -> anyhow::Result<()> {
+    pub async fn send_message(&self, msg: Outbound) -> anyhow::Result<()> {
         self.session_handle.send_message(msg).await?;
 
         Ok(())
@@ -57,7 +57,7 @@ impl<M: FixMessage> Initiator<M> {
         self.config.sender_comp_id == sender_comp_id && self.config.target_comp_id == target_comp_id
     }
 
-    pub fn session_handle(&self) -> SessionHandle<M> {
+    pub fn session_handle(&self) -> SessionHandle<Outbound> {
         self.session_handle.clone()
     }
 
@@ -85,9 +85,9 @@ impl<M: FixMessage> Initiator<M> {
     }
 }
 
-async fn establish_connection<M: FixMessage>(
+async fn establish_connection<Outbound: OutboundMessage>(
     config: SessionConfig,
-    session_ref: InternalSessionRef<M>,
+    session_ref: InternalSessionRef<Outbound>,
     completion_tx: watch::Sender<bool>,
 ) {
     loop {

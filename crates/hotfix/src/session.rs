@@ -6,11 +6,11 @@ pub mod session_ref;
 mod state;
 
 use crate::config::SessionConfig;
-use crate::message::FixMessage;
 use crate::message::generate_message;
 use crate::message::heartbeat::Heartbeat;
 use crate::message::logon::{Logon, ResetSeqNumConfig};
 use crate::message::parser::RawFixMessage;
+use crate::message::{FixMessage, OutboundMessage};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
 use anyhow::{Result, anyhow};
@@ -54,7 +54,7 @@ pub use crate::session::session_handle::SessionHandle;
 
 const SCHEDULE_CHECK_INTERVAL: u64 = 1;
 
-struct Session<A, M, S> {
+struct Session<A, M, O, S> {
     message_config: MessageConfig,
     config: SessionConfig,
     schedule: SessionSchedule,
@@ -64,11 +64,21 @@ struct Session<A, M, S> {
     store: S,
     schedule_check_timer: Pin<Box<Sleep>>,
     reset_on_next_logon: bool,
-    _phantom: std::marker::PhantomData<fn() -> M>,
+    _phantom: std::marker::PhantomData<fn() -> (M, O)>,
 }
 
-impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
-    fn new(config: SessionConfig, application: A, store: S) -> Session<A, M, S> {
+impl<App, M, Outbound, Store> Session<App, M, Outbound, Store>
+where
+    App: Application<M, Outbound>,
+    Outbound: OutboundMessage,
+    M: FixMessage,
+    Store: MessageStore,
+{
+    fn new(
+        config: SessionConfig,
+        application: App,
+        store: Store,
+    ) -> Session<App, M, Outbound, Store> {
         let schedule_check_timer = sleep(Duration::from_secs(SCHEDULE_CHECK_INTERVAL));
 
         let dictionary = Self::get_data_dictionary(&config);
@@ -732,7 +742,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
             .reset_peer_timer(self.config.heartbeat_interval, test_request_id);
     }
 
-    async fn send_app_message(&mut self, message: M) {
+    async fn send_app_message(&mut self, message: Outbound) {
         match self.application.on_outbound_message(&message).await {
             OutboundDecision::Send => {
                 self.send_message(message).await;
@@ -747,7 +757,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
         }
     }
 
-    async fn send_message(&mut self, message: impl FixMessage) {
+    async fn send_message(&mut self, message: impl OutboundMessage) {
         let seq_num = self.store.next_sender_seq_number();
         self.store.increment_sender_seq_number().await.unwrap();
 
@@ -869,7 +879,7 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
         }
     }
 
-    async fn handle_outbound_message(&mut self, message: M) {
+    async fn handle_outbound_message(&mut self, message: Outbound) {
         self.send_app_message(message).await;
     }
 
@@ -964,14 +974,15 @@ impl<A: Application<M>, M: FixMessage, S: MessageStore> Session<A, M, S> {
     }
 }
 
-async fn run_session<A, M, S>(
-    mut session: Session<A, M, S>,
+async fn run_session<A, M, O, S>(
+    mut session: Session<A, M, O, S>,
     mut event_receiver: mpsc::Receiver<SessionEvent>,
-    mut outbound_message_receiver: mpsc::Receiver<M>,
+    mut outbound_message_receiver: mpsc::Receiver<O>,
     mut admin_request_receiver: mpsc::Receiver<AdminRequest>,
 ) where
-    A: Application<M>,
+    A: Application<M, O>,
     M: FixMessage,
+    O: OutboundMessage,
     S: MessageStore + Send + 'static,
 {
     loop {

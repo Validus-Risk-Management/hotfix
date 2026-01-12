@@ -10,12 +10,12 @@ use tokio::sync::{mpsc, oneshot};
 /// such as inbound message processing and disconnects, [`SessionHandle`] is public
 /// and only exposes APIs intended for consumers of the engine.
 #[derive(Clone, Debug)]
-pub struct SessionHandle<M> {
-    outbound_message_sender: mpsc::Sender<M>,
+pub struct SessionHandle<Outbound> {
+    outbound_message_sender: mpsc::Sender<Outbound>,
     admin_request_sender: mpsc::Sender<AdminRequest>,
 }
 
-impl<M> SessionHandle<M> {
+impl<Outbound> SessionHandle<Outbound> {
     pub async fn get_session_info(&self) -> anyhow::Result<SessionInfo> {
         let (sender, receiver) = oneshot::channel::<SessionInfo>();
         self.admin_request_sender
@@ -24,7 +24,7 @@ impl<M> SessionHandle<M> {
         Ok(receiver.await?)
     }
 
-    pub async fn send_message(&self, msg: M) -> anyhow::Result<()> {
+    pub async fn send_message(&self, msg: Outbound) -> anyhow::Result<()> {
         self.outbound_message_sender
             .send(msg)
             .await
