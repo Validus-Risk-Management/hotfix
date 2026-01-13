@@ -9,13 +9,17 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio_rustls::{TlsConnector, client::TlsStream};
 
-use crate::config::SessionConfig;
+use crate::config::{SessionConfig, TlsConfig};
 use crate::transport::tcp::create_tcp_connection;
 
 pub async fn create_tcp_over_tls_connection(
     session_config: &SessionConfig,
 ) -> io::Result<TlsStream<TcpStream>> {
-    let client_config = get_client_config(session_config);
+    let tls_config = session_config
+        .tls_config
+        .as_ref()
+        .expect("TLS config must be present when creating TLS connection");
+    let client_config = get_client_config(tls_config);
     let socket = create_tcp_connection(session_config).await?;
     wrap_stream(
         socket,
@@ -25,28 +29,36 @@ pub async fn create_tcp_over_tls_connection(
     .await
 }
 
-fn get_client_config(session_config: &SessionConfig) -> ClientConfig {
-    let root_store = get_root_store(
-        &session_config
-            .tls_config
-            .clone()
-            .unwrap()
-            .ca_certificate_path,
-    );
+fn get_client_config(tls_config: &TlsConfig) -> ClientConfig {
+    let root_store = get_root_store(tls_config);
     ClientConfig::builder()
         .with_root_certificates(root_store)
         .with_no_client_auth()
 }
 
-fn get_root_store(ca_certificate_path: &str) -> RootCertStore {
-    let mut root_store = RootCertStore::empty();
-    let certs = load_certs(ca_certificate_path);
-    root_store.add_parsable_certificates(certs);
-
-    root_store
+fn get_root_store(tls_config: &TlsConfig) -> RootCertStore {
+    match tls_config {
+        TlsConfig::File {
+            ca_certificate_path,
+        } => {
+            let mut root_store = RootCertStore::empty();
+            let certs = load_certs_from_file(ca_certificate_path);
+            root_store.add_parsable_certificates(certs);
+            root_store
+        }
+        TlsConfig::Native => {
+            let mut root_store = RootCertStore::empty();
+            let native_certs = rustls_native_certs::load_native_certs();
+            root_store.add_parsable_certificates(native_certs.certs);
+            root_store
+        }
+        TlsConfig::Webpki => {
+            RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned())
+        }
+    }
 }
 
-fn load_certs(filename: &str) -> Vec<CertificateDer<'static>> {
+fn load_certs_from_file(filename: &str) -> Vec<CertificateDer<'static>> {
     let certfile = fs::File::open(filename).expect("certificate file to be open");
     let mut reader = BufReader::new(certfile);
     rustls_pemfile::certs(&mut reader)

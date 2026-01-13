@@ -33,7 +33,9 @@ mongodb = { workspace = true, optional = true }
 rustls-pki-types = { workspace = true }
 redb = { workspace = true, optional = true }
 rustls = { workspace = true }
+rustls-native-certs = { workspace = true }
 rustls-pemfile = { workspace = true }
+webpki-roots = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }

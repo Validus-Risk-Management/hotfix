@@ -25,11 +25,19 @@ impl Config {
     }
 }
 
-/// TLS encryption details.
+/// TLS encryption details with configurable trust store.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct TlsConfig {
-    /// The path to the CA certificate.
-    pub ca_certificate_path: String,
+#[serde(tag = "trust_store", rename_all = "snake_case")]
+pub enum TlsConfig {
+    /// Use a custom CA certificate file (PEM format).
+    File {
+        /// Path to the CA certificate file.
+        ca_certificate_path: String,
+    },
+    /// Use the operating system's native certificate store.
+    Native,
+    /// Use Mozilla's bundled root certificates (via webpki-roots).
+    Webpki,
 }
 
 /// Session schedule configuration
@@ -123,6 +131,7 @@ data_dictionary_path = "./spec/FIX44.xml"
 
 connection_port = 443
 connection_host = "127.0.0.1"
+trust_store = "file"
 ca_certificate_path = "my_cert.crt"
 heartbeat_interval = 30
 reset_on_logon = false
@@ -142,12 +151,65 @@ reset_on_logon = false
         assert_eq!(session_config.connection_port, 443);
         assert_eq!(session_config.connection_host, "127.0.0.1");
         assert_eq!(session_config.heartbeat_interval, 30);
-        let expected_tls_config = TlsConfig {
+        let expected_tls_config = TlsConfig::File {
             ca_certificate_path: "my_cert.crt".to_string(),
         };
         assert_eq!(session_config.tls_config, Some(expected_tls_config));
         assert_eq!(session_config.reconnect_interval, 30);
         assert_eq!(session_config.logon_timeout, 10);
+    }
+
+    #[test]
+    fn test_tls_config_native() {
+        let config_contents = r#"
+[[sessions]]
+begin_string = "FIX.4.4"
+sender_comp_id = "send-comp-id"
+target_comp_id = "target-comp-id"
+connection_port = 443
+connection_host = "127.0.0.1"
+heartbeat_interval = 30
+trust_store = "native"
+        "#;
+
+        let config: Config = toml::from_str(config_contents).unwrap();
+        let session_config = config.sessions.first().unwrap();
+        assert_eq!(session_config.tls_config, Some(TlsConfig::Native));
+    }
+
+    #[test]
+    fn test_tls_config_webpki() {
+        let config_contents = r#"
+[[sessions]]
+begin_string = "FIX.4.4"
+sender_comp_id = "send-comp-id"
+target_comp_id = "target-comp-id"
+connection_port = 443
+connection_host = "127.0.0.1"
+heartbeat_interval = 30
+trust_store = "webpki"
+        "#;
+
+        let config: Config = toml::from_str(config_contents).unwrap();
+        let session_config = config.sessions.first().unwrap();
+        assert_eq!(session_config.tls_config, Some(TlsConfig::Webpki));
+    }
+
+    #[test]
+    fn test_no_tls_config() {
+        let config_contents = r#"
+[[sessions]]
+begin_string = "FIX.4.4"
+sender_comp_id = "send-comp-id"
+target_comp_id = "target-comp-id"
+connection_port = 9880
+connection_host = "127.0.0.1"
+heartbeat_interval = 30
+        "#;
+
+        let config: Config = toml::from_str(config_contents).unwrap();
+        let session_config = config.sessions.first().unwrap();
+        assert_eq!(session_config.tls_config, None);
     }
 
     #[test]
@@ -327,6 +389,7 @@ end_day = "Friday"
 
     connection_port = 443
     connection_host = "127.0.0.1"
+    trust_store = "file"
     ca_certificate_path = "my_cert.crt"
     heartbeat_interval = 30
     logon_timeout = 20
@@ -350,6 +413,7 @@ end_day = "Friday"
 
     connection_port = 443
     connection_host = "127.0.0.1"
+    trust_store = "file"
     ca_certificate_path = "my_cert.crt"
     heartbeat_interval = 30
     reconnect_interval = 15

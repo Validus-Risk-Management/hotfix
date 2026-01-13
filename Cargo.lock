@@ -1285,6 +1285,7 @@ dependencies = [
  "mongodb",
  "redb",
  "rustls",
+ "rustls-native-certs",
  "rustls-pemfile",
  "rustls-pki-types",
  "serde",
@@ -1295,6 +1296,7 @@ dependencies = [
  "toml",
  "tracing",
  "uuid",
+ "webpki-roots",
 ]
 
 [[package]]
