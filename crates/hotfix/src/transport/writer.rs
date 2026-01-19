@@ -1,5 +1,6 @@
 use crate::message::parser::RawFixMessage;
 use tokio::sync::mpsc;
+use tracing::warn;
 
 #[derive(Clone, Debug)]
 pub enum WriterMessage {
@@ -18,16 +19,20 @@ impl WriterRef {
     }
 
     pub async fn send_raw_message(&self, msg: RawFixMessage) {
-        self.sender
-            .send(WriterMessage::SendMessage(msg))
-            .await
-            .expect("be able to send message");
+        if let Err(err) = self.sender.send(WriterMessage::SendMessage(msg)).await {
+            // If the channel is closed, the writer task has terminated.
+            // The session will receive a Disconnected event with the actual
+            // disconnection reason, so we don't need to handle the error here.
+            // The message we failed to send will be recovered by the counterparty
+            // through the built-in recovery mechanisms of FIX.
+            warn!("trying to send message but the writer is gone: {}", err);
+        }
     }
 
     pub async fn disconnect(&self) {
-        self.sender
-            .send(WriterMessage::Disconnect)
-            .await
-            .expect("be able to disconnect")
+        if let Err(err) = self.sender.send(WriterMessage::Disconnect).await {
+            // If the channel is closed, we're already effectively disconnected.
+            warn!("trying to send disconnect but the writer is gone: {}", err);
+        }
     }
 }
