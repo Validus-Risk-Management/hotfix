@@ -13,7 +13,7 @@ use crate::message::parser::RawFixMessage;
 use crate::message::{InboundMessage, generate_message};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use chrono::Utc;
 use hotfix_message::dict::Dictionary;
 use hotfix_message::message::{Config as MessageConfig, Message};
@@ -430,7 +430,7 @@ where
         self.store.increment_target_seq_number().await?;
 
         self.resend_messages(begin_seq_number, end_seq_number, message)
-            .await;
+            .await?;
 
         Ok(())
     }
@@ -663,13 +663,13 @@ where
         };
     }
 
-    async fn resend_messages(&mut self, begin: u64, end: u64, _message: &Message) {
+    async fn resend_messages(&mut self, begin: u64, end: u64, _message: &Message) -> Result<()> {
         info!(begin, end, "resending messages as requested");
         let messages = self
             .store
             .get_slice(begin as usize, end as usize)
             .await
-            .unwrap();
+            .context("failed to retrieve messages from store")?;
 
         let no = messages.len();
         debug!(number_of_messages = no, "number of messages");
@@ -682,9 +682,18 @@ where
                 .message_builder
                 .build(msg.as_slice())
                 .into_message()
-                .unwrap();
-            sequence_number = message.header().get(MSG_SEQ_NUM).unwrap();
-            let message_type: String = message.header().get::<&str>(MSG_TYPE).unwrap().to_string();
+                .with_context(|| format!("failed to build message for raw message: {msg:?}"))?;
+            sequence_number = message.header().get::<u64>(MSG_SEQ_NUM).map_err(|e| {
+                anyhow!(
+                    "sequence number in message to resend is unexpectedly missing: {:?}",
+                    e
+                )
+            })?;
+            let message_type: String = message
+                .header()
+                .get::<&str>(MSG_TYPE)
+                .context("message type in message to resend is unexpectedly missing")?
+                .to_string();
 
             if is_admin(message_type.as_str()) {
                 if reset_start.is_none() {
@@ -708,13 +717,16 @@ where
             }
             self.send_raw(
                 message_type.as_bytes(),
-                message.encode(&self.message_config).unwrap(),
+                message
+                    .encode(&self.message_config)
+                    .context("failed to encode message")?,
             )
             .await;
 
             if enabled!(tracing::Level::DEBUG) {
-                let m = String::from_utf8(msg.clone()).unwrap();
-                debug!(sequence_number, message = m, "resent message");
+                if let Ok(m) = String::from_utf8(msg.clone()) {
+                    debug!(sequence_number, message = m, "resent message");
+                }
             }
         }
 
@@ -724,6 +736,8 @@ where
             Self::log_skipped_admin_messages(begin, end);
             self.send_sequence_reset(begin, end).await;
         }
+
+        Ok(())
     }
 
     fn log_skipped_admin_messages(begin: u64, end: u64) {
