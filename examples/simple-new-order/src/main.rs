@@ -1,8 +1,7 @@
 mod application;
 mod messages;
 
-use crate::application::TestApplication;
-use crate::messages::{NewOrderSingle, OutboundMsg};
+use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use hotfix::config::Config;
 use hotfix::field_types::{Date, Timestamp};
@@ -17,6 +16,9 @@ use tokio::task::spawn_blocking;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
+
+use crate::application::TestApplication;
+use crate::messages::{NewOrderSingle, OutboundMsg};
 
 #[derive(ValueEnum, Clone, Debug)]
 #[clap(rename_all = "lower")]
@@ -37,23 +39,24 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     let args = Args::parse();
 
     if let Some(path) = args.logfile {
         let p = Path::new(&path);
-        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        let parent = p.parent().context("log file path has no parent directory")?;
+        std::fs::create_dir_all(parent)?;
         let logfile = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
             .open(p)
-            .expect("log file to open successfully");
+            .context("failed to open log file")?;
         let subscriber = tracing_subscriber::fmt::Subscriber::builder()
             .with_writer(logfile)
             .with_env_filter(EnvFilter::from_default_env())
             .finish();
-        tracing::subscriber::set_global_default(subscriber).unwrap();
+        tracing::subscriber::set_global_default(subscriber)?;
     } else {
         tracing_subscriber::fmt()
             .pretty()
@@ -63,40 +66,48 @@ async fn main() {
 
     let db_config = args.database.unwrap_or(Database::Redb);
     let app = TestApplication::default();
-    let initiator = start_session(&args.config, &db_config, app).await;
+    let initiator = start_session(&args.config, &db_config, app).await?;
 
     let status_service_token = CancellationToken::new();
-    tokio::spawn(start_web_service(
-        initiator.session_handle(),
-        status_service_token.child_token(),
-    ));
+    let session_handle = initiator.session_handle();
+    let child_token = status_service_token.child_token();
+    tokio::spawn(async move {
+        if let Err(e) = start_web_service(session_handle, child_token).await {
+            tracing::error!("web service error: {e:?}");
+        }
+    });
 
-    user_loop(&initiator).await;
+    user_loop(&initiator).await?;
     status_service_token.cancel();
     initiator
         .shutdown(false)
         .await
-        .expect("graceful shutdown to succeed");
+        .context("graceful shutdown failed")?;
+    Ok(())
 }
 
-async fn user_loop(session: &Initiator<OutboundMsg>) {
+async fn user_loop(session: &Initiator<OutboundMsg>) -> Result<()> {
     loop {
         println!("(q) to quit, (s) to send message");
 
-        let command_task = spawn_blocking(|| {
+        let command_task = spawn_blocking(|| -> Result<String> {
             let mut input = String::new();
             std::io::stdin()
                 .read_line(&mut input)
-                .expect("read line to succeed");
-            input
+                .context("failed to read line from stdin")?;
+            Ok(input)
         });
 
-        match command_task.await.unwrap().trim() {
+        let input: String = command_task
+            .await
+            .context("failed to join blocking task")??;
+
+        match input.trim() {
             "q" => {
-                return;
+                return Ok(());
             }
             "s" => {
-                send_message(session).await;
+                send_message(session).await?;
             }
             _ => {
                 println!("Unrecognised command");
@@ -105,7 +116,7 @@ async fn user_loop(session: &Initiator<OutboundMsg>) {
     }
 }
 
-async fn send_message(session: &Initiator<OutboundMsg>) {
+async fn send_message(session: &Initiator<OutboundMsg>) -> Result<()> {
     let mut order_id = format!("{}", uuid::Uuid::new_v4());
     order_id.truncate(12);
     let order = NewOrderSingle {
@@ -114,7 +125,7 @@ async fn send_message(session: &Initiator<OutboundMsg>) {
         cl_ord_id: order_id,
         side: fix44::Side::Buy,
         order_qty: 230,
-        settlement_date: Date::new(2023, 9, 19).unwrap(),
+        settlement_date: Date::new(2023, 9, 19).context("invalid settlement date")?,
         currency: "USD".to_string(),
         number_of_allocations: 1,
         allocation_account: "acc1".to_string(),
@@ -122,32 +133,39 @@ async fn send_message(session: &Initiator<OutboundMsg>) {
     };
     let msg = OutboundMsg::NewOrderSingle(order);
 
-    session.send_message(msg).await.unwrap();
+    session
+        .send_message(msg)
+        .await
+        .context("failed to send message")?;
+    Ok(())
 }
 
 async fn start_session(
     config_path: &str,
     db_config: &Database,
     app: TestApplication,
-) -> Initiator<OutboundMsg> {
+) -> Result<Initiator<OutboundMsg>> {
     let mut config = Config::load_from_path(config_path);
-    let session_config = config.sessions.pop().expect("config to include a session");
+    let session_config = config
+        .sessions
+        .pop()
+        .context("config must include a session")?;
 
     match db_config {
         Database::Redb => {
             let store = hotfix::store::redb::RedbMessageStore::new("session.db")
-                .expect("be able to create store");
+                .context("failed to create redb store")?;
             Initiator::start(session_config, app, store).await
         }
         Database::Mongodb => {
             let uri = "mongodb://localhost:30001";
             let client = Client::with_uri_str(uri)
                 .await
-                .expect("able to create client");
+                .context("failed to create mongodb client")?;
             let store =
                 hotfix::store::mongodb::MongoDbMessageStore::new(client.database("hotfix"), None)
                     .await
-                    .expect("be able to create store");
+                    .context("failed to create mongodb store")?;
             Initiator::start(session_config, app, store).await
         }
     }
@@ -156,13 +174,15 @@ async fn start_session(
 async fn start_web_service(
     session_handle: SessionHandle<OutboundMsg>,
     cancellation_token: CancellationToken,
-) {
+) -> Result<()> {
     let config = RouterConfig {
         enable_admin_endpoints: true,
     };
     let router = build_router_with_config(session_handle, config);
     let host_and_port = std::env::var("HOST_AND_PORT").unwrap_or("0.0.0.0:9881".to_string());
-    let listener = tokio::net::TcpListener::bind(&host_and_port).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(&host_and_port)
+        .await
+        .context("failed to bind TCP listener")?;
 
     info!("starting web interface on http://{host_and_port}");
 
@@ -176,4 +196,6 @@ async fn start_web_service(
             info!("status service cancelled");
         }
     }
+
+    Ok(())
 }

@@ -13,7 +13,7 @@ use crate::message::parser::RawFixMessage;
 use crate::message::{InboundMessage, generate_message};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, bail};
 use chrono::Utc;
 use hotfix_message::dict::Dictionary;
 use hotfix_message::message::{Config as MessageConfig, Message};
@@ -78,16 +78,15 @@ where
         config: SessionConfig,
         application: App,
         store: Store,
-    ) -> Session<App, Inbound, Outbound, Store> {
+    ) -> Result<Session<App, Inbound, Outbound, Store>> {
         let schedule_check_timer = sleep(Duration::from_secs(SCHEDULE_CHECK_INTERVAL));
 
-        let dictionary = Self::get_data_dictionary(&config);
+        let dictionary = Self::get_data_dictionary(&config)?;
         let message_config = MessageConfig::default();
-        let message_builder = MessageBuilder::new(dictionary, message_config)
-            .expect("failed to create message builder");
-        let schedule = config.schedule.as_ref().try_into().unwrap();
+        let message_builder = MessageBuilder::new(dictionary, message_config)?;
+        let schedule = config.schedule.as_ref().try_into()?;
 
-        Self {
+        let session = Self {
             config,
             schedule,
             message_config,
@@ -98,17 +97,19 @@ where
             schedule_check_timer: Box::pin(schedule_check_timer),
             reset_on_next_logon: false,
             _phantom: std::marker::PhantomData,
-        }
+        };
+
+        Ok(session)
     }
 
-    fn get_data_dictionary(config: &SessionConfig) -> Dictionary {
+    fn get_data_dictionary(config: &SessionConfig) -> Result<Dictionary> {
         match &config.data_dictionary_path {
             None => match config.begin_string.as_str() {
                 #[cfg(feature = "fix44")]
-                "FIX.4.4" => Dictionary::fix44(),
-                _ => panic!("unsupported begin string: {}", config.begin_string),
+                "FIX.4.4" => Ok(Dictionary::fix44()),
+                _ => bail!("unsupported begin string: {}", config.begin_string),
             },
-            Some(dictionary_path) => Dictionary::load_from_file(dictionary_path).unwrap(),
+            Some(dictionary_path) => Ok(Dictionary::load_from_file(dictionary_path)?),
         }
     }
 

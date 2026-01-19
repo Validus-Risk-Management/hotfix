@@ -1,8 +1,7 @@
 mod application;
 mod messages;
 
-use crate::application::LoadTestingApplication;
-use crate::messages::{ExecutionReport, NewOrderSingle, OutboundMsg};
+use anyhow::Result;
 use clap::{Parser, ValueEnum};
 use hotfix::config::SessionConfig;
 use hotfix::field_types::{Date, Timestamp};
@@ -15,6 +14,9 @@ use tokio::runtime::Builder;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
+
+use crate::application::LoadTestingApplication;
+use crate::messages::{ExecutionReport, NewOrderSingle, OutboundMsg};
 
 #[derive(ValueEnum, Clone, Debug)]
 #[clap(rename_all = "lower")]
@@ -37,7 +39,7 @@ struct Args {
 
 const WAIT_SECONDS: u64 = 3;
 
-fn main() {
+fn main() -> Result<()> {
     let args = Args::parse();
 
     let runtime = Builder::new_multi_thread()
@@ -50,10 +52,12 @@ fn main() {
     runtime.block_on(run_load_test(
         args.message_count,
         args.database.unwrap_or(Database::Memory),
-    ));
+    ))?;
+
+    Ok(())
 }
 
-async fn run_load_test(message_count: u32, database: Database) {
+async fn run_load_test(message_count: u32, database: Database) -> Result<()> {
     tracing_subscriber::fmt()
         .pretty()
         .with_env_filter(EnvFilter::from_default_env())
@@ -63,7 +67,7 @@ async fn run_load_test(message_count: u32, database: Database) {
 
     let (tx, rx) = unbounded_channel();
     let application = LoadTestingApplication::new(tx);
-    let initiator = start_session(config, database, application).await;
+    let initiator = start_session(config, database, application).await?;
 
     for s in 0..WAIT_SECONDS {
         info!("starting in {} seconds", WAIT_SECONDS - s);
@@ -74,24 +78,23 @@ async fn run_load_test(message_count: u32, database: Database) {
     let messages_handler = tokio::spawn(submit_messages(initiator.session_handle(), message_count));
     let report_handler = tokio::spawn(listen_for_reports(rx, message_count));
 
-    messages_handler.await.unwrap();
+    messages_handler.await?;
     info!("sent all messages, awaiting responses");
-    report_handler.await.unwrap();
+    report_handler.await?;
 
     let duration = start.elapsed();
     info!("completed run in {duration:?} seconds");
 
-    initiator
-        .shutdown(false)
-        .await
-        .expect("graceful shutdown to succeed");
+    initiator.shutdown(false).await?;
+
+    Ok(())
 }
 
 async fn start_session(
     session_config: SessionConfig,
     db_config: Database,
     app: LoadTestingApplication,
-) -> Initiator<OutboundMsg> {
+) -> Result<Initiator<OutboundMsg>> {
     match db_config {
         Database::Memory => {
             let store = hotfix::store::in_memory::InMemoryMessageStore::default();

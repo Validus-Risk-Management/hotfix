@@ -10,6 +10,7 @@ publish = false
 hotfix = { path = "../../crates/hotfix", features = ["fix44", "mongodb", "redb"] }
 hotfix-web = { path = "../../crates/hotfix-web", features = ["ui"] }
 
+anyhow.workspace = true
 async-trait.workspace = true
 axum.workspace = true
 clap = { workspace = true, features = ["derive"] }

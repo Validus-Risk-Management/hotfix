@@ -1,3 +1,7 @@
+use anyhow::Result;
+use tokio::sync::{mpsc, oneshot};
+use tracing::debug;
+
 use crate::config::SessionConfig;
 use crate::message::{InboundMessage, OutboundMessage, RawFixMessage};
 use crate::session::Session;
@@ -6,8 +10,6 @@ use crate::session::event::{AwaitingActiveSessionResponse, SessionEvent};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
 use crate::{Application, session};
-use tokio::sync::{mpsc, oneshot};
-use tracing::debug;
 
 #[derive(Clone)]
 pub struct InternalSessionRef<Outbound> {
@@ -21,11 +23,11 @@ impl<Outbound: OutboundMessage> InternalSessionRef<Outbound> {
         config: SessionConfig,
         application: impl Application<Inbound, Outbound>,
         store: impl MessageStore + Send + Sync + 'static,
-    ) -> Self {
+    ) -> Result<Self> {
         let (event_sender, event_receiver) = mpsc::channel::<SessionEvent>(100);
         let (outbound_message_sender, outbound_message_receiver) = mpsc::channel::<Outbound>(10);
         let (admin_request_sender, admin_request_receiver) = mpsc::channel::<AdminRequest>(10);
-        let session = Session::new(config, application, store);
+        let session = Session::new(config, application, store)?;
         tokio::spawn(session::run_session(
             session,
             event_receiver,
@@ -33,11 +35,11 @@ impl<Outbound: OutboundMessage> InternalSessionRef<Outbound> {
             admin_request_receiver,
         ));
 
-        Self {
+        Ok(Self {
             event_sender,
             outbound_message_sender,
             admin_request_sender,
-        }
+        })
     }
 
     pub async fn register_writer(&self, writer: WriterRef) {

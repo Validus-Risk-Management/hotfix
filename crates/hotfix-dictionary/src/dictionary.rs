@@ -1,7 +1,8 @@
 use crate::{Component, ComponentData, Datatype, DatatypeData, Field, FieldData};
 
+use crate::error::ParseError;
 use crate::message_definition::{MessageData, MessageDefinition};
-use crate::quickfix::{ParseDictionaryError, QuickFixReader};
+use crate::quickfix::QuickFixReader;
 use crate::string::SmartString;
 use fnv::FnvHashMap;
 
@@ -52,9 +53,9 @@ impl Dictionary {
 
     /// Attempts to read a QuickFIX-style specification file and convert it into
     /// a [`Dictionary`].
-    pub fn from_quickfix_spec(input: &str) -> Result<Self, ParseDictionaryError> {
+    pub fn from_quickfix_spec(input: &str) -> Result<Self, ParseError> {
         let xml_document =
-            roxmltree::Document::parse(input).map_err(|_| ParseDictionaryError::InvalidFormat)?;
+            roxmltree::Document::parse(input).map_err(|_| ParseError::InvalidFormat)?;
         QuickFixReader::new(&xml_document)
     }
 
@@ -71,7 +72,7 @@ impl Dictionary {
         self.version.as_str()
     }
 
-    pub fn load_from_file(path: &str) -> Result<Self, ParseDictionaryError> {
+    pub fn load_from_file(path: &str) -> Result<Self, ParseError> {
         let spec = std::fs::read_to_string(path)
             .unwrap_or_else(|_| panic!("unable to read FIX dictionary file at {path}"));
         Dictionary::from_quickfix_spec(&spec)

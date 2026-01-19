@@ -1,5 +1,6 @@
 use crate::builder::DictionaryBuilder;
 use crate::component::{ComponentData, FixmlComponentAttributes};
+use crate::error::{ParseError, ParseResult};
 use crate::message_definition::MessageData;
 use crate::string::SmartString;
 use crate::{
@@ -29,7 +30,7 @@ impl<'a> QuickFixReader<'a> {
             if child.is_element() {
                 let name = child
                     .attribute("name")
-                    .ok_or(ParseDictionaryError::InvalidFormat)?
+                    .ok_or(ParseError::InvalidFormat)?
                     .to_string();
                 import_component(&mut reader.builder, child, &name)?;
             }
@@ -61,23 +62,17 @@ impl<'a> QuickFixReader<'a> {
         let find_tagged_child = |tag: &str| {
             root.children()
                 .find(|n| n.has_tag_name(tag))
-                .ok_or_else(|| ParseDictionaryError::InvalidData(format!("<{tag}> tag not found")))
+                .ok_or_else(|| ParseError::InvalidData(format!("<{tag}> tag not found")))
         };
         let version_type = root
             .attribute("type")
-            .ok_or(ParseDictionaryError::InvalidData(
-                "No version attribute.".to_string(),
-            ))?;
-        let version_major = root
-            .attribute("major")
-            .ok_or(ParseDictionaryError::InvalidData(
-                "No major version attribute.".to_string(),
-            ))?;
-        let version_minor = root
-            .attribute("minor")
-            .ok_or(ParseDictionaryError::InvalidData(
-                "No minor version attribute.".to_string(),
-            ))?;
+            .ok_or(ParseError::InvalidData("No version attribute.".to_string()))?;
+        let version_major = root.attribute("major").ok_or(ParseError::InvalidData(
+            "No major version attribute.".to_string(),
+        ))?;
+        let version_minor = root.attribute("minor").ok_or(ParseError::InvalidData(
+            "No minor version attribute.".to_string(),
+        ))?;
         let version_sp = root.attribute("servicepack").unwrap_or("0");
         let version = format!(
             "{}.{}.{}{}",
@@ -104,19 +99,19 @@ impl<'a> QuickFixReader<'a> {
 
 fn import_field(builder: &mut DictionaryBuilder, node: roxmltree::Node) -> ParseResult<()> {
     if node.tag_name().name() != "field" {
-        return Err(ParseDictionaryError::InvalidFormat);
+        return Err(ParseError::InvalidFormat);
     }
     let data_type_name = import_datatype(builder, node);
     let value_restrictions = value_restrictions_from_node(node, data_type_name.clone());
     let name = node
         .attribute("name")
-        .ok_or(ParseDictionaryError::InvalidFormat)?
+        .ok_or(ParseError::InvalidFormat)?
         .into();
     let tag = node
         .attribute("number")
-        .ok_or(ParseDictionaryError::InvalidFormat)?
+        .ok_or(ParseError::InvalidFormat)?
         .parse()
-        .map_err(|_| ParseDictionaryError::InvalidFormat)?;
+        .map_err(|_| ParseError::InvalidFormat)?;
     let field = FieldData {
         name,
         tag,
@@ -142,11 +137,11 @@ fn import_message(builder: &mut DictionaryBuilder, node: roxmltree::Node) -> Par
     let message = MessageData {
         name: node
             .attribute("name")
-            .ok_or(ParseDictionaryError::InvalidFormat)?
+            .ok_or(ParseError::InvalidFormat)?
             .into(),
         msg_type: node
             .attribute("msgtype")
-            .ok_or(ParseDictionaryError::InvalidFormat)?
+            .ok_or(ParseError::InvalidFormat)?
             .into(),
         component_id: 0,
         layout_items,
@@ -289,7 +284,7 @@ fn import_layout_item(
             }
         }
         _ => {
-            return Err(ParseDictionaryError::InvalidFormat);
+            return Err(ParseError::InvalidFormat);
         }
     };
     let item = LayoutItemData { required, kind };
@@ -305,14 +300,4 @@ fn panic_missing_tag_in_element(elem: roxmltree::Node, tag: &str) -> ! {
             .get(elem.range().start..elem.range().end)
             .unwrap_or("Error retrieving element text")
     );
-}
-
-type ParseError = ParseDictionaryError;
-type ParseResult<T> = Result<T, ParseError>;
-
-/// The error type that can arise when decoding a QuickFIX Dictionary.
-#[derive(Clone, Debug)]
-pub enum ParseDictionaryError {
-    InvalidFormat,
-    InvalidData(String),
 }

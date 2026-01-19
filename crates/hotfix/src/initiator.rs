@@ -6,6 +6,7 @@
 //! The initiator establishes the transport layer connection with
 //! the peer, and sends the initial Logon (35=A) message. For transport,
 //! `HotFIX` supports plain TCP and encrypted TLS over TCP connections.
+use anyhow::Result;
 use std::time::Duration;
 use tokio::sync::watch;
 use tokio::time::sleep;
@@ -30,8 +31,8 @@ impl<Outbound: OutboundMessage> Initiator<Outbound> {
         config: SessionConfig,
         application: impl Application<Inbound, Outbound>,
         store: impl MessageStore + Send + Sync + 'static,
-    ) -> Self {
-        let session_ref = InternalSessionRef::new(config.clone(), application, store);
+    ) -> Result<Self> {
+        let session_ref = InternalSessionRef::new(config.clone(), application, store)?;
         let (completion_tx, completion_rx) = watch::channel(false);
 
         tokio::spawn({
@@ -40,14 +41,16 @@ impl<Outbound: OutboundMessage> Initiator<Outbound> {
             establish_connection(config, session_ref, completion_tx)
         });
 
-        Self {
+        let initiator = Self {
             config,
             session_handle: session_ref.into(),
             completion_rx,
-        }
+        };
+
+        Ok(initiator)
     }
 
-    pub async fn send_message(&self, msg: Outbound) -> anyhow::Result<()> {
+    pub async fn send_message(&self, msg: Outbound) -> Result<()> {
         self.session_handle.send_message(msg).await?;
 
         Ok(())
@@ -61,7 +64,7 @@ impl<Outbound: OutboundMessage> Initiator<Outbound> {
         self.session_handle.clone()
     }
 
-    pub async fn shutdown(self, reconnect: bool) -> anyhow::Result<()> {
+    pub async fn shutdown(self, reconnect: bool) -> Result<()> {
         self.session_handle.shutdown(reconnect).await?;
         tokio::time::timeout(Duration::from_secs(5), self.wait_for_shutdown()).await?;
 
