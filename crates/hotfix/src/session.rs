@@ -1123,3 +1123,384 @@ async fn run_session<App, Inbound, Outbound, Store>(
 
     debug!("session is shutting down")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::application::{InboundDecision, OutboundDecision};
+    use crate::message::{InboundMessage, OutboundMessage};
+    use chrono::{DateTime, Datelike, NaiveDate, NaiveTime, TimeDelta, Timelike};
+    use chrono_tz::Tz;
+    use hotfix_message::message::Message;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use tokio::sync::mpsc;
+
+    /// A controllable store for testing that implements MessageStore
+    #[derive(Clone)]
+    struct TestStore {
+        creation_time: DateTime<Utc>,
+        fail_reset: Arc<AtomicBool>,
+        reset_called: Arc<AtomicBool>,
+        sender_seq: u64,
+        target_seq: u64,
+    }
+
+    impl TestStore {
+        fn new(creation_time: DateTime<Utc>) -> Self {
+            Self {
+                creation_time,
+                fail_reset: Arc::new(AtomicBool::new(false)),
+                reset_called: Arc::new(AtomicBool::new(false)),
+                sender_seq: 1,
+                target_seq: 1,
+            }
+        }
+
+        fn set_fail_reset(&self) {
+            self.fail_reset.store(true, Ordering::SeqCst);
+        }
+
+        fn was_reset_called(&self) -> bool {
+            self.reset_called.load(Ordering::SeqCst)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl MessageStore for TestStore {
+        async fn add(&mut self, _sequence_number: u64, _message: &[u8]) -> Result<()> {
+            Ok(())
+        }
+
+        async fn get_slice(&self, _begin: usize, _end: usize) -> Result<Vec<Vec<u8>>> {
+            Ok(vec![])
+        }
+
+        fn next_sender_seq_number(&self) -> u64 {
+            self.sender_seq
+        }
+
+        fn next_target_seq_number(&self) -> u64 {
+            self.target_seq
+        }
+
+        async fn increment_sender_seq_number(&mut self) -> Result<()> {
+            self.sender_seq += 1;
+            Ok(())
+        }
+
+        async fn increment_target_seq_number(&mut self) -> Result<()> {
+            self.target_seq += 1;
+            Ok(())
+        }
+
+        async fn set_target_seq_number(&mut self, seq_number: u64) -> Result<()> {
+            self.target_seq = seq_number;
+            Ok(())
+        }
+
+        async fn reset(&mut self) -> Result<()> {
+            self.reset_called.store(true, Ordering::SeqCst);
+            if self.fail_reset.load(Ordering::SeqCst) {
+                bail!("simulated reset failure")
+            }
+            self.creation_time = Utc::now();
+            Ok(())
+        }
+
+        fn creation_time(&self) -> DateTime<Utc> {
+            self.creation_time
+        }
+    }
+
+    /// Dummy message type for testing that implements required traits
+    #[derive(Clone)]
+    struct DummyMessage;
+
+    impl OutboundMessage for DummyMessage {
+        fn write(&self, _msg: &mut Message) {}
+        fn message_type(&self) -> &str {
+            "0"
+        }
+    }
+
+    impl InboundMessage for DummyMessage {
+        fn parse(_message: &Message) -> Self {
+            DummyMessage
+        }
+    }
+
+    /// Minimal no-op application for testing
+    struct NoOpApp;
+
+    #[async_trait::async_trait]
+    impl Application<DummyMessage, DummyMessage> for NoOpApp {
+        async fn on_outbound_message(&self, _: &DummyMessage) -> OutboundDecision {
+            OutboundDecision::Send
+        }
+        async fn on_inbound_message(&self, _: DummyMessage) -> InboundDecision {
+            InboundDecision::Accept
+        }
+        async fn on_logout(&mut self, _: &str) {}
+        async fn on_logon(&mut self) {}
+    }
+
+    fn create_writer_ref() -> WriterRef {
+        let (sender, _) = mpsc::channel(10);
+        WriterRef::new(sender)
+    }
+
+    fn create_test_config() -> SessionConfig {
+        SessionConfig {
+            begin_string: "FIX.4.4".to_string(),
+            sender_comp_id: "SENDER".to_string(),
+            target_comp_id: "TARGET".to_string(),
+            data_dictionary_path: None,
+            connection_host: "localhost".to_string(),
+            connection_port: 9876,
+            tls_config: None,
+            heartbeat_interval: 30,
+            logon_timeout: 10,
+            logout_timeout: 2,
+            reconnect_interval: 30,
+            reset_on_logon: false,
+            schedule: None,
+        }
+    }
+
+    fn create_test_session(
+        schedule: SessionSchedule,
+        state: SessionState,
+        store: TestStore,
+    ) -> Session<NoOpApp, DummyMessage, DummyMessage, TestStore> {
+        let config = create_test_config();
+        let message_config = MessageConfig::default();
+        let dictionary = Dictionary::fix44();
+        let message_builder = MessageBuilder::new(dictionary, message_config).unwrap();
+
+        Session {
+            message_config,
+            config,
+            schedule,
+            message_builder,
+            state,
+            application: NoOpApp,
+            store,
+            schedule_check_timer: Box::pin(sleep(Duration::from_secs(1))),
+            reset_on_next_logon: false,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Creates a Daily schedule that is active at the current time
+    fn create_active_schedule() -> SessionSchedule {
+        // Use a 24-hour window that's definitely active
+        SessionSchedule::Daily {
+            start_time: NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+            end_time: NaiveTime::from_hms_opt(23, 59, 59).unwrap(),
+            timezone: Tz::UTC,
+        }
+    }
+
+    /// Creates a Daily schedule that is inactive at the current time
+    fn create_inactive_schedule() -> SessionSchedule {
+        let now = Utc::now();
+        let current_hour = now.time().hour();
+        // Create a 1-hour window that's 12 hours from now (definitely not the current hour)
+        let start_hour = (current_hour + 12) % 24;
+        let end_hour = (start_hour + 1) % 24;
+        SessionSchedule::Daily {
+            start_time: NaiveTime::from_hms_opt(start_hour, 0, 0).unwrap(),
+            end_time: NaiveTime::from_hms_opt(end_hour, 0, 0).unwrap(),
+            timezone: Tz::UTC,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_schedule_check_active_same_period() {
+        // Use NonStop schedule - always active, always same period
+        let schedule = SessionSchedule::NonStop;
+        let writer = create_writer_ref();
+        let state = SessionState::new_active(writer, 30);
+        let store = TestStore::new(Utc::now());
+
+        let mut session = create_test_session(schedule, state, store);
+
+        session.handle_schedule_check().await;
+
+        // State should remain Active (no logout triggered)
+        assert!(
+            session.state.is_logged_on(),
+            "State should remain logged on for same period"
+        );
+        assert!(
+            !session.store.was_reset_called(),
+            "Store reset should not be called for same period"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_schedule_check_active_different_period() {
+        // Use a Daily schedule that's currently active
+        let schedule = create_active_schedule();
+        let writer = create_writer_ref();
+        let state = SessionState::new_active(writer, 30);
+        // Creation time is yesterday - different session period
+        let yesterday = Utc::now() - TimeDelta::days(1);
+        let store = TestStore::new(yesterday);
+
+        let mut session = create_test_session(schedule, state, store);
+
+        // Verify the schedule correctly identifies different periods
+        let now = Utc::now();
+        let creation_time = session.store.creation_time();
+        let same_period = session
+            .schedule
+            .is_same_session_period(&creation_time, &now);
+        assert!(
+            matches!(same_period, Ok(false)),
+            "Schedule should identify different periods"
+        );
+
+        session.handle_schedule_check().await;
+
+        // Store reset should have been called (indicates Ok(false) branch was taken)
+        // Note: logout_and_terminate disconnects the writer but state transition to
+        // Disconnected happens asynchronously via event processing, not in this call
+        assert!(
+            session.store.was_reset_called(),
+            "Store reset should be called for different period"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_schedule_check_active_reset_fails() {
+        // Use a Daily schedule that's currently active
+        let schedule = create_active_schedule();
+        let writer = create_writer_ref();
+        let state = SessionState::new_active(writer, 30);
+        // Creation time is yesterday - different session period
+        let yesterday = Utc::now() - TimeDelta::days(1);
+        let store = TestStore::new(yesterday);
+        store.set_fail_reset();
+
+        let mut session = create_test_session(schedule, state, store);
+
+        session.handle_schedule_check().await;
+
+        // Store reset should have been attempted
+        assert!(
+            session.store.was_reset_called(),
+            "Store reset should be called"
+        );
+        // When reset fails, state is explicitly set to Disconnected(reconnect=false)
+        assert!(
+            matches!(session.state, SessionState::Disconnected(_)),
+            "State should be Disconnected after reset failure"
+        );
+        // Should NOT reconnect since reset failed
+        assert!(
+            !session.state.should_reconnect(),
+            "Should not reconnect after failed reset"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_schedule_check_active_period_error() {
+        // Use a narrow schedule that's currently active but creation_time is outside
+        let now = Utc::now();
+        let current_hour = now.time().hour();
+
+        // Create a 2-hour window around current time
+        let start_hour = if current_hour == 0 {
+            23
+        } else {
+            current_hour - 1
+        };
+        let end_hour = (current_hour + 2) % 24;
+
+        let schedule = SessionSchedule::Daily {
+            start_time: NaiveTime::from_hms_opt(start_hour, 0, 0).unwrap(),
+            end_time: NaiveTime::from_hms_opt(end_hour, 0, 0).unwrap(),
+            timezone: Tz::UTC,
+        };
+
+        let writer = create_writer_ref();
+        let state = SessionState::new_active(writer, 30);
+
+        // Creation time is today but at a time outside the schedule window
+        // Use a time that's definitely outside the window (6 hours from now)
+        let outside_hour = (current_hour + 6) % 24;
+        let creation_time = DateTime::from_naive_utc_and_offset(
+            NaiveDate::from_ymd_opt(now.year(), now.month(), now.day())
+                .unwrap()
+                .and_hms_opt(outside_hour, 30, 0)
+                .unwrap(),
+            Utc,
+        );
+
+        let store = TestStore::new(creation_time);
+
+        let mut session = create_test_session(schedule, state, store);
+
+        // Verify that is_same_session_period will return an error
+        let same_period = session
+            .schedule
+            .is_same_session_period(&creation_time, &now);
+        assert!(
+            same_period.is_err(),
+            "Schedule should return error when creation_time is outside active window"
+        );
+
+        session.handle_schedule_check().await;
+
+        // The Err branch calls logout_and_terminate which disconnects the writer.
+        // Store reset is NOT called in the Err branch, only in Ok(false).
+        assert!(
+            !session.store.was_reset_called(),
+            "Store reset should not be called on period check error"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_schedule_check_inactive_connected() {
+        // Use a schedule that's currently inactive
+        let schedule = create_inactive_schedule();
+        let writer = create_writer_ref();
+        let state = SessionState::new_active(writer, 30);
+        let store = TestStore::new(Utc::now());
+
+        let mut session = create_test_session(schedule, state, store);
+
+        session.handle_schedule_check().await;
+
+        // State should be AwaitingLogout (graceful logout initiated)
+        assert!(
+            session.state.is_awaiting_logout(),
+            "State should be AwaitingLogout when schedule is inactive and was connected"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_schedule_check_inactive_disconnected() {
+        // Use a schedule that's currently inactive
+        let schedule = create_inactive_schedule();
+        let state = SessionState::new_disconnected(true, "test");
+        let store = TestStore::new(Utc::now());
+
+        let mut session = create_test_session(schedule, state, store);
+
+        session.handle_schedule_check().await;
+
+        // State should remain Disconnected (no action taken)
+        assert!(
+            matches!(session.state, SessionState::Disconnected(_)),
+            "State should remain Disconnected when schedule is inactive and was disconnected"
+        );
+        // Reconnect flag should be preserved
+        assert!(
+            session.state.should_reconnect(),
+            "Reconnect flag should be preserved"
+        );
+    }
+}
