@@ -36,3 +36,26 @@ impl WriterRef {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn send_raw_message_does_not_panic_when_channel_closed() {
+        let (sender, receiver) = mpsc::channel(1);
+        let writer = WriterRef::new(sender);
+        drop(receiver);
+
+        writer.send_raw_message(RawFixMessage::new(vec![])).await;
+    }
+
+    #[tokio::test]
+    async fn disconnect_does_not_panic_when_channel_closed() {
+        let (sender, receiver) = mpsc::channel(1);
+        let writer = WriterRef::new(sender);
+        drop(receiver);
+
+        writer.disconnect().await;
+    }
+}
