@@ -139,7 +139,9 @@ where
                             let reject = Reject::new(msg_seq_num)
                                 .session_reject_reason(SessionRejectReason::InvalidTagNumber)
                                 .text(&format!("invalid field {tag}"));
-                            self.send_message(reject).await;
+                            self.send_message(reject)
+                                .await
+                                .context("failed to send reject")?;
                         }
                         Err(err) => {
                             error!("failed to get message seq num: {:?}", err);
@@ -161,7 +163,9 @@ where
                                     SessionRejectReason::RepeatingGroupFieldsOutOfOrder,
                                 )
                                 .text(&format!("field appears in incorrect order:{tag}"));
-                            self.send_message(reject).await;
+                            self.send_message(reject)
+                                .await
+                                .context("failed to send reject")?;
                         }
                         Err(err) => {
                             error!("failed to get message seq num: {:?}", err);
@@ -240,7 +244,10 @@ where
                 }
                 self.store.increment_target_seq_number().await?;
             }
-            Err(err) => self.handle_verification_error(err).await,
+            Err(err) => self
+                .handle_verification_error(err)
+                .await
+                .context("failed to handle verification error")?,
         }
 
         Ok(())
@@ -290,14 +297,16 @@ where
         verify_message(message, &self.config, expected_seq_number)
     }
 
-    async fn on_connect(&mut self, writer: WriterRef) {
+    async fn on_connect(&mut self, writer: WriterRef) -> Result<()> {
         self.state = SessionState::AwaitingLogon {
             writer,
             logon_sent: false,
             logon_timeout: Instant::now() + Duration::from_secs(self.config.logon_timeout),
         };
         self.reset_peer_timer(None);
-        self.send_logon().await;
+        self.send_logon().await?;
+
+        Ok(())
     }
 
     async fn on_disconnect(&mut self, reason: String) {
@@ -327,7 +336,10 @@ where
                     self.application.on_logon().await;
                     self.store.increment_target_seq_number().await?;
                 }
-                Err(err) => self.handle_verification_error(err).await,
+                Err(err) => self
+                    .handle_verification_error(err)
+                    .await
+                    .context("failed to handle verification error")?,
             }
         } else {
             error!("received unexpected logon message");
@@ -338,7 +350,7 @@ where
 
     async fn on_logout(&mut self) -> Result<()> {
         if self.state.is_logged_on() {
-            self.send_logout("Logout acknowledged").await;
+            self.send_logout("Logout acknowledged").await?;
         }
 
         self.application.on_logout("peer has logged us out").await;
@@ -378,7 +390,8 @@ where
         self.store.increment_target_seq_number().await?;
 
         self.send_message(Heartbeat::for_request(req_id.to_string()))
-            .await;
+            .await
+            .context("failed to send heartbeat in response to test request")?;
 
         Ok(())
     }
@@ -399,7 +412,9 @@ where
                 )
                 .session_reject_reason(SessionRejectReason::RequiredTagMissing)
                 .text("missing begin sequence number for resend request");
-                self.send_message(reject).await;
+                self.send_message(reject)
+                    .await
+                    .context("failed to send reject for invalid resend request")?;
                 return Ok(());
             }
         };
@@ -422,7 +437,9 @@ where
                 )
                 .session_reject_reason(SessionRejectReason::RequiredTagMissing)
                 .text("missing end sequence number for resend request");
-                self.send_message(reject).await;
+                self.send_message(reject)
+                    .await
+                    .context("failed to send reject for invalid resend request")?;
                 return Ok(());
             }
         };
@@ -456,7 +473,7 @@ where
             .map_err(|_| anyhow!("failed to get seq number"))?;
         let is_gap_fill: bool = message.get(GAP_FILL_FLAG).unwrap_or(false);
         if let Err(err) = self.verify_message(message, is_gap_fill) {
-            self.handle_verification_error(err).await;
+            self.handle_verification_error(err).await?;
             return Ok(());
         }
 
@@ -470,7 +487,9 @@ where
                 let reject = Reject::new(msg_seq_num)
                     .session_reject_reason(SessionRejectReason::RequiredTagMissing)
                     .text("missing NewSeqNo tag in sequence reset message");
-                self.send_message(reject).await;
+                self.send_message(reject).await.context(
+                    "failed to send reject message in response to invalid sequence reset message",
+                )?;
 
                 // note: we don't increment the target seq number here
                 // this is an ambiguous case in the specification, but leaving the
@@ -490,14 +509,16 @@ where
             let reject = Reject::new(msg_seq_num)
                 .session_reject_reason(SessionRejectReason::ValueIsIncorrect)
                 .text(&text);
-            self.send_message(reject).await;
+            self.send_message(reject).await.context(
+                "failed to send reject message in response to invalid sequence reset message",
+            )?;
             return Ok(());
         }
 
         self.store.set_target_seq_number(end - 1).await
     }
 
-    async fn handle_verification_error(&mut self, error: MessageVerificationError) {
+    async fn handle_verification_error(&mut self, error: MessageVerificationError) -> Result<()> {
         match error {
             MessageVerificationError::SeqNumberTooLow {
                 expected,
@@ -508,7 +529,8 @@ where
                     .await;
             }
             MessageVerificationError::SeqNumberTooHigh { expected, actual } => {
-                self.handle_sequence_number_too_high(expected, actual).await;
+                self.handle_sequence_number_too_high(expected, actual)
+                    .await?;
             }
             MessageVerificationError::IncorrectBeginString(begin_string) => {
                 self.handle_incorrect_begin_string(begin_string).await;
@@ -542,6 +564,8 @@ where
                 .await;
             }
         }
+
+        Ok(())
     }
 
     async fn handle_incorrect_begin_string(&mut self, received_begin_string: String) {
@@ -563,7 +587,9 @@ where
         let reject = Reject::new(msg_seq_num)
             .session_reject_reason(SessionRejectReason::ValueIsIncorrect)
             .text(&format!("invalid comp ID {received_comp_id}"));
-        self.send_message(reject).await;
+        if let Err(err) = self.send_message(reject).await {
+            error!("failed to send reject message with invalid comp ID: {err}");
+        };
 
         self.logout_and_terminate("incorrect comp ID received")
             .await;
@@ -589,7 +615,7 @@ where
         self.state = SessionState::new_disconnected(false, &reason);
     }
 
-    async fn handle_sequence_number_too_high(&mut self, expected: u64, actual: u64) {
+    async fn handle_sequence_number_too_high(&mut self, expected: u64, actual: u64) -> Result<()> {
         match self
             .state
             .try_transition_to_awaiting_resend(expected, actual)
@@ -598,7 +624,9 @@ where
                 debug!(
                     "we are behind target (ours: {expected}, theirs: {actual}), requesting resend."
                 );
-                self.send_resend_request(expected, actual).await;
+                self.send_resend_request(expected, actual)
+                    .await
+                    .context("failed to send resend request")?;
             }
             AwaitingResendTransitionOutcome::InvalidState(reason) => {
                 error!("failed to request resend: {reason}");
@@ -618,6 +646,8 @@ where
                 );
             }
         }
+
+        Ok(())
     }
 
     async fn handle_invalid_msg_type(&mut self, message: Message, msg_type: &str) {
@@ -626,7 +656,9 @@ where
                 let reject = Reject::new(msg_seq_num)
                     .session_reject_reason(SessionRejectReason::InvalidMsgtype)
                     .text(&format!("invalid message type {msg_type}"));
-                self.send_message(reject).await;
+                if let Err(err) = self.send_message(reject).await {
+                    error!("failed to send reject message for invalid msgtype: {err}");
+                };
 
                 #[allow(clippy::collapsible_if)]
                 if let Ok(seq_num) = message.header().get::<u64>(MSG_SEQ_NUM)
@@ -647,7 +679,9 @@ where
         let reject = Reject::new(msg_seq_num)
             .session_reject_reason(SessionRejectReason::SendingtimeAccuracyProblem)
             .text(text);
-        self.send_message(reject).await;
+        if let Err(err) = self.send_message(reject).await {
+            error!("failed to send reject for time accuracy problem: {err}");
+        };
         if let Err(err) = self.store.increment_target_seq_number().await {
             error!("failed to increment target seq number: {:?}", err);
         };
@@ -657,7 +691,9 @@ where
         let reject = Reject::new(msg_seq_num)
             .session_reject_reason(SessionRejectReason::RequiredTagMissing)
             .text("original sending time is required");
-        self.send_message(reject).await;
+        if let Err(err) = self.send_message(reject).await {
+            error!("failed to send reject for time missing tag: {err}");
+        };
         if let Err(err) = self.store.increment_target_seq_number().await {
             error!("failed to increment target seq number: {:?}", err);
         };
@@ -705,7 +741,9 @@ where
             if let Some(begin) = reset_start {
                 let end = sequence_number;
                 Self::log_skipped_admin_messages(begin, end);
-                self.send_sequence_reset(begin, end).await;
+                self.send_sequence_reset(begin, end)
+                    .await
+                    .context("failed to send sequence reset")?;
                 reset_start = None;
             }
 
@@ -723,10 +761,10 @@ where
             )
             .await;
 
-            if enabled!(tracing::Level::DEBUG) {
-                if let Ok(m) = String::from_utf8(msg.clone()) {
-                    debug!(sequence_number, message = m, "resent message");
-                }
+            if enabled!(tracing::Level::DEBUG)
+                && let Ok(m) = String::from_utf8(msg.clone())
+            {
+                debug!(sequence_number, message = m, "resent message");
             }
         }
 
@@ -734,7 +772,9 @@ where
             // the final reset if needed
             let end = sequence_number;
             Self::log_skipped_admin_messages(begin, end);
-            self.send_sequence_reset(begin, end).await;
+            self.send_sequence_reset(begin, end)
+                .await
+                .context("failed to send sequence reset")?;
         }
 
         Ok(())
@@ -757,25 +797,27 @@ where
             .reset_peer_timer(self.config.heartbeat_interval, test_request_id);
     }
 
-    async fn send_app_message(&mut self, message: Outbound) {
+    async fn send_app_message(&mut self, message: Outbound) -> Result<()> {
         match self.application.on_outbound_message(&message).await {
             OutboundDecision::Send => {
-                self.send_message(message).await;
+                self.send_message(message)
+                    .await
+                    .context("failed to send app message")?;
             }
             OutboundDecision::Drop => {
                 debug!("dropped outbound message as instructed by the application");
             }
             OutboundDecision::TerminateSession => {
-                error!("failed to send message to application");
+                warn!("the application indicated we should terminate the session");
                 self.state.disconnect_writer().await;
             }
         }
+
+        Ok(())
     }
 
-    async fn send_message(&mut self, message: impl OutboundMessage) {
+    async fn send_message(&mut self, message: impl OutboundMessage) -> Result<()> {
         let seq_num = self.store.next_sender_seq_number();
-        self.store.increment_sender_seq_number().await.unwrap();
-
         let msg_type = message.message_type().as_bytes().to_vec();
         let msg = generate_message(
             &self.config.begin_string,
@@ -784,9 +826,19 @@ where
             seq_num,
             message,
         )
-        .unwrap();
-        self.store.add(seq_num, &msg).await.unwrap();
+        .context("failed to generate message")?;
+        self.store
+            .increment_sender_seq_number()
+            .await
+            .context("failed to increment sender seq number")?;
+
+        self.store
+            .add(seq_num, &msg)
+            .await
+            .context("failed to add message to store")?;
         self.send_raw(&msg_type, msg).await;
+
+        Ok(())
     }
 
     async fn send_raw(&mut self, message_type: &[u8], data: Vec<u8>) {
@@ -796,7 +848,7 @@ where
         self.reset_heartbeat_timer();
     }
 
-    async fn send_sequence_reset(&mut self, begin: u64, end: u64) {
+    async fn send_sequence_reset(&mut self, begin: u64, end: u64) -> Result<()> {
         let sequence_reset = SequenceReset {
             gap_fill: true,
             new_seq_no: end,
@@ -808,20 +860,22 @@ where
             begin,
             sequence_reset,
         )
-        .unwrap();
+        .context("failed to generate message")?;
 
         self.send_raw(b"4", raw_message).await;
         debug!(begin, end, "sent reset sequence");
+
+        Ok(())
     }
 
-    async fn send_resend_request(&mut self, begin: u64, end: u64) {
+    async fn send_resend_request(&mut self, begin: u64, end: u64) -> Result<()> {
         let request = ResendRequest::new(begin, end);
-        self.send_message(request).await;
+        self.send_message(request).await
     }
 
-    async fn send_logon(&mut self) {
+    async fn send_logon(&mut self) -> Result<()> {
         let reset_config = if self.config.reset_on_logon || self.reset_on_next_logon {
-            self.store.reset().await.unwrap();
+            self.store.reset().await?;
             ResetSeqNumConfig::Reset
         } else {
             ResetSeqNumConfig::NoReset(Some(self.store.next_target_seq_number()))
@@ -830,12 +884,12 @@ where
 
         let logon = Logon::new(self.config.heartbeat_interval, reset_config);
 
-        self.send_message(logon).await;
+        self.send_message(logon).await
     }
 
-    async fn send_logout(&mut self, reason: &str) {
+    async fn send_logout(&mut self, reason: &str) -> Result<()> {
         let logout = Logout::with_reason(reason.to_string());
-        self.send_message(logout).await;
+        self.send_message(logout).await
     }
 
     /// Sends a logout message and immediately disconnects the counterparty.
@@ -846,7 +900,9 @@ where
     ///
     /// In other scenarios, [`initiate_graceful_logout`] should be preferred.
     async fn logout_and_terminate(&mut self, reason: &str) {
-        self.send_logout(reason).await;
+        if let Err(err) = self.send_logout(reason).await {
+            warn!("failed to send logout during session termination: {}", err);
+        }
         self.state.disconnect_writer().await;
     }
 
@@ -855,13 +911,15 @@ where
     /// The session waits for a configurable timeout period for the counterparty to
     /// respond with a `Logout` message. If no response is received within the timeout
     /// period, it disconnects the counterparty.
-    async fn initiate_graceful_logout(&mut self, reason: &str, reconnect: bool) {
+    async fn initiate_graceful_logout(&mut self, reason: &str, reconnect: bool) -> Result<()> {
         if self.state.try_transition_to_awaiting_logout(
             Duration::from_secs(self.config.logout_timeout),
             reconnect,
         ) {
-            self.send_logout(reason).await;
+            self.send_logout(reason).await?;
         }
+
+        Ok(())
     }
 
     async fn handle_session_event(&mut self, event: SessionEvent) {
@@ -881,12 +939,14 @@ where
                 self.on_disconnect(reason).await;
             }
             SessionEvent::Connected(w) => {
-                self.on_connect(w).await;
+                if let Err(err) = self.on_connect(w).await {
+                    error!(err = ?err, "failed to establish logon after connecting");
+                }
             }
             SessionEvent::ShouldReconnect(responder) => {
-                responder
-                    .send(self.state.should_reconnect())
-                    .expect("be able to respond");
+                if let Err(_) = responder.send(self.state.should_reconnect()) {
+                    warn!("tried to respond to ShouldReconnect query but the receiver is gone");
+                }
             }
             SessionEvent::AwaitingActiveSession(responder) => {
                 self.state.register_session_awaiter(responder);
@@ -895,15 +955,21 @@ where
     }
 
     async fn handle_outbound_message(&mut self, message: Outbound) {
-        self.send_app_message(message).await;
+        if let Err(err) = self.send_app_message(message).await {
+            error!(err = ?err, "failed to send app message: {err}");
+        }
     }
 
     async fn handle_admin_request(&mut self, request: AdminRequest) {
         match request {
             AdminRequest::InitiateGracefulShutdown { reconnect } => {
                 warn!("initiating shutdown on request from admin..");
-                self.initiate_graceful_logout("explicitly requested", reconnect)
-                    .await;
+                if let Err(err) = self
+                    .initiate_graceful_logout("explicitly requested", reconnect)
+                    .await
+                {
+                    error!(err = ?err, "initiating graceful shutdown");
+                }
             }
             AdminRequest::RequestSessionInfo(responder) => {
                 info!("session info requested");
@@ -919,7 +985,9 @@ where
     }
 
     async fn handle_heartbeat_timeout(&mut self) {
-        self.send_message(Heartbeat::default()).await;
+        if let Err(err) = self.send_message(Heartbeat::default()).await {
+            error!(err = ?err, "failed to send heartbeat message");
+        }
     }
 
     async fn handle_peer_timeout(&mut self) {
@@ -936,7 +1004,9 @@ where
             let req_id = format!("TEST_{}", self.store.next_target_seq_number());
             info!("sending TestRequest due to peer timer expiring");
             let request = TestRequest::new(req_id.clone());
-            self.send_message(request).await;
+            if let Err(err) = self.send_message(request).await {
+                error!(err = ?err, "failed to send TestRequest");
+            }
             self.reset_peer_timer(Some(req_id));
         }
     }
@@ -971,8 +1041,12 @@ where
             }
         } else if self.state.is_connected() {
             // we are currently outside scheduled session time
-            self.initiate_graceful_logout("End of session time", true)
-                .await;
+            if let Err(err) = self
+                .initiate_graceful_logout("End of session time", true)
+                .await
+            {
+                error!(err = ?err, "failed to initiate graceful logout");
+            }
         }
 
         // we always need to reschedule the check, otherwise we won't be able to resume an inactive session

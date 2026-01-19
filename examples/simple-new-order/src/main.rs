@@ -44,7 +44,9 @@ async fn main() -> Result<()> {
 
     if let Some(path) = args.logfile {
         let p = Path::new(&path);
-        let parent = p.parent().context("log file path has no parent directory")?;
+        let parent = p
+            .parent()
+            .context("log file path has no parent directory")?;
         std::fs::create_dir_all(parent)?;
         let logfile = std::fs::OpenOptions::new()
             .write(true)
