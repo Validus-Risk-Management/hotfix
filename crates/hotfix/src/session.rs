@@ -944,7 +944,7 @@ where
                 }
             }
             SessionEvent::ShouldReconnect(responder) => {
-                if let Err(_) = responder.send(self.state.should_reconnect()) {
+                if responder.send(self.state.should_reconnect()).is_err() {
                     warn!("tried to respond to ShouldReconnect query but the receiver is gone");
                 }
             }
