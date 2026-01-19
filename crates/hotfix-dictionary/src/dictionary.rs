@@ -305,3 +305,29 @@ impl Dictionary {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_load_from_file_success() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/resources/quickfix/FIX-4.4.xml"
+        );
+        let dict = Dictionary::load_from_file(path).unwrap();
+        assert_eq!(dict.version(), "FIX.4.4");
+        assert!(dict.message_by_name("Heartbeat").is_some());
+    }
+
+    #[test]
+    fn test_load_from_file_invalid_content() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/test_data/quickfix_specs/empty_file.xml"
+        );
+        let result = Dictionary::load_from_file(path);
+        assert!(result.is_err());
+    }
+}
