@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.4.2...hotfix-v0.4.3) - 2026-01-20
+
+### Other
+
+- Replace unwraps with anyhow errors in session code ([#265](https://github.com/Validus-Risk-Management/hotfix/pull/265))
+
 ## [0.4.2](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.4.1...hotfix-v0.4.2) - 2025-12-09
 
 ### Added

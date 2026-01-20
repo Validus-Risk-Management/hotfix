@@ -2,7 +2,7 @@
 name = "hotfix-dictionary"
 description = "FIX dictionary generation for HotFIX."
 readme = "./README.md"
-version = "0.1.4"
+version = "0.1.5"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
