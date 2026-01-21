@@ -2,17 +2,16 @@
 //!
 //! These tests verify the TLS connection logic in `crates/hotfix/src/transport/socket/tls.rs`.
 
-mod common;
-
 use std::sync::Arc;
 
-use common::tls_helpers::{ServerBehavior, TestCertificates, TestTlsServer, init_crypto_provider};
 use hotfix::config::TlsConfig;
 use hotfix::transport::error::ConnectionError;
 use hotfix::transport::socket::tls::{create_tcp_over_tls_connection, wrap_stream};
 use rustls::ClientConfig;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+
+use crate::helpers::{ServerBehavior, TestCertificates, TestTlsServer, init_crypto_provider};
 
 #[tokio::test]
 async fn test_tls_connection_with_file_config_succeeds() {

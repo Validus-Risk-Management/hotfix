@@ -175,7 +175,6 @@ impl TestTlsServer {
                         match result {
                             Ok((tcp_stream, _peer_addr)) => {
                                 let acceptor = acceptor.clone();
-                                let behavior = behavior.clone();
                                 tokio::spawn(async move {
                                     match behavior {
                                         ServerBehavior::Echo => {
@@ -192,11 +191,6 @@ impl TestTlsServer {
                                         ServerBehavior::CloseImmediately => {
                                             // Just drop the connection without completing TLS handshake
                                             drop(tcp_stream);
-                                        }
-                                        ServerBehavior::CloseDuringHandshake => {
-                                            // Start accepting but drop during handshake
-                                            // The accept() call will handle this
-                                            let _ = acceptor.accept(tcp_stream).await;
                                         }
                                     }
                                 });
@@ -248,8 +242,6 @@ impl Drop for TestTlsServer {
 pub enum ServerBehavior {
     /// Echo back any received data (normal operation).
     Echo,
-    /// Close the connection immediately without TLS handshake.
+    /// Close the connection immediately after TCP accept, before TLS handshake.
     CloseImmediately,
-    /// Close the connection during the TLS handshake.
-    CloseDuringHandshake,
 }
