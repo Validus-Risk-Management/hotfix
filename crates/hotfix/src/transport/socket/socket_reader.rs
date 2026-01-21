@@ -69,10 +69,9 @@ where
         }
     }
     debug!("reader loop is shutting down");
-    actor
-        .dc_sender
-        .send(())
-        .expect("be able to signal disconnect");
+    if actor.dc_sender.send(()).is_err() {
+        debug!("receiver dropped before we could notify them of reader disconnecting");
+    }
 }
 
 #[cfg(test)]

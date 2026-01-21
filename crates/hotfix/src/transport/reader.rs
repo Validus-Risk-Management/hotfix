@@ -1,4 +1,5 @@
 use tokio::sync::oneshot;
+use tracing::warn;
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
@@ -14,8 +15,8 @@ impl ReaderRef {
     }
 
     pub async fn wait_for_disconnect(self) {
-        self.disconnect_signal
-            .await
-            .expect("not to drop signal prematurely");
+        if self.disconnect_signal.await.is_err() {
+            warn!("reader dropped without issuing disconnect notification");
+        }
     }
 }
