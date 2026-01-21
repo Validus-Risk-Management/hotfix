@@ -19,9 +19,10 @@ pub struct Config {
 
 impl Config {
     /// Load a [Config] from a `toml` file.
-    pub fn load_from_path<P: AsRef<Path>>(path: P) -> Self {
-        let config_str = fs::read_to_string(path).expect("to be able to load config");
-        toml::from_str::<Self>(&config_str).expect("to be able to parse config")
+    pub fn load_from_path<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
+        let config_str = fs::read_to_string(path)?;
+        let config = toml::from_str::<Self>(&config_str)?;
+        Ok(config)
     }
 }
 
@@ -113,6 +114,16 @@ pub struct SessionConfig {
 
     /// The schedule configuration for the session
     pub schedule: Option<ScheduleConfig>,
+}
+
+/// Errors that may occur when loading configuration.
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigError {
+    #[error("failed to read config file")]
+    Io(#[from] std::io::Error),
+
+    #[error("failed to parse config")]
+    Parse(#[from] toml::de::Error),
 }
 
 #[cfg(test)]
