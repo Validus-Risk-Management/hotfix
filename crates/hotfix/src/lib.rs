@@ -20,6 +20,11 @@
 //!
 //! Check out the [examples](https://github.com/Validus-Risk-Management/hotfix/tree/main/examples)
 //! to get started.
+
+#![deny(clippy::expect_used)]
+#![deny(clippy::panic)]
+#![deny(clippy::unwrap_used)]
+
 pub mod application;
 pub mod config;
 pub(crate) mod error;
