@@ -11,12 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
-- release ([#268](https://github.com/Validus-Risk-Management/hotfix/pull/268))
-
-## [0.1.5](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-web-v0.1.4...hotfix-web-v0.1.5) - 2026-01-20
-
-### Other
-
 - updated the following local packages: hotfix, hotfix-web-ui
 
 ## [0.1.4](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-web-v0.1.3...hotfix-web-v0.1.4) - 2025-12-09
@@ -41,7 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- support reconnects in shutdowns initiated via CLI tool ([#250](https://github.com/Validus-Risk-Management/hotfix/pull/250))
+- support reconnects in shutdowns initiated via CLI
+  tool ([#250](https://github.com/Validus-Risk-Management/hotfix/pull/250))
 
 ## [0.1.0](https://github.com/Validus-Risk-Management/hotfix/releases/tag/hotfix-web-v0.1.0) - 2025-11-26
 
