@@ -1,4 +1,5 @@
 use anyhow::Result;
+use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tracing::debug;
 
@@ -42,44 +43,63 @@ impl<Outbound: OutboundMessage> InternalSessionRef<Outbound> {
         })
     }
 
-    pub async fn register_writer(&self, writer: WriterRef) {
+    pub async fn register_writer(&self, writer: WriterRef) -> Result<(), SessionGone> {
         self.event_sender
             .send(SessionEvent::Connected(writer))
-            .await
-            .expect("be able to register writer");
+            .await?;
+
+        Ok(())
     }
 
-    pub async fn new_fix_message_received(&self, msg: RawFixMessage) {
+    pub async fn new_fix_message_received(&self, msg: RawFixMessage) -> Result<(), SessionGone> {
         self.event_sender
             .send(SessionEvent::FixMessageReceived(msg))
-            .await
-            .expect("be able to receive message");
+            .await?;
+
+        Ok(())
     }
 
-    pub async fn disconnect(&self, reason: String) {
+    pub async fn disconnect(&self, reason: String) -> Result<(), SessionGone> {
         self.event_sender
             .send(SessionEvent::Disconnected(reason))
-            .await
-            .expect("be able to send disconnect");
+            .await?;
+
+        Ok(())
     }
 
-    pub async fn should_reconnect(&self) -> bool {
+    pub async fn should_reconnect(&self) -> Result<bool, SessionGone> {
         let (sender, receiver) = oneshot::channel();
         self.event_sender
             .send(SessionEvent::ShouldReconnect(sender))
-            .await
-            .unwrap();
-        receiver.await.expect("to receive a response")
+            .await?;
+        Ok(receiver.await?)
     }
 
-    pub async fn await_active_session_time(&self) {
+    pub async fn await_active_session_time(&self) -> Result<(), SessionGone> {
         debug!("awaiting active session time");
         let (sender, receiver) = oneshot::channel::<AwaitingActiveSessionResponse>();
         self.event_sender
             .send(SessionEvent::AwaitingActiveSession(sender))
-            .await
-            .unwrap();
-        receiver.await.expect("to receive a response");
+            .await?;
+        receiver.await?;
+
         debug!("resuming connection as session is active");
+        Ok(())
+    }
+}
+
+#[derive(Debug, Error)]
+#[error("session task terminated")]
+pub struct SessionGone(String);
+
+impl From<mpsc::error::SendError<SessionEvent>> for SessionGone {
+    fn from(err: mpsc::error::SendError<SessionEvent>) -> Self {
+        Self(err.to_string())
+    }
+}
+
+impl From<oneshot::error::RecvError> for SessionGone {
+    fn from(err: oneshot::error::RecvError) -> Self {
+        Self(err.to_string())
     }
 }

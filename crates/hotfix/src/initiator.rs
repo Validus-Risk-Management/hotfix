@@ -94,11 +94,21 @@ async fn establish_connection<Outbound: OutboundMessage>(
     completion_tx: watch::Sender<bool>,
 ) {
     loop {
-        session_ref.await_active_session_time().await;
+        if session_ref.await_active_session_time().await.is_err() {
+            warn!("session task terminated when checking active session time");
+            break;
+        }
 
         match connect(&config, session_ref.clone()).await {
             Ok(conn) => {
-                session_ref.register_writer(conn.get_writer()).await;
+                if session_ref
+                    .register_writer(conn.get_writer())
+                    .await
+                    .is_err()
+                {
+                    warn!("session task terminated when trying to register writer");
+                    break;
+                };
                 conn.run_until_disconnect().await;
                 warn!("session connection dropped, attempting to reconnect");
             }
@@ -108,9 +118,18 @@ async fn establish_connection<Outbound: OutboundMessage>(
             }
         };
 
-        if !session_ref.should_reconnect().await {
-            warn!("session indicated we shouldn't reconnect");
-            break;
+        match session_ref.should_reconnect().await {
+            Ok(false) => {
+                warn!("session indicated we shouldn't reconnect");
+                break;
+            }
+            Ok(true) => {
+                debug!("session indicated we should reconnect");
+            }
+            Err(_) => {
+                warn!("session task terminated when making decision to reconnect");
+                break;
+            }
         }
         let reconnect_interval = config.reconnect_interval;
         debug!("waiting for {reconnect_interval} seconds before attempting to reconnect");

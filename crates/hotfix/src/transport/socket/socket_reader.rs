@@ -49,21 +49,28 @@ where
 
         match actor.reader.read_buf(&mut buf).await {
             Ok(0) => {
-                actor
+                let _ = actor
                     .session_ref
                     .disconnect("received EOF".to_string())
                     .await;
                 break;
             }
             Err(err) => {
-                actor.session_ref.disconnect(err.to_string()).await;
+                let _ = actor.session_ref.disconnect(err.to_string()).await;
                 break;
             }
             Ok(_) => {
                 let messages = parser.parse(&buf);
 
                 for msg in messages {
-                    actor.session_ref.new_fix_message_received(msg).await;
+                    if actor
+                        .session_ref
+                        .new_fix_message_received(msg)
+                        .await
+                        .is_err()
+                    {
+                        debug!("reader received message but session has been terminated");
+                    }
                 }
             }
         }
