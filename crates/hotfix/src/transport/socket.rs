@@ -3,11 +3,11 @@ pub mod socket_writer;
 pub mod tcp;
 pub mod tls;
 
-use std::io;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::message::OutboundMessage;
 use crate::session::InternalSessionRef;
+use crate::transport::error::ConnectionResult;
 use crate::{
     config::SessionConfig,
     transport::{
@@ -20,14 +20,17 @@ use crate::{
 pub async fn connect(
     config: &SessionConfig,
     session_ref: InternalSessionRef<impl OutboundMessage>,
-) -> io::Result<FixConnection> {
-    let use_tls = config.tls_config.is_some();
-
-    let conn = if use_tls {
-        let stream = create_tcp_over_tls_connection(config).await?;
+) -> ConnectionResult<FixConnection> {
+    let conn = if let Some(tls_config) = config.tls_config.as_ref() {
+        let stream = create_tcp_over_tls_connection(
+            config.connection_host.to_owned(),
+            config.connection_port,
+            tls_config,
+        )
+        .await?;
         _create_io_refs(session_ref.clone(), stream).await
     } else {
-        let stream = create_tcp_connection(config).await?;
+        let stream = create_tcp_connection(&config.connection_host, config.connection_port).await?;
         _create_io_refs(session_ref.clone(), stream).await
     };
 

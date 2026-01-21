@@ -1,6 +1,6 @@
+use std::fs;
 use std::io::BufReader;
 use std::sync::Arc;
-use std::{fs, io};
 
 use rustls::ClientConfig;
 use rustls::RootCertStore;
@@ -9,40 +9,36 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio_rustls::{TlsConnector, client::TlsStream};
 
-use crate::config::{SessionConfig, TlsConfig};
+use crate::config::TlsConfig;
+use crate::transport::error::ConnectionResult;
 use crate::transport::tcp::create_tcp_connection;
 
 pub async fn create_tcp_over_tls_connection(
-    session_config: &SessionConfig,
-) -> io::Result<TlsStream<TcpStream>> {
-    let tls_config = session_config
-        .tls_config
-        .as_ref()
-        .expect("TLS config must be present when creating TLS connection");
-    let client_config = get_client_config(tls_config);
-    let socket = create_tcp_connection(session_config).await?;
-    wrap_stream(
-        socket,
-        session_config.connection_host.clone(),
-        Arc::new(client_config),
-    )
-    .await
+    host: String,
+    port: u16,
+    tls_config: &TlsConfig,
+) -> ConnectionResult<TlsStream<TcpStream>> {
+    let client_config = get_client_config(tls_config)?;
+    let socket = create_tcp_connection(&host, port).await?;
+    wrap_stream(socket, host, Arc::new(client_config)).await
 }
 
-fn get_client_config(tls_config: &TlsConfig) -> ClientConfig {
-    let root_store = get_root_store(tls_config);
-    ClientConfig::builder()
+fn get_client_config(tls_config: &TlsConfig) -> ConnectionResult<ClientConfig> {
+    let root_store = get_root_store(tls_config)?;
+    let client_config = ClientConfig::builder()
         .with_root_certificates(root_store)
-        .with_no_client_auth()
+        .with_no_client_auth();
+
+    Ok(client_config)
 }
 
-fn get_root_store(tls_config: &TlsConfig) -> RootCertStore {
-    match tls_config {
+fn get_root_store(tls_config: &TlsConfig) -> ConnectionResult<RootCertStore> {
+    let store = match tls_config {
         TlsConfig::File {
             ca_certificate_path,
         } => {
             let mut root_store = RootCertStore::empty();
-            let certs = load_certs_from_file(ca_certificate_path);
+            let certs = load_certs_from_file(ca_certificate_path)?;
             root_store.add_parsable_certificates(certs);
             root_store
         }
@@ -55,26 +51,28 @@ fn get_root_store(tls_config: &TlsConfig) -> RootCertStore {
         TlsConfig::Webpki => {
             RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned())
         }
-    }
+    };
+
+    Ok(store)
 }
 
-fn load_certs_from_file(filename: &str) -> Vec<CertificateDer<'static>> {
-    let certfile = fs::File::open(filename).expect("certificate file to be open");
+fn load_certs_from_file(filename: &str) -> ConnectionResult<Vec<CertificateDer<'static>>> {
+    let certfile = fs::File::open(filename)?;
     let mut reader = BufReader::new(certfile);
-    rustls_pemfile::certs(&mut reader)
-        .map(|result| result.unwrap())
-        .collect()
+    let certs = rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?;
+
+    Ok(certs)
 }
 
 pub async fn wrap_stream<S>(
     socket: S,
     domain: String,
     config: Arc<ClientConfig>,
-) -> io::Result<TlsStream<S>>
+) -> ConnectionResult<TlsStream<S>>
 where
     S: 'static + AsyncRead + AsyncWrite + Send + Unpin,
 {
-    let domain = ServerName::try_from(domain).unwrap();
+    let domain = ServerName::try_from(domain)?;
     let stream = TlsConnector::from(config);
-    stream.connect(domain, socket).await
+    Ok(stream.connect(domain, socket).await?)
 }
