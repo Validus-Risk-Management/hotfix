@@ -47,5 +47,8 @@ uuid = { workspace = true, features = ["v4"] }
 [dev-dependencies]
 hotfix-message = { version = "0.2.8", path = "../hotfix-message", features = ["fix44", "utils-chrono"] }
 
+rcgen = "0.13"
+rustls = { workspace = true, features = ["ring"] }
+tempfile = "3"
 testcontainers = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }

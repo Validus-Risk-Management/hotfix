@@ -1,8 +1,9 @@
 mod connection;
-mod error;
+pub mod error;
 pub mod reader;
 pub mod socket;
 pub mod writer;
 
 pub use connection::FixConnection;
+pub use error::{ConnectionError, ConnectionResult};
 pub use socket::*;

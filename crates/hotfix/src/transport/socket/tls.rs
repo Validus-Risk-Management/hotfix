@@ -23,7 +23,8 @@ pub async fn create_tcp_over_tls_connection(
     wrap_stream(socket, host, Arc::new(client_config)).await
 }
 
-fn get_client_config(tls_config: &TlsConfig) -> ConnectionResult<ClientConfig> {
+/// Create a TLS client configuration from the given TLS config.
+pub fn get_client_config(tls_config: &TlsConfig) -> ConnectionResult<ClientConfig> {
     let root_store = get_root_store(tls_config)?;
     let client_config = ClientConfig::builder()
         .with_root_certificates(root_store)
