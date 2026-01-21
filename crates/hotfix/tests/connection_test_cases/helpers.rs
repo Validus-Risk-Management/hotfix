@@ -1,11 +1,16 @@
-//! Test helpers for TLS-related integration tests.
+//! Test helpers for connection-related integration tests.
 //!
-//! Provides utilities for generating test certificates and spinning up local TLS servers.
+//! Provides utilities for generating test certificates, spinning up local servers,
+//! and minimal Application implementations for testing.
 
 use std::io::Write;
 use std::net::SocketAddr;
 use std::sync::{Arc, Once};
 
+use hotfix::Application;
+use hotfix::application::{InboundDecision, OutboundDecision};
+use hotfix::message::{InboundMessage, OutboundMessage};
+use hotfix_message::message::Message;
 use rcgen::{CertificateParams, DnType, IsCa, KeyPair, KeyUsagePurpose, SanType};
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
@@ -244,4 +249,114 @@ pub enum ServerBehavior {
     Echo,
     /// Close the connection immediately after TCP accept, before TLS handshake.
     CloseImmediately,
+}
+
+/// A test TCP server (without TLS) for integration testing.
+pub struct TestTcpServer {
+    pub addr: SocketAddr,
+    shutdown_tx: Option<oneshot::Sender<()>>,
+    task_handle: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl TestTcpServer {
+    /// Start a new TCP echo server.
+    pub async fn start() -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("Failed to bind TCP listener");
+        let addr = listener.local_addr().expect("Failed to get local address");
+
+        let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
+
+        let task_handle = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    result = listener.accept() => {
+                        match result {
+                            Ok((mut tcp_stream, _)) => {
+                                tokio::spawn(async move {
+                                    let mut buf = [0u8; 1024];
+                                    while let Ok(n) = tcp_stream.read(&mut buf).await {
+                                        if n == 0 {
+                                            break;
+                                        }
+                                        let _ = tcp_stream.write_all(&buf[..n]).await;
+                                    }
+                                });
+                            }
+                            Err(_) => break,
+                        }
+                    }
+                    _ = &mut shutdown_rx => {
+                        break;
+                    }
+                }
+            }
+        });
+
+        TestTcpServer {
+            addr,
+            shutdown_tx: Some(shutdown_tx),
+            task_handle: Some(task_handle),
+        }
+    }
+
+    pub fn port(&self) -> u16 {
+        self.addr.port()
+    }
+
+    pub async fn shutdown(mut self) {
+        if let Some(tx) = self.shutdown_tx.take() {
+            let _ = tx.send(());
+        }
+        if let Some(handle) = self.task_handle.take() {
+            let _ = handle.await;
+        }
+    }
+}
+
+impl Drop for TestTcpServer {
+    fn drop(&mut self) {
+        if let Some(tx) = self.shutdown_tx.take() {
+            let _ = tx.send(());
+        }
+    }
+}
+
+/// A minimal message type for testing that doesn't require fix44 types.
+#[derive(Debug, Clone)]
+pub struct MinimalMessage;
+
+impl OutboundMessage for MinimalMessage {
+    fn write(&self, _msg: &mut Message) {
+        // No-op for minimal test message
+    }
+
+    fn message_type(&self) -> &str {
+        "0" // Heartbeat type, simplest message
+    }
+}
+
+impl InboundMessage for MinimalMessage {
+    fn parse(_message: &Message) -> Self {
+        MinimalMessage
+    }
+}
+
+/// A minimal Application implementation for testing transport connectivity.
+pub struct MinimalApplication;
+
+#[async_trait::async_trait]
+impl Application<MinimalMessage, MinimalMessage> for MinimalApplication {
+    async fn on_outbound_message(&self, _msg: &MinimalMessage) -> OutboundDecision {
+        OutboundDecision::Send
+    }
+
+    async fn on_inbound_message(&self, _msg: MinimalMessage) -> InboundDecision {
+        InboundDecision::Accept
+    }
+
+    async fn on_logout(&mut self, _reason: &str) {}
+
+    async fn on_logon(&mut self) {}
 }
