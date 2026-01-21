@@ -78,7 +78,11 @@ impl OutboundMessage for Reject {
 impl InboundMessage for Reject {
     fn parse(message: &Message) -> Self {
         Self {
-            ref_seq_num: message.get(REF_SEQ_NUM).unwrap(),
+            // TODO: how do we handle errors in parsing messages?
+            #[allow(clippy::expect_used)]
+            ref_seq_num: message
+                .get(REF_SEQ_NUM)
+                .expect("ref_seq_num should be present"),
             ref_tag_id: message.get(REF_TAG_ID).ok(),
             ref_msg_type: message.get(REF_MSG_TYPE).ok(),
             session_reject_reason: message.get(SESSION_REJECT_REASON).ok(),

@@ -16,7 +16,10 @@ impl OutboundMessage for SequenceReset {
     fn write(&self, msg: &mut Message) {
         msg.set(GAP_FILL_FLAG, self.gap_fill);
         msg.set(NEW_SEQ_NO, self.new_seq_no);
-        let sending_time: Timestamp = msg.header().get(SENDING_TIME).unwrap();
+        #[allow(clippy::expect_used)]
+        let sending_time: Timestamp = msg.header().get(SENDING_TIME).expect(
+            "sending time should always be present due to previously having validated message",
+        );
         msg.header_mut().set(ORIG_SENDING_TIME, sending_time);
         msg.header_mut().set(POSS_DUP_FLAG, true);
     }
