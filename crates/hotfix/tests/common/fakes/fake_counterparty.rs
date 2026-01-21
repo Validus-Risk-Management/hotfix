@@ -1,3 +1,4 @@
+use anyhow::Result;
 use hotfix::config::SessionConfig;
 use hotfix::message::logon::{Logon, ResetSeqNumConfig};
 use hotfix::message::sequence_reset::SequenceReset;
@@ -33,16 +34,16 @@ where
     pub async fn start(
         session_ref: InternalSessionRef<Outbound>,
         session_config: SessionConfig,
-    ) -> Self {
+    ) -> Result<Self> {
         let (writer_ref, receiver) = Self::create_writer();
         let (reader_ref, dc_sender) = Self::create_reader();
         let connection = FixConnection::new(writer_ref, reader_ref);
         let message_config = MessageConfig::default();
-        let message_builder = MessageBuilder::new(Dictionary::fix44(), message_config).unwrap();
+        let message_builder = MessageBuilder::new(Dictionary::fix44(), message_config)?;
 
-        session_ref.register_writer(connection.get_writer()).await;
+        session_ref.register_writer(connection.get_writer()).await?;
 
-        Self {
+        let fake_counterparty = Self {
             receiver,
             received_messages: vec![],
             sent_messages: vec![],
@@ -52,10 +53,12 @@ where
             message_config,
             _connection: connection,
             _dc_sender: dc_sender,
-        }
+        };
+
+        Ok(fake_counterparty)
     }
 
-    pub async fn reconnect(&mut self, reset_store: bool) {
+    pub async fn reconnect(&mut self, reset_store: bool) -> Result<()> {
         let (writer_ref, receiver) = Self::create_writer();
         let (reader_ref, dc_sender) = Self::create_reader();
         let connection = FixConnection::new(writer_ref, reader_ref);
@@ -64,11 +67,13 @@ where
         self._dc_sender = dc_sender;
         self.session_ref
             .register_writer(connection.get_writer())
-            .await;
+            .await?;
 
         if reset_store {
             self.sent_messages.clear();
         }
+
+        Ok(())
     }
 
     pub async fn push_previously_sent_message(&mut self, message: impl OutboundMessage) {
@@ -94,7 +99,8 @@ where
         if skip_updates {
             self.session_ref
                 .new_fix_message_received(RawFixMessage::new(original_raw))
-                .await;
+                .await
+                .expect("failed to resend message");
             return;
         }
 
@@ -112,7 +118,8 @@ where
             Ok(resent_raw) => {
                 self.session_ref
                     .new_fix_message_received(RawFixMessage::new(resent_raw))
-                    .await;
+                    .await
+                    .expect("failed to resend message");
             }
             Err(err) => {
                 panic!("failed to encode message for resend: {err:?}");
@@ -140,7 +147,8 @@ where
         .expect("failed to generate message");
         self.session_ref
             .new_fix_message_received(RawFixMessage::new(raw_message))
-            .await;
+            .await
+            .expect("failed to send sequence reset");
     }
 
     pub async fn send_logon(&mut self) {
@@ -167,7 +175,8 @@ where
         self.sent_messages.push(raw_message.clone());
         self.session_ref
             .new_fix_message_received(RawFixMessage::new(raw_message))
-            .await;
+            .await
+            .expect("failed to send message");
     }
 
     pub fn delete_last_message_from_store(&mut self) -> bool {

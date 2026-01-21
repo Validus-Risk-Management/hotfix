@@ -63,7 +63,10 @@ impl When<&mut FakeCounterparty<TestMessage>> {
     }
 
     pub async fn gets_reconnected(&mut self, reset_store: bool) {
-        self.target.reconnect(reset_store).await;
+        self.target
+            .reconnect(reset_store)
+            .await
+            .expect("failed to check whether session reconnected");
     }
 }
 

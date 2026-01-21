@@ -32,7 +32,9 @@ pub async fn given_a_connected_session_with_store(
         .expect("session to be created successfully");
 
     let session_spy = SessionSpy::new(session.clone().into(), message_rx);
-    let mock_counterparty = FakeCounterparty::start(session.clone(), counterparty_config).await;
+    let mock_counterparty = FakeCounterparty::start(session.clone(), counterparty_config)
+        .await
+        .expect("failed to start FakeCounterparty");
 
     (session_spy, mock_counterparty)
 }
