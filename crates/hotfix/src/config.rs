@@ -128,8 +128,10 @@ pub enum ConfigError {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::{Config, TlsConfig};
+    use crate::config::{Config, ConfigError, TlsConfig};
     use chrono::{NaiveTime, Weekday};
+    use std::io::Write;
+    use tempfile::NamedTempFile;
 
     #[test]
     fn test_simple_config() {
@@ -435,5 +437,51 @@ end_day = "Friday"
 
         let session_config = config.sessions.first().unwrap();
         assert_eq!(session_config.reconnect_interval, 15);
+    }
+
+    #[test]
+    fn test_load_from_path_success() {
+        let config_contents = r#"
+[[sessions]]
+begin_string = "FIX.4.4"
+sender_comp_id = "sender"
+target_comp_id = "target"
+connection_host = "127.0.0.1"
+connection_port = 9876
+heartbeat_interval = 30
+"#;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(config_contents.as_bytes()).unwrap();
+
+        let config = Config::load_from_path(temp_file.path()).unwrap();
+        assert_eq!(config.sessions.len(), 1);
+
+        let session = config.sessions.first().unwrap();
+        assert_eq!(session.begin_string, "FIX.4.4");
+        assert_eq!(session.sender_comp_id, "sender");
+        assert_eq!(session.target_comp_id, "target");
+        assert_eq!(session.connection_host, "127.0.0.1");
+        assert_eq!(session.connection_port, 9876);
+        assert_eq!(session.heartbeat_interval, 30);
+    }
+
+    #[test]
+    fn test_load_from_path_missing_file() {
+        let result = Config::load_from_path("/nonexistent/path/to/config.toml");
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ConfigError::Io(_)));
+    }
+
+    #[test]
+    fn test_load_from_path_invalid_toml() {
+        let invalid_toml = "this is not valid toml {{{{";
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(invalid_toml.as_bytes()).unwrap();
+
+        let result = Config::load_from_path(temp_file.path());
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ConfigError::Parse(_)));
     }
 }
