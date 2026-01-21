@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.4.3...hotfix-v0.5.0) - 2026-01-21
+
+### Added
+
+- forbid unwraps and expects in main hotfix crate ([#272](https://github.com/Validus-Risk-Management/hotfix/pull/272))
+
 ## [0.4.3](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.4.2...hotfix-v0.4.3) - 2026-01-20
 
 ### Other
