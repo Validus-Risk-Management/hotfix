@@ -147,7 +147,7 @@ async fn start_session(
     db_config: &Database,
     app: TestApplication,
 ) -> Result<Initiator<OutboundMsg>> {
-    let mut config = Config::load_from_path(config_path);
+    let mut config = Config::load_from_path(config_path)?;
     let session_config = config
         .sessions
         .pop()
