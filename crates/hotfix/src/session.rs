@@ -1,4 +1,5 @@
 pub(crate) mod admin_request;
+pub mod error;
 pub(crate) mod event;
 mod info;
 mod session_handle;

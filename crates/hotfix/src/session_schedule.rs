@@ -1,5 +1,5 @@
 use crate::config::ScheduleConfig;
-use crate::error::SessionError;
+use crate::session::error::SessionError;
 use chrono::{DateTime, Datelike, Days, NaiveDate, NaiveTime, TimeDelta, Utc, Weekday};
 use chrono_tz::Tz;
 

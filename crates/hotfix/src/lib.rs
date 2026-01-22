@@ -27,7 +27,6 @@
 
 pub mod application;
 pub mod config;
-pub(crate) mod error;
 pub mod initiator;
 pub mod message;
 pub mod message_utils;
