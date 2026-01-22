@@ -1,5 +1,5 @@
 use crate::config::SessionConfig;
-use crate::error::{CompIdType, MessageVerificationError};
+use crate::message::verification_error::{CompIdType, MessageVerificationError};
 use hotfix_message::Part;
 use hotfix_message::field_types::Timestamp;
 use hotfix_message::message::Message;
@@ -180,8 +180,9 @@ fn check_target_comp_id(
 
 #[cfg(test)]
 mod tests {
-    use super::{Message, MessageVerificationError, SessionConfig, verify_message};
-    use crate::error::CompIdType;
+    use super::{Message, SessionConfig, verify_message};
+    use crate::message::verification_error::CompIdType;
+    use crate::message::verification_error::MessageVerificationError;
     use hotfix_message::field_types::Timestamp;
     use hotfix_message::{Part, fix44};
 
