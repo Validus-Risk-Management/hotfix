@@ -161,14 +161,10 @@ impl FileStore {
         Ok(index)
     }
 
-    fn write_seqnums(&mut self) -> std::io::Result<()> {
+    fn write_seqnums_with(&mut self, sender: u64, target: u64) -> std::io::Result<()> {
         self.seqnums_file.seek(SeekFrom::Start(0))?;
         self.seqnums_file.set_len(0)?;
-        write!(
-            self.seqnums_file,
-            "{:020} : {:020}",
-            self.sender_seq_number, self.target_seq_number
-        )?;
+        write!(self.seqnums_file, "{:020} : {:020}", sender, target)?;
         self.seqnums_file.flush()?;
         Ok(())
     }
@@ -308,21 +304,26 @@ impl MessageStore for FileStore {
     }
 
     async fn increment_sender_seq_number(&mut self) -> Result<()> {
-        self.sender_seq_number += 1;
-        self.write_seqnums()
-            .map_err(|e| StoreError::UpdateSequenceNumber(e.into()))
+        let new_value = self.sender_seq_number + 1;
+        self.write_seqnums_with(new_value, self.target_seq_number)
+            .map_err(|e| StoreError::UpdateSequenceNumber(e.into()))?;
+        self.sender_seq_number = new_value;
+        Ok(())
     }
 
     async fn increment_target_seq_number(&mut self) -> Result<()> {
-        self.target_seq_number += 1;
-        self.write_seqnums()
-            .map_err(|e| StoreError::UpdateSequenceNumber(e.into()))
+        let new_value = self.target_seq_number + 1;
+        self.write_seqnums_with(self.sender_seq_number, new_value)
+            .map_err(|e| StoreError::UpdateSequenceNumber(e.into()))?;
+        self.target_seq_number = new_value;
+        Ok(())
     }
 
     async fn set_target_seq_number(&mut self, seq_number: u64) -> Result<()> {
+        self.write_seqnums_with(self.sender_seq_number, seq_number)
+            .map_err(|e| StoreError::UpdateSequenceNumber(e.into()))?;
         self.target_seq_number = seq_number;
-        self.write_seqnums()
-            .map_err(|e| StoreError::UpdateSequenceNumber(e.into()))
+        Ok(())
     }
 
     async fn reset(&mut self) -> Result<()> {
