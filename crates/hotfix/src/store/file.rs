@@ -1,5 +1,5 @@
-use crate::store::MessageStore;
-use anyhow::{Context, Result};
+use crate::store::{MessageStore, Result, StoreError};
+use anyhow::Context;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
@@ -33,7 +33,7 @@ pub struct FileStore {
 }
 
 impl FileStore {
-    pub fn new(directory: impl AsRef<Path>, name: &str) -> Result<Self> {
+    pub fn new(directory: impl AsRef<Path>, name: &str) -> anyhow::Result<Self> {
         let base_path = directory.as_ref().join(name);
         std::fs::create_dir_all(directory)?;
 
@@ -84,7 +84,7 @@ impl FileStore {
     /// Retrieves the session creation time from the session file.
     ///
     /// It initialises the session file if it doesn't exist.
-    fn get_or_create_session_time(base_path: &Path) -> Result<DateTime<Utc>> {
+    fn get_or_create_session_time(base_path: &Path) -> anyhow::Result<DateTime<Utc>> {
         let session_path = base_path.with_extension("session");
         let session_time = if session_path.exists() {
             let content = std::fs::read_to_string(&session_path)?;
@@ -101,7 +101,7 @@ impl FileStore {
     /// Retrieves the sequence numbers from the seqnums file.
     ///
     /// It defaults to `(0, 0)` if the file doesn't exist or if it's empty.
-    fn read_initial_seqnums(base_path: &Path) -> Result<(u64, u64)> {
+    fn read_initial_seqnums(base_path: &Path) -> anyhow::Result<(u64, u64)> {
         let seqnums_path = base_path.with_extension("seqnums");
         let (sender_seq_number, target_seq_number) = if seqnums_path.exists() {
             let content =
@@ -118,7 +118,7 @@ impl FileStore {
         Ok((sender_seq_number, target_seq_number))
     }
 
-    fn parse_seqnums(content: &str) -> Result<(u64, u64)> {
+    fn parse_seqnums(content: &str) -> anyhow::Result<(u64, u64)> {
         let parts: Vec<&str> = content.trim().split(':').map(|s| s.trim()).collect();
         if parts.len() != 2 {
             anyhow::bail!("invalid seqnums format");
@@ -132,7 +132,7 @@ impl FileStore {
         Ok((sender, target))
     }
 
-    fn load_message_index(header_path: &Path) -> Result<HashMap<u64, MessageDef>> {
+    fn load_message_index(header_path: &Path) -> anyhow::Result<HashMap<u64, MessageDef>> {
         let mut index = HashMap::new();
 
         if !header_path.exists() {
@@ -161,7 +161,7 @@ impl FileStore {
         Ok(index)
     }
 
-    fn write_seqnums(&mut self) -> Result<()> {
+    fn write_seqnums(&mut self) -> std::io::Result<()> {
         self.seqnums_file.seek(SeekFrom::Start(0))?;
         self.seqnums_file.set_len(0)?;
         write!(
@@ -176,21 +176,29 @@ impl FileStore {
 
 #[async_trait::async_trait]
 impl MessageStore for FileStore {
-    async fn add(&mut self, sequence_number: u64, message: &[u8]) -> anyhow::Result<()> {
+    async fn add(&mut self, sequence_number: u64, message: &[u8]) -> Result<()> {
         let msg_size = message.len();
         let offset = self.current_body_offset;
 
-        // write the message itself
-        self.body_file.write_all(message)?;
-        self.body_file.flush()?;
+        let mut persist = || -> std::io::Result<()> {
+            // write the message itself
+            self.body_file.write_all(message)?;
+            self.body_file.flush()?;
 
-        // write the offset to the header file
-        writeln!(
-            self.header_file,
-            "{},{},{}",
-            sequence_number, offset, msg_size
-        )?;
-        self.header_file.flush()?;
+            // write the offset to the header file
+            writeln!(
+                self.header_file,
+                "{},{},{}",
+                sequence_number, offset, msg_size
+            )?;
+            self.header_file.flush()?;
+            Ok(())
+        };
+
+        persist().map_err(|e| StoreError::PersistMessage {
+            sequence_number,
+            source: e.into(),
+        })?;
 
         self.message_index.insert(
             sequence_number,
@@ -205,26 +213,31 @@ impl MessageStore for FileStore {
     }
 
     async fn get_slice(&self, begin: usize, end: usize) -> Result<Vec<Vec<u8>>> {
-        let mut messages = Vec::with_capacity(end - begin + 1);
+        let retrieve = || -> std::io::Result<Vec<Vec<u8>>> {
+            let mut messages = Vec::with_capacity(end - begin + 1);
 
-        let body_path = self.base_path.with_extension("body");
-        let mut body_file =
-            File::open(body_path).context("failed to open body file for reading")?;
+            let body_path = self.base_path.with_extension("body");
+            let mut body_file = File::open(body_path)?;
 
-        for seq_num in begin..=end {
-            if let Some(msg_def) = self.message_index.get(&(seq_num as u64)) {
-                body_file.seek(SeekFrom::Start(msg_def.offset))?;
+            for seq_num in begin..=end {
+                if let Some(msg_def) = self.message_index.get(&(seq_num as u64)) {
+                    body_file.seek(SeekFrom::Start(msg_def.offset))?;
 
-                let mut buffer = vec![0u8; msg_def.size];
-                body_file
-                    .read_exact(&mut buffer)
-                    .context("failed to read message from body file")?;
+                    let mut buffer = vec![0u8; msg_def.size];
+                    body_file.read_exact(&mut buffer)?;
 
-                messages.push(buffer);
+                    messages.push(buffer);
+                }
             }
-        }
 
-        Ok(messages)
+            Ok(messages)
+        };
+
+        retrieve().map_err(|e| StoreError::RetrieveMessages {
+            begin,
+            end,
+            source: e.into(),
+        })
     }
 
     fn next_sender_seq_number(&self) -> u64 {
@@ -237,80 +250,82 @@ impl MessageStore for FileStore {
 
     async fn increment_sender_seq_number(&mut self) -> Result<()> {
         self.sender_seq_number += 1;
-        self.write_seqnums()?;
-
-        Ok(())
+        self.write_seqnums()
+            .map_err(|e| StoreError::UpdateSequenceNumber(e.into()))
     }
 
     async fn increment_target_seq_number(&mut self) -> Result<()> {
         self.target_seq_number += 1;
-        self.write_seqnums()?;
-
-        Ok(())
+        self.write_seqnums()
+            .map_err(|e| StoreError::UpdateSequenceNumber(e.into()))
     }
 
     async fn set_target_seq_number(&mut self, seq_number: u64) -> Result<()> {
         self.target_seq_number = seq_number;
-        self.write_seqnums()?;
-        Ok(())
+        self.write_seqnums()
+            .map_err(|e| StoreError::UpdateSequenceNumber(e.into()))
     }
 
     async fn reset(&mut self) -> Result<()> {
-        self.body_file.flush()?;
-        self.header_file.flush()?;
+        let do_reset = |this: &mut Self| -> std::io::Result<()> {
+            this.body_file.flush()?;
+            this.header_file.flush()?;
 
-        // remove all files
-        let body_path = self.base_path.with_extension("body");
-        let header_path = self.base_path.with_extension("header");
-        let seqnums_path = self.base_path.with_extension("seqnums");
-        let session_path = self.base_path.with_extension("session");
+            // remove all files
+            let body_path = this.base_path.with_extension("body");
+            let header_path = this.base_path.with_extension("header");
+            let seqnums_path = this.base_path.with_extension("seqnums");
+            let session_path = this.base_path.with_extension("session");
 
-        if body_path.exists() {
-            std::fs::remove_file(&body_path)?;
-        }
-        if header_path.exists() {
-            std::fs::remove_file(&header_path)?;
-        }
-        if seqnums_path.exists() {
-            std::fs::remove_file(&seqnums_path)?;
-        }
-        if session_path.exists() {
-            std::fs::remove_file(&session_path)?;
-        }
+            if body_path.exists() {
+                std::fs::remove_file(&body_path)?;
+            }
+            if header_path.exists() {
+                std::fs::remove_file(&header_path)?;
+            }
+            if seqnums_path.exists() {
+                std::fs::remove_file(&seqnums_path)?;
+            }
+            if session_path.exists() {
+                std::fs::remove_file(&session_path)?;
+            }
 
-        // reset in-memory state
-        self.sender_seq_number = 0;
-        self.target_seq_number = 0;
-        self.creation_time = Utc::now();
-        self.message_index.clear();
-        self.current_body_offset = 0;
+            // reset in-memory state
+            this.sender_seq_number = 0;
+            this.target_seq_number = 0;
+            this.creation_time = Utc::now();
+            this.message_index.clear();
+            this.current_body_offset = 0;
 
-        // recreate files
-        let now = Utc::now();
-        std::fs::write(&session_path, now.to_rfc3339())?;
+            // recreate files
+            let now = Utc::now();
+            std::fs::write(&session_path, now.to_rfc3339())?;
 
-        let body_file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&body_path)?;
-        self.body_file = BufWriter::new(body_file);
+            let body_file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&body_path)?;
+            this.body_file = BufWriter::new(body_file);
 
-        let header_file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&header_path)?;
-        self.header_file = BufWriter::new(header_file);
+            let header_file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&header_path)?;
+            this.header_file = BufWriter::new(header_file);
 
-        self.seqnums_file = OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .read(true)
-            .write(true)
-            .open(&seqnums_path)?;
+            this.seqnums_file = OpenOptions::new()
+                .create(true)
+                .truncate(true)
+                .read(true)
+                .write(true)
+                .open(&seqnums_path)?;
 
-        self.creation_time = now;
+            this.creation_time = now;
 
-        Ok(())
+            Ok(())
+        };
+
+        do_reset(self).map_err(|e| StoreError::Reset(e.into()))
     }
 
     fn creation_time(&self) -> DateTime<Utc> {

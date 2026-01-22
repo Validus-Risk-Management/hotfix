@@ -1,5 +1,4 @@
-use crate::store::MessageStore;
-use anyhow::{Result, bail};
+use crate::store::{MessageStore, Result, StoreError};
 use chrono::{DateTime, Utc};
 use redb::{Database, ReadOnlyTable, ReadableDatabase, TableDefinition, TableError};
 use std::path::Path;
@@ -22,7 +21,7 @@ pub struct RedbMessageStore {
 }
 
 impl RedbMessageStore {
-    pub fn new(path: impl AsRef<Path>) -> Result<Self> {
+    pub fn new(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let db = Database::create(path)?;
 
         let meta = if let Some(stored_metadata) = Self::load_metadata(&db)? {
@@ -36,7 +35,7 @@ impl RedbMessageStore {
         Ok(Self { db, meta })
     }
 
-    fn persist_default_metadata(db: &Database) -> Result<()> {
+    fn persist_default_metadata(db: &Database) -> anyhow::Result<()> {
         let creation_timestamp = Utc::now().timestamp_micros() as u64;
         let sender_seq_number = 0;
         let target_seq_number = 0;
@@ -55,7 +54,7 @@ impl RedbMessageStore {
         Ok(())
     }
 
-    fn load_metadata(db: &Database) -> Result<Option<MetaData>> {
+    fn load_metadata(db: &Database) -> anyhow::Result<Option<MetaData>> {
         let read_txn = db.begin_read()?;
         let metadata = match read_txn.open_table(META_TABLE) {
             Ok(table) => {
@@ -81,19 +80,23 @@ impl RedbMessageStore {
         Ok(metadata)
     }
 
-    fn read_required_meta_field(table: &ReadOnlyTable<&str, u64>, key: &str) -> Result<u64> {
+    fn read_required_meta_field(table: &ReadOnlyTable<&str, u64>, key: &str) -> anyhow::Result<u64> {
         table
             .get(key)?
             .map(|v| v.value())
             .ok_or_else(|| anyhow::anyhow!("missing required metadata field: {key}"))
     }
 
-    fn parse_timestamp(timestamp: u64) -> Result<DateTime<Utc>> {
+    fn parse_timestamp(timestamp: u64) -> anyhow::Result<DateTime<Utc>> {
         DateTime::from_timestamp_micros(timestamp as i64)
             .ok_or_else(|| anyhow::anyhow!("invalid timestamp: {timestamp}"))
     }
 
-    async fn update_sequence_number(&mut self, key: &str, value: u64) -> Result<()> {
+    async fn update_sequence_number(
+        &mut self,
+        key: &str,
+        value: u64,
+    ) -> std::result::Result<(), redb::Error> {
         let write_txn = self.db.begin_write()?;
         {
             let mut table = write_txn.open_table(META_TABLE)?;
@@ -107,13 +110,20 @@ impl RedbMessageStore {
 #[async_trait::async_trait]
 impl MessageStore for RedbMessageStore {
     async fn add(&mut self, sequence_number: u64, message: &[u8]) -> Result<()> {
-        let write_txn = self.db.begin_write()?;
-        {
-            let mut table = write_txn.open_table(MESSAGES_TABLE)?;
-            table.insert(sequence_number, message)?;
-        }
-        write_txn.commit()?;
-        Ok(())
+        let persist = || -> std::result::Result<(), redb::Error> {
+            let write_txn = self.db.begin_write()?;
+            {
+                let mut table = write_txn.open_table(MESSAGES_TABLE)?;
+                table.insert(sequence_number, message)?;
+            }
+            write_txn.commit()?;
+            Ok(())
+        };
+
+        persist().map_err(|e| StoreError::PersistMessage {
+            sequence_number,
+            source: e.into(),
+        })
     }
 
     async fn get_slice(&self, begin: usize, end: usize) -> Result<Vec<Vec<u8>>> {
@@ -121,18 +131,26 @@ impl MessageStore for RedbMessageStore {
             return Ok(vec![]);
         }
 
-        let read_txn = self.db.begin_read()?;
-        match read_txn.open_table(MESSAGES_TABLE) {
-            Ok(table) => {
-                let messages: std::result::Result<Vec<Vec<u8>>, redb::StorageError> = table
-                    .range(begin as u64..=end as u64)?
-                    .map(|m| m.map(|v| v.1.value().to_vec()))
-                    .collect();
-                Ok(messages?)
+        let retrieve = || -> std::result::Result<Vec<Vec<u8>>, redb::Error> {
+            let read_txn = self.db.begin_read()?;
+            match read_txn.open_table(MESSAGES_TABLE) {
+                Ok(table) => {
+                    let messages: std::result::Result<Vec<Vec<u8>>, redb::StorageError> = table
+                        .range(begin as u64..=end as u64)?
+                        .map(|m| m.map(|v| v.1.value().to_vec()))
+                        .collect();
+                    Ok(messages?)
+                }
+                Err(TableError::TableDoesNotExist(_)) => Ok(vec![]),
+                Err(err) => Err(err.into()),
             }
-            Err(TableError::TableDoesNotExist(_)) => Ok(vec![]),
-            Err(err) => Err(err.into()),
-        }
+        };
+
+        retrieve().map_err(|e| StoreError::RetrieveMessages {
+            begin,
+            end,
+            source: e.into(),
+        })
     }
 
     fn next_sender_seq_number(&self) -> u64 {
@@ -146,7 +164,8 @@ impl MessageStore for RedbMessageStore {
     async fn increment_sender_seq_number(&mut self) -> Result<()> {
         let sender_seq_number = self.meta.sender_seq_number + 1;
         self.update_sequence_number(SENDER_KEY, sender_seq_number)
-            .await?;
+            .await
+            .map_err(|e| StoreError::UpdateSequenceNumber(e.into()))?;
         self.meta.sender_seq_number = sender_seq_number;
         Ok(())
     }
@@ -157,19 +176,22 @@ impl MessageStore for RedbMessageStore {
     }
 
     async fn set_target_seq_number(&mut self, seq_number: u64) -> Result<()> {
-        self.update_sequence_number(TARGET_KEY, seq_number).await?;
+        self.update_sequence_number(TARGET_KEY, seq_number)
+            .await
+            .map_err(|e| StoreError::UpdateSequenceNumber(e.into()))?;
         self.meta.target_seq_number = seq_number;
         Ok(())
     }
 
     async fn reset(&mut self) -> Result<()> {
-        Self::persist_default_metadata(&self.db)?;
-        if let Some(meta) = Self::load_metadata(&self.db)? {
-            self.meta = meta;
-            Ok(())
-        } else {
-            bail!("meta unexpectedly not found")
-        }
+        let do_reset = |db: &Database| -> anyhow::Result<MetaData> {
+            Self::persist_default_metadata(db)?;
+            Self::load_metadata(db)?
+                .ok_or_else(|| anyhow::anyhow!("meta unexpectedly not found"))
+        };
+
+        self.meta = do_reset(&self.db).map_err(|e| StoreError::Reset(e.into()))?;
+        Ok(())
     }
 
     fn creation_time(&self) -> DateTime<Utc> {

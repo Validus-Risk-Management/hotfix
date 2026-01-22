@@ -1043,6 +1043,7 @@ mod tests {
             SessionError::InvalidSchedule(msg) => {
                 assert!(msg.contains("Weekly sessions cannot have weekdays specified"));
             }
+            other => panic!("unexpected error: {other}"),
         }
     }
 

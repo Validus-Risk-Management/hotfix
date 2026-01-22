@@ -1,5 +1,4 @@
-use crate::store::MessageStore;
-use anyhow::Result;
+use crate::store::{MessageStore, Result};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 
