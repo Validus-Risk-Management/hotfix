@@ -85,7 +85,9 @@ impl MongoDbMessageStore {
         Ok(meta)
     }
 
-    async fn new_sequence(meta_collection: &Collection<SequenceMeta>) -> anyhow::Result<SequenceMeta> {
+    async fn new_sequence(
+        meta_collection: &Collection<SequenceMeta>,
+    ) -> anyhow::Result<SequenceMeta> {
         let sequence_id = ObjectId::new();
         let initial_meta = SequenceMeta {
             object_id: sequence_id,
@@ -133,24 +135,25 @@ impl MessageStore for MongoDbMessageStore {
                 "$lte": end as u32,
             }
         };
-        let mut cursor = self
-            .message_collection
-            .find(filter)
-            .await
-            .map_err(|e| StoreError::RetrieveMessages {
-                begin,
-                end,
-                source: e.into(),
-            })?;
-
-        let mut messages = Vec::new();
-        while let Some(message) = cursor.try_next().await.map_err(|e| {
+        let mut cursor = self.message_collection.find(filter).await.map_err(|e| {
             StoreError::RetrieveMessages {
                 begin,
                 end,
                 source: e.into(),
             }
-        })? {
+        })?;
+
+        let mut messages = Vec::new();
+        while let Some(message) =
+            cursor
+                .try_next()
+                .await
+                .map_err(|e| StoreError::RetrieveMessages {
+                    begin,
+                    end,
+                    source: e.into(),
+                })?
+        {
             messages.push(message.data.bytes);
         }
 

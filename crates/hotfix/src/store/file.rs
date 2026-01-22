@@ -172,33 +172,22 @@ impl FileStore {
         self.seqnums_file.flush()?;
         Ok(())
     }
-}
 
-#[async_trait::async_trait]
-impl MessageStore for FileStore {
-    async fn add(&mut self, sequence_number: u64, message: &[u8]) -> Result<()> {
+    fn write_message(&mut self, sequence_number: u64, message: &[u8]) -> std::io::Result<()> {
         let msg_size = message.len();
         let offset = self.current_body_offset;
 
-        let mut persist = || -> std::io::Result<()> {
-            // write the message itself
-            self.body_file.write_all(message)?;
-            self.body_file.flush()?;
+        // write the message itself
+        self.body_file.write_all(message)?;
+        self.body_file.flush()?;
 
-            // write the offset to the header file
-            writeln!(
-                self.header_file,
-                "{},{},{}",
-                sequence_number, offset, msg_size
-            )?;
-            self.header_file.flush()?;
-            Ok(())
-        };
-
-        persist().map_err(|e| StoreError::PersistMessage {
-            sequence_number,
-            source: e.into(),
-        })?;
+        // write the offset to the header file
+        writeln!(
+            self.header_file,
+            "{},{},{}",
+            sequence_number, offset, msg_size
+        )?;
+        self.header_file.flush()?;
 
         self.message_index.insert(
             sequence_number,
@@ -212,32 +201,102 @@ impl MessageStore for FileStore {
         Ok(())
     }
 
-    async fn get_slice(&self, begin: usize, end: usize) -> Result<Vec<Vec<u8>>> {
-        let retrieve = || -> std::io::Result<Vec<Vec<u8>>> {
-            let mut messages = Vec::with_capacity(end - begin + 1);
+    fn perform_reset(&mut self) -> std::io::Result<()> {
+        self.body_file.flush()?;
+        self.header_file.flush()?;
 
-            let body_path = self.base_path.with_extension("body");
-            let mut body_file = File::open(body_path)?;
+        // remove all files
+        let body_path = self.base_path.with_extension("body");
+        let header_path = self.base_path.with_extension("header");
+        let seqnums_path = self.base_path.with_extension("seqnums");
+        let session_path = self.base_path.with_extension("session");
 
-            for seq_num in begin..=end {
-                if let Some(msg_def) = self.message_index.get(&(seq_num as u64)) {
-                    body_file.seek(SeekFrom::Start(msg_def.offset))?;
+        if body_path.exists() {
+            std::fs::remove_file(&body_path)?;
+        }
+        if header_path.exists() {
+            std::fs::remove_file(&header_path)?;
+        }
+        if seqnums_path.exists() {
+            std::fs::remove_file(&seqnums_path)?;
+        }
+        if session_path.exists() {
+            std::fs::remove_file(&session_path)?;
+        }
 
-                    let mut buffer = vec![0u8; msg_def.size];
-                    body_file.read_exact(&mut buffer)?;
+        // reset in-memory state
+        self.sender_seq_number = 0;
+        self.target_seq_number = 0;
+        self.creation_time = Utc::now();
+        self.message_index.clear();
+        self.current_body_offset = 0;
 
-                    messages.push(buffer);
-                }
+        // recreate files
+        let now = Utc::now();
+        std::fs::write(&session_path, now.to_rfc3339())?;
+
+        let body_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&body_path)?;
+        self.body_file = BufWriter::new(body_file);
+
+        let header_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&header_path)?;
+        self.header_file = BufWriter::new(header_file);
+
+        self.seqnums_file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .read(true)
+            .write(true)
+            .open(&seqnums_path)?;
+
+        self.creation_time = now;
+
+        Ok(())
+    }
+
+    fn read_messages(&self, begin: usize, end: usize) -> std::io::Result<Vec<Vec<u8>>> {
+        let mut messages = Vec::with_capacity(end - begin + 1);
+
+        let body_path = self.base_path.with_extension("body");
+        let mut body_file = File::open(body_path)?;
+
+        for seq_num in begin..=end {
+            if let Some(msg_def) = self.message_index.get(&(seq_num as u64)) {
+                body_file.seek(SeekFrom::Start(msg_def.offset))?;
+
+                let mut buffer = vec![0u8; msg_def.size];
+                body_file.read_exact(&mut buffer)?;
+
+                messages.push(buffer);
             }
+        }
 
-            Ok(messages)
-        };
+        Ok(messages)
+    }
+}
 
-        retrieve().map_err(|e| StoreError::RetrieveMessages {
-            begin,
-            end,
-            source: e.into(),
-        })
+#[async_trait::async_trait]
+impl MessageStore for FileStore {
+    async fn add(&mut self, sequence_number: u64, message: &[u8]) -> Result<()> {
+        self.write_message(sequence_number, message)
+            .map_err(|err| StoreError::PersistMessage {
+                sequence_number,
+                source: err.into(),
+            })
+    }
+
+    async fn get_slice(&self, begin: usize, end: usize) -> Result<Vec<Vec<u8>>> {
+        self.read_messages(begin, end)
+            .map_err(|e| StoreError::RetrieveMessages {
+                begin,
+                end,
+                source: e.into(),
+            })
     }
 
     fn next_sender_seq_number(&self) -> u64 {
@@ -267,65 +326,8 @@ impl MessageStore for FileStore {
     }
 
     async fn reset(&mut self) -> Result<()> {
-        let do_reset = |this: &mut Self| -> std::io::Result<()> {
-            this.body_file.flush()?;
-            this.header_file.flush()?;
-
-            // remove all files
-            let body_path = this.base_path.with_extension("body");
-            let header_path = this.base_path.with_extension("header");
-            let seqnums_path = this.base_path.with_extension("seqnums");
-            let session_path = this.base_path.with_extension("session");
-
-            if body_path.exists() {
-                std::fs::remove_file(&body_path)?;
-            }
-            if header_path.exists() {
-                std::fs::remove_file(&header_path)?;
-            }
-            if seqnums_path.exists() {
-                std::fs::remove_file(&seqnums_path)?;
-            }
-            if session_path.exists() {
-                std::fs::remove_file(&session_path)?;
-            }
-
-            // reset in-memory state
-            this.sender_seq_number = 0;
-            this.target_seq_number = 0;
-            this.creation_time = Utc::now();
-            this.message_index.clear();
-            this.current_body_offset = 0;
-
-            // recreate files
-            let now = Utc::now();
-            std::fs::write(&session_path, now.to_rfc3339())?;
-
-            let body_file = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&body_path)?;
-            this.body_file = BufWriter::new(body_file);
-
-            let header_file = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&header_path)?;
-            this.header_file = BufWriter::new(header_file);
-
-            this.seqnums_file = OpenOptions::new()
-                .create(true)
-                .truncate(true)
-                .read(true)
-                .write(true)
-                .open(&seqnums_path)?;
-
-            this.creation_time = now;
-
-            Ok(())
-        };
-
-        do_reset(self).map_err(|e| StoreError::Reset(e.into()))
+        self.perform_reset()
+            .map_err(|e| StoreError::Reset(e.into()))
     }
 
     fn creation_time(&self) -> DateTime<Utc> {
