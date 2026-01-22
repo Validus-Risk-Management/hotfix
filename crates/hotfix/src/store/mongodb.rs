@@ -113,7 +113,7 @@ impl MessageStore for MongoDbMessageStore {
                 bytes: message.to_vec(),
             },
         };
-        let filter = doc! { "sequence_id": self.current_sequence.object_id, "msg_seq_number": sequence_number as u32 };
+        let filter = doc! { "sequence_id": self.current_sequence.object_id, "msg_seq_number": sequence_number as i64 };
         let options = ReplaceOptions::builder().upsert(true).build();
         self.message_collection
             .replace_one(filter, message)
@@ -131,8 +131,8 @@ impl MessageStore for MongoDbMessageStore {
         let filter = doc! {
             "sequence_id": self.current_sequence.object_id,
             "msg_seq_number": doc! {
-                "$gte": begin as u32,
-                "$lte": end as u32,
+                "$gte": begin as i64,
+                "$lte": end as i64,
             }
         };
         let mut cursor = self.message_collection.find(filter).await.map_err(|e| {
@@ -169,7 +169,6 @@ impl MessageStore for MongoDbMessageStore {
     }
 
     async fn increment_sender_seq_number(&mut self) -> Result<()> {
-        self.current_sequence.sender_seq_number += 1;
         self.meta_collection
             .update_one(
                 doc! { "_id": self.current_sequence.object_id },
@@ -177,12 +176,12 @@ impl MessageStore for MongoDbMessageStore {
             )
             .await
             .map_err(|e| StoreError::UpdateSequenceNumber(e.into()))?;
+        self.current_sequence.sender_seq_number += 1;
 
         Ok(())
     }
 
     async fn increment_target_seq_number(&mut self) -> Result<()> {
-        self.current_sequence.target_seq_number += 1;
         self.meta_collection
             .update_one(
                 doc! { "_id": self.current_sequence.object_id },
@@ -190,19 +189,20 @@ impl MessageStore for MongoDbMessageStore {
             )
             .await
             .map_err(|e| StoreError::UpdateSequenceNumber(e.into()))?;
+        self.current_sequence.target_seq_number += 1;
 
         Ok(())
     }
 
     async fn set_target_seq_number(&mut self, seq_number: u64) -> Result<()> {
-        self.current_sequence.target_seq_number = seq_number;
         self.meta_collection
             .update_one(
                 doc! { "_id": self.current_sequence.object_id },
-                doc! { "$set": { "target_seq_number": seq_number as u32 } },
+                doc! { "$set": { "target_seq_number": seq_number as i64 } },
             )
             .await
             .map_err(|e| StoreError::UpdateSequenceNumber(e.into()))?;
+        self.current_sequence.target_seq_number = seq_number;
 
         Ok(())
     }
