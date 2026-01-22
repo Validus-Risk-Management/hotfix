@@ -8,7 +8,6 @@ use hotfix::field_types::{Date, Timestamp};
 use hotfix::fix44;
 use hotfix::initiator::Initiator;
 use hotfix::session::SessionHandle;
-use hotfix::store::mongodb::Client;
 use hotfix_web::{RouterConfig, build_router_with_config};
 use std::path::Path;
 use tokio::select;
@@ -23,8 +22,8 @@ use crate::messages::{NewOrderSingle, OutboundMsg};
 #[derive(ValueEnum, Clone, Debug)]
 #[clap(rename_all = "lower")]
 enum Database {
-    Redb,
-    Mongodb,
+    Memory,
+    File,
 }
 
 #[derive(Parser, Debug)]
@@ -66,7 +65,7 @@ async fn main() -> Result<()> {
             .init();
     }
 
-    let db_config = args.database.unwrap_or(Database::Redb);
+    let db_config = args.database.unwrap_or(Database::Memory);
     let app = TestApplication::default();
     let initiator = start_session(&args.config, &db_config, app).await?;
 
@@ -154,20 +153,13 @@ async fn start_session(
         .context("config must include a session")?;
 
     match db_config {
-        Database::Redb => {
-            let store = hotfix::store::redb::RedbMessageStore::new("session.db")
-                .context("failed to create redb store")?;
+        Database::Memory => {
+            let store = hotfix::store::in_memory::InMemoryMessageStore::default();
             Initiator::start(session_config, app, store).await
         }
-        Database::Mongodb => {
-            let uri = "mongodb://localhost:30001";
-            let client = Client::with_uri_str(uri)
-                .await
-                .context("failed to create mongodb client")?;
-            let store =
-                hotfix::store::mongodb::MongoDbMessageStore::new(client.database("hotfix"), None)
-                    .await
-                    .context("failed to create mongodb store")?;
+        Database::File => {
+            let store = hotfix::store::file::FileStore::new("data", "simple-new-order-store")
+                .context("failed to create file store")?;
             Initiator::start(session_config, app, store).await
         }
     }

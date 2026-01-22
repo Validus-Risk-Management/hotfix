@@ -15,9 +15,6 @@ pub mod mongodb;
 
 /// A file-based message store for persistence.
 pub mod file;
-#[cfg(feature = "redb")]
-/// A message store using [redb](https://www.redb.org/) for persistence.
-pub mod redb;
 
 pub use error::*;
 

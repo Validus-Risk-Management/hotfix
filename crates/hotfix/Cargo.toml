@@ -14,7 +14,6 @@ categories.workspace = true
 [features]
 default = ["test-utils"]
 fix44 = ["hotfix-message/fix44"]
-redb = ["dep:redb"]
 mongodb = ["dep:mongodb"]
 test-utils = []
 
@@ -31,7 +30,6 @@ chrono-tz = { workspace = true, features = ["serde"] }
 futures = { workspace = true }
 mongodb = { workspace = true, optional = true }
 rustls-pki-types = { workspace = true }
-redb = { workspace = true, optional = true }
 rustls = { workspace = true }
 rustls-native-certs = { workspace = true }
 rustls-pemfile = { workspace = true }

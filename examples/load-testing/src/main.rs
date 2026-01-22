@@ -23,7 +23,6 @@ use crate::messages::{ExecutionReport, NewOrderSingle, OutboundMsg};
 enum Database {
     Memory,
     File,
-    Redb,
 }
 
 #[derive(Parser, Debug)]
@@ -102,11 +101,6 @@ async fn start_session(
         }
         Database::File => {
             let store = hotfix::store::file::FileStore::new("data", "load-testing-store")
-                .expect("be able to create store");
-            Initiator::start(session_config, app, store).await
-        }
-        Database::Redb => {
-            let store = hotfix::store::redb::RedbMessageStore::new("perf-session.db")
                 .expect("be able to create store");
             Initiator::start(session_config, app, store).await
         }

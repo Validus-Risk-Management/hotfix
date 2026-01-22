@@ -346,14 +346,6 @@ async fn create_test_store_factories() -> Vec<Box<dyn TestStoreFactory>> {
         Box::new(FileStoreTestFactory::new()) as Box<dyn TestStoreFactory>,
     ];
 
-    // Add redb store factory if the feature is enabled
-    #[cfg(feature = "redb")]
-    {
-        stores.push(
-            Box::new(redb_test_utils::RedbTestStoreFactory::new()) as Box<dyn TestStoreFactory>
-        );
-    }
-
     #[cfg(feature = "mongodb")]
     {
         stores.push(
@@ -404,43 +396,6 @@ impl Drop for FileStoreTestFactory {
         let base_path = self.directory.join(&self.name);
         for ext in ["header", "body", "seqnums", "session"] {
             let _ = fs::remove_file(base_path.with_extension(ext));
-        }
-    }
-}
-
-#[cfg(feature = "redb")]
-mod redb_test_utils {
-    use super::*;
-    use hotfix::store::MessageStore;
-    use hotfix::store::redb::RedbMessageStore;
-    use std::path::PathBuf;
-    use std::{env, fs};
-
-    pub(crate) struct RedbTestStoreFactory {
-        db_path: PathBuf,
-    }
-
-    impl RedbTestStoreFactory {
-        pub(crate) fn new() -> Self {
-            let mut temp_path = env::temp_dir();
-            temp_path.push(format!("redb_test_{}", uuid::Uuid::new_v4()));
-            temp_path.set_extension("db");
-
-            Self { db_path: temp_path }
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl TestStoreFactory for RedbTestStoreFactory {
-        async fn create_store(&self) -> Box<dyn MessageStore> {
-            Box::new(RedbMessageStore::new(&self.db_path).expect("Failed to create store"))
-        }
-    }
-
-    impl Drop for RedbTestStoreFactory {
-        fn drop(&mut self) {
-            // Clean up the database file when the test store is dropped
-            let _ = fs::remove_file(&self.db_path);
         }
     }
 }
