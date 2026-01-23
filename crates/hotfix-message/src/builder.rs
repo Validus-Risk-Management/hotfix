@@ -1,3 +1,7 @@
+#![deny(clippy::expect_used)]
+#![deny(clippy::panic)]
+#![deny(clippy::unwrap_used)]
+
 use crate::Part;
 use crate::error::{MessageIntegrityError, ParserError, ParserResult};
 use crate::field_map::Field;
@@ -65,7 +69,8 @@ impl MessageBuilder {
             }
         };
 
-        let msg_type = header.get::<&str>(MSG_TYPE).unwrap(); // we know this is valid at this point as we have already verified the integrity of the header
+        #[allow(clippy::expect_used)]
+        let msg_type = header.get::<&str>(MSG_TYPE).expect("we know this is valid at this point as we have already verified the integrity of the header");
         let (body, next) = match self.build_body(msg_type, &mut parser, next) {
             Ok((body, field)) => (body, field),
             Err(err) => {
@@ -173,9 +178,10 @@ impl MessageBuilder {
             } else {
                 // check the message type once all other header fields have been parsed
                 // we delay it until after parsing so our rejection has access to fields like the sequence number
+                #[allow(clippy::expect_used)]
                 let msg_type = header
                     .get::<&str>(MSG_TYPE)
-                    .expect("this should never fail as we've verified the integrity of the header");
+                    .expect("this never fails as we've verified the integrity of the header");
                 if self.dict.message_by_msgtype(msg_type).is_none() {
                     return Err(ParserError::InvalidMsgType(msg_type.to_string()));
                 }
@@ -196,12 +202,12 @@ impl MessageBuilder {
         let mut field = next_field;
 
         while message_def.contains_tag(field.tag) {
-            let tag = field.tag.get();
+            let tag = field.tag;
             body.store_field(field);
 
             // check if it's the start of a group and parse the group as needed
-            let field_def = self.get_dict_field_by_tag(tag)?;
-            match message_def.get_group(TagU32::new(tag).unwrap()) {
+            let field_def = self.get_dict_field_by_tag(tag.get())?;
+            match message_def.get_group(tag) {
                 Some(group_def) => {
                     let (groups, next) = Self::parse_groups(parser, group_def, field_def.tag())?;
                     body.set_groups(groups);
@@ -424,6 +430,7 @@ impl GroupSpecification {
     }
 
     pub fn delimiter_tag(&self) -> TagU32 {
+        #[allow(clippy::expect_used)]
         self.fields
             .first()
             .expect("groups always have at least one field")
@@ -471,10 +478,7 @@ fn build_message_specifications(
             groups.extend(extract_groups(dict, item)?);
         }
 
-        let message_def = MessageSpecification {
-            fields,
-            groups,
-        };
+        let message_def = MessageSpecification { fields, groups };
         definitions.insert(message.msg_type().to_string(), message_def);
     }
 
