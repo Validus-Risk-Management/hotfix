@@ -6,7 +6,6 @@ use crate::message::{Config, Message};
 use crate::parsed_message::{GarbledReason, InvalidReason, ParsedMessage};
 use crate::parts::{Body, Header, RepeatingGroup, Trailer};
 use crate::tags::{BEGIN_STRING, BODY_LENGTH, CHECK_SUM, MSG_TYPE};
-use anyhow::anyhow;
 use hotfix_dictionary::{Dictionary, LayoutItem, LayoutItemKind, TagU32};
 use std::collections::{HashMap, HashSet};
 
@@ -316,11 +315,11 @@ impl MessageBuilder {
     fn get_tags_for_component(
         dict: &Dictionary,
         component_name: &str,
-    ) -> anyhow::Result<HashSet<TagU32>> {
+    ) -> ParserResult<HashSet<TagU32>> {
         let mut tags = HashSet::new();
         let component = dict
             .component_by_name(component_name)
-            .ok_or(ParserError::InvalidComponent(component_name.to_string()))?;
+            .ok_or_else(|| ParserError::InvalidComponent(component_name.to_string()))?;
         for item in component.items() {
             if let LayoutItemKind::Field(field) = item.kind() {
                 tags.insert(field.tag());
@@ -457,7 +456,7 @@ impl MessageSpecification {
 
 fn build_message_specifications(
     dict: &Dictionary,
-) -> anyhow::Result<HashMap<String, MessageSpecification>> {
+) -> ParserResult<HashMap<String, MessageSpecification>> {
     let mut definitions = HashMap::new();
 
     for message in dict.messages() {
@@ -467,12 +466,14 @@ fn build_message_specifications(
             .flatten()
             .collect();
 
+        let mut groups = HashMap::new();
+        for item in message.layout() {
+            groups.extend(extract_groups(dict, item)?);
+        }
+
         let message_def = MessageSpecification {
             fields,
-            groups: message.layout().fold(HashMap::new(), |mut acc, item| {
-                acc.extend(extract_groups(dict, item).unwrap());
-                acc
-            }),
+            groups,
         };
         definitions.insert(message.msg_type().to_string(), message_def);
     }
@@ -480,13 +481,13 @@ fn build_message_specifications(
     Ok(definitions)
 }
 
-fn extract_fields(dict: &Dictionary, item: LayoutItem) -> anyhow::Result<Vec<FieldSpecification>> {
+fn extract_fields(dict: &Dictionary, item: LayoutItem) -> ParserResult<Vec<FieldSpecification>> {
     let is_required = item.required();
     let fields = match item.kind() {
         LayoutItemKind::Component(c) => {
             let component = dict
                 .component_by_name(c.name())
-                .ok_or_else(|| anyhow!("missing component"))?;
+                .ok_or_else(|| ParserError::InvalidComponent(c.name().to_string()))?;
             component
                 .items()
                 .flat_map(|i| extract_fields(dict, i))
@@ -509,18 +510,22 @@ fn extract_fields(dict: &Dictionary, item: LayoutItem) -> anyhow::Result<Vec<Fie
 fn extract_groups(
     dict: &Dictionary,
     item: LayoutItem,
-) -> anyhow::Result<HashMap<TagU32, GroupSpecification>> {
+) -> ParserResult<HashMap<TagU32, GroupSpecification>> {
     let mut groups = HashMap::new();
     match item.kind() {
         LayoutItemKind::Component(c) => {
             let component = dict
                 .component_by_name(c.name())
-                .ok_or_else(|| anyhow!("missing component"))?;
-            component.items().for_each(|i| {
-                groups.extend(extract_groups(dict, i).unwrap());
-            })
+                .ok_or_else(|| ParserError::InvalidComponent(c.name().to_string()))?;
+            for i in component.items() {
+                groups.extend(extract_groups(dict, i)?);
+            }
         }
         LayoutItemKind::Group(field, items) => {
+            let mut nested_groups = HashMap::new();
+            for i in items.iter() {
+                nested_groups.extend(extract_groups(dict, i.clone())?);
+            }
             groups.insert(
                 field.tag(),
                 GroupSpecification {
@@ -530,10 +535,7 @@ fn extract_groups(
                         .flat_map(|i| extract_fields(dict, i.clone()))
                         .flatten()
                         .collect(),
-                    nested_groups: items.iter().fold(HashMap::new(), |mut acc, i| {
-                        acc.extend(extract_groups(dict, i.clone()).unwrap());
-                        acc
-                    }),
+                    nested_groups,
                 },
             );
         }
