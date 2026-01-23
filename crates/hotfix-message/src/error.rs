@@ -1,3 +1,5 @@
+use hotfix_dictionary::TagU32;
+use std::collections::HashSet;
 use std::io;
 use thiserror::Error;
 
@@ -42,4 +44,12 @@ pub(crate) enum MessageIntegrityError {
     InvalidMsgType,
     #[error("Invalid CheckSum")]
     InvalidCheckSum,
+}
+
+#[derive(Error, Debug)]
+pub enum SetGroupsError {
+    #[error("Supplied empty vector of groups")]
+    EmptyGroups,
+    #[error("Supplied groups contain multiple start tags")]
+    MultipleStartTagsAndDelimiters(HashSet<(TagU32, TagU32)>),
 }

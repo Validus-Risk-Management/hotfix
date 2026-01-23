@@ -48,7 +48,7 @@ impl OutboundMessage for OutboundMsg {
                 let mut allocation = RepeatingGroup::new(fix44::NO_ALLOCS, fix44::ALLOC_ACCOUNT);
                 allocation.set(fix44::ALLOC_ACCOUNT, order.allocation_account.as_str());
                 allocation.set(fix44::ALLOC_QTY, order.allocation_quantity);
-                msg.set_groups(vec![allocation]);
+                msg.set_groups(vec![allocation]).unwrap();
             }
         }
     }

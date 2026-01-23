@@ -1,7 +1,3 @@
-#![deny(clippy::expect_used)]
-#![deny(clippy::panic)]
-#![deny(clippy::unwrap_used)]
-
 use crate::Part;
 use crate::error::{MessageIntegrityError, ParserError, ParserResult};
 use crate::field_map::Field;
@@ -210,7 +206,9 @@ impl MessageBuilder {
             match message_def.get_group(tag) {
                 Some(group_def) => {
                     let (groups, next) = Self::parse_groups(parser, group_def, field_def.tag())?;
-                    body.set_groups(groups);
+                    #[allow(clippy::expect_used)]
+                    body.set_groups(groups)
+                        .expect("groups are guaranteed to be valid at this point");
                     field = next;
                 }
                 None => {
@@ -264,7 +262,10 @@ impl MessageBuilder {
                     {
                         let (groups, next) =
                             Self::parse_groups(parser, nested_group_def, current_tag)?;
-                        group.set_groups(groups);
+                        #[allow(clippy::expect_used)]
+                        group
+                            .set_groups(groups)
+                            .expect("groups are guaranteed to be valid at this point");
                         next
                     } else {
                         parser

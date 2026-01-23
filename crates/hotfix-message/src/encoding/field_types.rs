@@ -115,8 +115,12 @@ where
 {
     let serialized = item.to_bytes();
     let bytes = &serialized[..];
-    let deserialized = T::deserialize(bytes).ok().unwrap();
-    let deserialized_lossy = T::deserialize_lossy(bytes).ok().unwrap();
+    let Some(deserialized) = T::deserialize(bytes).ok() else {
+        return false;
+    };
+    let Some(deserialized_lossy) = T::deserialize_lossy(bytes).ok() else {
+        return false;
+    };
     deserialized == item && deserialized_lossy == item
 }
 

@@ -18,7 +18,7 @@ impl Default for WithMilliseconds {
 }
 
 #[cfg_attr(doc_cfg, doc(cfg(feature = "utils-chrono")))]
-impl<'a> FieldType<'a> for chrono::NaiveDateTime {
+impl<'a> FieldType<'a> for NaiveDateTime {
     type Error = &'static str;
     type SerializeSettings = WithMilliseconds;
 
@@ -38,8 +38,7 @@ impl<'a> FieldType<'a> for chrono::NaiveDateTime {
         }
 
         let date = chrono::NaiveDate::deserialize(&data[..8])?;
-        let hyphen = <&[u8]>::deserialize(&data[8..9]).unwrap();
-        if hyphen != b"-" {
+        if data[8] != b'-' {
             return Err("Hyphen in datetime not found.");
         }
         let time = chrono::NaiveTime::deserialize(&data[9..])?;
@@ -59,14 +58,13 @@ impl<'a> FieldType<'a> for chrono::NaiveDate {
         B: Buffer,
     {
         use chrono::Datelike;
-        write!(
+        let _ = write!(
             BufferWriter(buffer),
             "{:04}{:02}{:02}",
             self.year(),
             self.month(),
             self.day(),
-        )
-        .unwrap();
+        );
         8
     }
 
@@ -90,21 +88,19 @@ impl<'a> FieldType<'a> for chrono::NaiveTime {
     where
         B: Buffer,
     {
-        write!(
+        let _ = write!(
             BufferWriter(buffer),
             "{:02}:{:02}:{:02}",
             self.hour(),
             self.minute(),
             self.second()
-        )
-        .unwrap();
+        );
         if with_millis {
-            write!(
+            let _ = write!(
                 BufferWriter(buffer),
                 ".{:03}",
                 self.nanosecond() / 1_000_000
-            )
-            .unwrap();
+            );
             12
         } else {
             8

@@ -1,6 +1,8 @@
+use hotfix_dictionary::IsFieldDefinition;
+
 use crate::field_map::FieldMap;
 use crate::parts::Part;
-use hotfix_dictionary::TagU32;
+use crate::session_fields;
 
 #[derive(Default)]
 pub struct Header {
@@ -17,7 +19,12 @@ impl Part for Header {
     }
 
     fn calculate_length(&self) -> usize {
-        let skip = vec![TagU32::new(8).unwrap(), TagU32::new(9).unwrap()];
+        // when calculating the trailer's contribution to the message length,
+        // the BeginString and BodyLength fields are not to be counted
+        let skip = vec![
+            session_fields::BEGIN_STRING.tag(),
+            session_fields::BODY_LENGTH.tag(),
+        ];
         self.fields.calculate_length(&skip)
     }
 }

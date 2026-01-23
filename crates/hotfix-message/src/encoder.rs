@@ -138,14 +138,14 @@ mod tests {
         ));
         subparty_2.store_field(Field::new(fix44::PARTY_SUB_ID_TYPE.tag(), b"2".to_vec()));
 
-        party_1.set_groups(vec![subparty_1, subparty_2]);
+        party_1.set_groups(vec![subparty_1, subparty_2])?;
 
         let mut party_2 = RepeatingGroup::new(fix44::NO_PARTY_I_DS, fix44::PARTY_ID);
         party_2.store_field(Field::new(fix44::PARTY_ID.tag(), b"PARTY_B".to_vec()));
         party_2.store_field(Field::new(fix44::PARTY_ID_SOURCE.tag(), b"D".to_vec()));
         party_2.store_field(Field::new(fix44::PARTY_ROLE.tag(), b"2".to_vec()));
 
-        msg.body.set_groups(vec![party_1, party_2]);
+        msg.body.set_groups(vec![party_1, party_2])?;
         let config = Config { separator: b'|' };
         let raw_message = msg.encode(&config)?;
 

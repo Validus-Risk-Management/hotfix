@@ -9,13 +9,13 @@ mod trailer;
 use hotfix_dictionary::{IsFieldDefinition, TagU32};
 
 use crate::encoding::FieldValueError;
+use crate::error::SetGroupsError;
 use crate::{FieldType, HardCodedFixFieldDefinition};
 pub(crate) use body::Body;
 pub(crate) use header::Header;
 pub use repeating_group::RepeatingGroup;
 pub(crate) use trailer::Trailer;
 
-// TODO: what a rubbish name.. but can't think of anything better that's not overloaded with fefix names
 pub trait Part {
     fn get_field_map(&self) -> &FieldMap;
     fn get_field_map_mut(&mut self) -> &mut FieldMap;
@@ -24,9 +24,7 @@ pub trait Part {
     where
         V: FieldType<'a>,
     {
-        let tag = TagU32::new(field_definition.tag).unwrap();
-        let field = Field::new(tag, value.to_bytes());
-
+        let field = Field::new(field_definition.tag(), value.to_bytes());
         self.store_field(field);
     }
 
@@ -58,14 +56,21 @@ pub trait Part {
         self.get_field_map_mut().fields.shift_remove(&field.tag())
     }
 
-    fn set_groups(&mut self, groups: Vec<RepeatingGroup>) {
+    fn set_groups(&mut self, groups: Vec<RepeatingGroup>) -> Result<(), SetGroupsError> {
         let tags: HashSet<(TagU32, TagU32)> = groups
             .iter()
             .map(|g| (g.start_tag, g.delimiter_tag))
             .collect();
-        assert_eq!(tags.len(), 1);
-        let (start_tag, _) = tags.into_iter().next().unwrap();
-        self.get_field_map_mut().set_groups(start_tag, groups);
+        let (start_tag, _) = &tags
+            .iter()
+            .next()
+            .ok_or_else(|| SetGroupsError::EmptyGroups)?;
+        if tags.len() > 1 {
+            return Err(SetGroupsError::MultipleStartTagsAndDelimiters(tags));
+        }
+        self.get_field_map_mut().set_groups(*start_tag, groups);
+
+        Ok(())
     }
 
     fn get_group(&self, start_tag: TagU32, index: usize) -> Option<&RepeatingGroup> {

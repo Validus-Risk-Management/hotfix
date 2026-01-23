@@ -1,6 +1,7 @@
 use crate::field_map::FieldMap;
 use crate::parts::Part;
-use hotfix_dictionary::TagU32;
+use crate::session_fields;
+use hotfix_dictionary::IsFieldDefinition;
 
 #[derive(Default)]
 pub struct Trailer {
@@ -17,7 +18,9 @@ impl Part for Trailer {
     }
 
     fn calculate_length(&self) -> usize {
-        let skip = vec![TagU32::new(10).unwrap()];
+        // when calculating the trailer's contribution to the message length,
+        // the checksum itself must be skipped to avoid a circular dependency
+        let skip = vec![session_fields::CHECK_SUM.tag()];
         self.fields.calculate_length(&skip)
     }
 }

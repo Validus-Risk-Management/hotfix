@@ -14,7 +14,7 @@ impl<'a> FieldType<'a> for TagU32 {
         B: Buffer,
     {
         let initial_len = buffer.len();
-        write!(BufferWriter(buffer), "{self}").unwrap();
+        let _ = write!(BufferWriter(buffer), "{self}");
         buffer.len() - initial_len
     }
 
@@ -29,6 +29,7 @@ impl<'a> FieldType<'a> for TagU32 {
     #[inline]
     fn deserialize_lossy(data: &'a [u8]) -> Result<Self, Self::Error> {
         let n = u32::deserialize_lossy(data)?;
-        Ok(TagU32::new(n.max(1)).unwrap())
+        #[allow(clippy::expect_used)]
+        Ok(TagU32::new(n.max(1)).expect("guaranteed to be non-zero"))
     }
 }

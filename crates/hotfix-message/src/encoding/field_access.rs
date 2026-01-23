@@ -88,6 +88,7 @@ where
     /// valid UTF-8. As such, you should only *ever* use this function for
     /// [`FieldType`] implementors that are guaranteed to be representable with
     /// valid UTF-8 (like numbers with ASCII digits).
+    #[allow(clippy::expect_used)]
     fn to_string(&self) -> String {
         String::from_utf8(self.to_bytes()).expect("Invalid UTF-8 representation of FIX field.")
     }

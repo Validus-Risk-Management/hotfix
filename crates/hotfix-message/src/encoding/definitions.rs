@@ -23,6 +23,7 @@ pub struct HardCodedFixFieldDefinition {
 impl dict::IsFieldDefinition for HardCodedFixFieldDefinition {
     #[inline]
     fn tag(&self) -> TagU32 {
+        #[allow(clippy::expect_used)]
         TagU32::new(self.tag).expect("Invalid tag number 0.")
     }
 

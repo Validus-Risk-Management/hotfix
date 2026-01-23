@@ -25,18 +25,20 @@ impl Timestamp {
     }
 
     /// Returns the current UTC system time with millisecond precision.
+    #[allow(clippy::expect_used)]
     pub fn utc_now() -> Self {
         use chrono::{Datelike, Timelike};
         let utc: chrono::DateTime<chrono::Utc> = chrono::Utc::now();
-        let date = Date::new(utc.year() as u32, utc.month(), utc.day());
+        let date = Date::new(utc.year() as u32, utc.month(), utc.day())
+            .expect("chrono::Utc::now() always produces a valid date");
         let time = Time::from_hmsm(
             utc.hour(),
             utc.minute(),
             utc.second(),
             utc.nanosecond() / 1_000_000,
         )
-        .unwrap();
-        Self::new(date.unwrap(), time)
+        .expect("chrono::Utc::now() always produces a valid time");
+        Self::new(date, time)
     }
 
     /// Returns the date of `self`.

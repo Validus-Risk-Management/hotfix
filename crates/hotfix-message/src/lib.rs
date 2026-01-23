@@ -1,3 +1,7 @@
+#![deny(clippy::expect_used)]
+#![deny(clippy::panic)]
+#![deny(clippy::unwrap_used)]
+
 mod builder;
 mod encoder;
 mod encoding;
