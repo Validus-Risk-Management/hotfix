@@ -31,7 +31,7 @@ pub struct MessageBuilder {
 }
 
 impl MessageBuilder {
-    pub fn new(dict: Dictionary, config: Config) -> anyhow::Result<Self> {
+    pub fn new(dict: Dictionary, config: Config) -> ParserResult<Self> {
         let header_tags = Self::get_tags_for_component(&dict, "StandardHeader")?;
         let trailer_tags = Self::get_tags_for_component(&dict, "StandardTrailer")?;
         let message_definitions = build_message_specifications(&dict)?;
