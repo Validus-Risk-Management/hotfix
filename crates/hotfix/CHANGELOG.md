@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.5.0...hotfix-v0.5.1) - 2026-01-23
+
+### Added
+
+- replace anyhow with proper error variants in message stores ([#279](https://github.com/Validus-Risk-Management/hotfix/pull/279))
+
 ## [0.5.0](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.4.3...hotfix-v0.5.0) - 2026-01-21
 
 ### Added
