@@ -1,5 +1,6 @@
 #![cfg(feature = "mongodb")]
 
+use chrono::Duration;
 use hotfix::store::mongodb::{Client, MongoDbMessageStore};
 use hotfix::store::{MessageStore, StoreError};
 use testcontainers::runners::AsyncRunner;
@@ -113,4 +114,78 @@ async fn test_state_preserved_after_failed_set_target() {
 
     // State should be unchanged
     assert_eq!(store.next_target_seq_number(), initial_target_seq);
+}
+
+#[tokio::test]
+async fn test_cleanup_removes_old_sequences() {
+    let (container, mut store) = create_dedicated_container_and_store().await;
+
+    // Add a message to the initial sequence
+    store.add(1, b"message in sequence 1").await.unwrap();
+
+    // Reset creates a new sequence, making the first one "old"
+    store.reset().await.unwrap();
+    store.add(1, b"message in sequence 2").await.unwrap();
+
+    // Reset again to have two old sequences
+    store.reset().await.unwrap();
+    store.add(1, b"message in sequence 3").await.unwrap();
+
+    // Small delay to ensure old sequences have earlier timestamps than the cutoff
+    tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+
+    // Cleanup with zero duration should delete all old sequences
+    let deleted = store.cleanup_older_than(Duration::zero()).await.unwrap();
+
+    assert_eq!(deleted, 2);
+
+    drop(container);
+}
+
+#[tokio::test]
+async fn test_cleanup_preserves_current_sequence() {
+    let (container, mut store) = create_dedicated_container_and_store().await;
+
+    // Add messages to current sequence
+    store.add(1, b"message 1").await.unwrap();
+    store.add(2, b"message 2").await.unwrap();
+
+    // Cleanup with zero duration - current sequence should be preserved
+    let deleted = store.cleanup_older_than(Duration::zero()).await.unwrap();
+
+    assert_eq!(deleted, 0);
+
+    // Verify messages are still accessible
+    let messages = store.get_slice(1, 2).await.unwrap();
+    assert_eq!(messages.len(), 2);
+
+    drop(container);
+}
+
+#[tokio::test]
+async fn test_cleanup_respects_age_threshold() {
+    let (container, mut store) = create_dedicated_container_and_store().await;
+
+    // Create an old sequence
+    store.reset().await.unwrap();
+
+    // Cleanup with a large duration should not delete anything
+    let deleted = store.cleanup_older_than(Duration::days(365)).await.unwrap();
+
+    assert_eq!(deleted, 0);
+
+    drop(container);
+}
+
+#[tokio::test]
+async fn test_cleanup_after_connection_drop() {
+    let (container, store) = create_dedicated_container_and_store().await;
+
+    // Stop the container
+    container.stop().await.unwrap();
+
+    // Attempt cleanup - should fail
+    let result = store.cleanup_older_than(Duration::zero()).await;
+
+    assert!(matches!(result, Err(StoreError::Cleanup(_))));
 }
