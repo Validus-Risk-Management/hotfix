@@ -1,10 +1,10 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use futures::TryStreamExt;
-use mongodb::bson::Binary;
 use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::spec::BinarySubtype;
+use mongodb::bson::{Binary, DateTime as BsonDateTime};
 use mongodb::options::{FindOneOptions, IndexOptions, ReplaceOptions};
 use mongodb::{Collection, Database, IndexModel};
 use serde::{Deserialize, Serialize};
@@ -99,6 +99,53 @@ impl MongoDbMessageStore {
         meta_collection.insert_one(&initial_meta).await?;
 
         Ok(initial_meta)
+    }
+
+    /// Deletes sequences older than the specified age, along with their associated messages.
+    ///
+    /// Returns the number of deleted sequences.
+    pub async fn cleanup_older_than(&self, age: Duration) -> Result<u64> {
+        let cutoff = BsonDateTime::from_millis((Utc::now() - age).timestamp_millis());
+
+        // Find old sequence IDs (excluding current sequence)
+        let filter = doc! {
+            "meta": true,
+            "creation_time": { "$lt": cutoff },
+            "_id": { "$ne": self.current_sequence.object_id }
+        };
+        let mut cursor = self
+            .meta_collection
+            .find(filter)
+            .await
+            .map_err(|e| StoreError::Cleanup(e.into()))?;
+
+        let mut old_sequence_ids = Vec::new();
+        while let Some(meta) = cursor
+            .try_next()
+            .await
+            .map_err(|e| StoreError::Cleanup(e.into()))?
+        {
+            old_sequence_ids.push(meta.object_id);
+        }
+
+        if old_sequence_ids.is_empty() {
+            return Ok(0);
+        }
+
+        // Delete messages first to avoid orphaned meta documents
+        self.message_collection
+            .delete_many(doc! { "sequence_id": { "$in": &old_sequence_ids } })
+            .await
+            .map_err(|e| StoreError::Cleanup(e.into()))?;
+
+        // Delete sequence metas
+        let result = self
+            .meta_collection
+            .delete_many(doc! { "_id": { "$in": &old_sequence_ids } })
+            .await
+            .map_err(|e| StoreError::Cleanup(e.into()))?;
+
+        Ok(result.deleted_count)
     }
 }
 

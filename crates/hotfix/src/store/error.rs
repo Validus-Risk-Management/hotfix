@@ -32,6 +32,10 @@ pub enum StoreError {
     /// Failed to reset the store.
     #[error("failed to reset store")]
     Reset(#[source] BoxError),
+
+    /// Failed to cleanup old sequences.
+    #[error("failed to cleanup old sequences")]
+    Cleanup(#[source] BoxError),
 }
 
 /// A specialized Result type for store operations.
