@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-message-v0.2.8...hotfix-message-v0.3.0) - 2026-01-27
+
+### Other
+
+- remove anyhow from hotfix-message crate ([#285](https://github.com/Validus-Risk-Management/hotfix/pull/285))
+
 ## [0.2.8](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-message-v0.2.7...hotfix-message-v0.2.8) - 2026-01-20
 
 ### Other

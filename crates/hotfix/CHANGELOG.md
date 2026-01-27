@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.5.1...hotfix-v0.6.0) - 2026-01-27
+
+### Added
+
+- add helper function to delete old sequences in MongoDB store ([#286](https://github.com/Validus-Risk-Management/hotfix/pull/286))
+
+### Other
+
+- remove anyhow from hotfix-message crate ([#285](https://github.com/Validus-Risk-Management/hotfix/pull/285))
+
 ## [0.5.1](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.5.0...hotfix-v0.5.1) - 2026-01-23
 
 ### Added
