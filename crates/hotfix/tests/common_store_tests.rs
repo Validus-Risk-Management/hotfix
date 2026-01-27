@@ -312,12 +312,13 @@ async fn test_creation_time_gets_reset_correctly() {
     for factory in create_test_store_factories().await {
         let mut store = factory.create_store().await;
 
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
         let after_sleep = Utc::now();
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
 
         store.reset().await.expect("failed to reset store");
         let reset_creation_time = store.creation_time();
-        assert!(reset_creation_time >= after_sleep);
+        assert!(reset_creation_time > after_sleep);
 
         if !factory.is_persistent() {
             continue;

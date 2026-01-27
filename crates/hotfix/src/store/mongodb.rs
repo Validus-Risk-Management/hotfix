@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, TimeZone, Utc};
 use futures::TryStreamExt;
 use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
@@ -18,7 +18,7 @@ struct SequenceMeta {
     #[serde(rename = "_id")]
     object_id: ObjectId,
     meta: bool,
-    creation_time: DateTime<Utc>,
+    creation_time: BsonDateTime,
     sender_seq_number: u64,
     target_seq_number: u64,
 }
@@ -92,7 +92,7 @@ impl MongoDbMessageStore {
         let initial_meta = SequenceMeta {
             object_id: sequence_id,
             meta: true,
-            creation_time: Utc::now(),
+            creation_time: BsonDateTime::now(),
             sender_seq_number: 0,
             target_seq_number: 0,
         };
@@ -262,6 +262,9 @@ impl MessageStore for MongoDbMessageStore {
     }
 
     fn creation_time(&self) -> DateTime<Utc> {
-        self.current_sequence.creation_time
+        #[allow(clippy::expect_used)]
+        Utc.timestamp_millis_opt(self.current_sequence.creation_time.timestamp_millis())
+            .single()
+            .expect("BsonDateTime is guaranteed to store valid timestamp")
     }
 }

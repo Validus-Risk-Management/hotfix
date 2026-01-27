@@ -132,7 +132,7 @@ async fn test_cleanup_removes_old_sequences() {
     store.add(1, b"message in sequence 3").await.unwrap();
 
     // Small delay to ensure old sequences have earlier timestamps than the cutoff
-    tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
 
     // Cleanup with zero duration should delete all old sequences
     let deleted = store.cleanup_older_than(Duration::zero()).await.unwrap();
