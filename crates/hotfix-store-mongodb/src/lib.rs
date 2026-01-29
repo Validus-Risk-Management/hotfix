@@ -1,3 +1,18 @@
+//! MongoDB message store implementation for the hotfix FIX engine.
+//!
+//! This crate provides [`MongoDbMessageStore`], a persistent message store
+//! backed by MongoDB.
+//!
+//! # Example
+//!
+//! ```ignore
+//! use hotfix_store_mongodb::{Client, MongoDbMessageStore};
+//!
+//! let client = Client::with_uri_str("mongodb://localhost:27017").await?;
+//! let db = client.database("myapp");
+//! let store = MongoDbMessageStore::new(db, Some("fix_messages")).await?;
+//! ```
+
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use futures::TryStreamExt;
@@ -9,9 +24,10 @@ use mongodb::options::{FindOneOptions, IndexOptions, ReplaceOptions};
 use mongodb::{Collection, Database, IndexModel};
 use serde::{Deserialize, Serialize};
 
-pub use mongodb::Client;
+use hotfix_store::MessageStore;
+use hotfix_store::error::{Result, StoreError};
 
-use crate::store::{MessageStore, Result, StoreError};
+pub use mongodb::Client;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct SequenceMeta {
@@ -30,6 +46,10 @@ struct Message {
     data: Binary,
 }
 
+/// A MongoDB-backed message store implementation.
+///
+/// This store persists messages and sequence numbers to MongoDB,
+/// allowing session state to survive application restarts.
 pub struct MongoDbMessageStore {
     meta_collection: Collection<SequenceMeta>,
     message_collection: Collection<Message>,
@@ -37,7 +57,26 @@ pub struct MongoDbMessageStore {
 }
 
 impl MongoDbMessageStore {
-    pub async fn new(db: Database, collection_name: Option<&str>) -> anyhow::Result<Self> {
+    /// Creates a new MongoDB message store.
+    ///
+    /// # Arguments
+    ///
+    /// * `db` - The MongoDB database to use
+    /// * `collection_name` - Optional collection name (defaults to "messages")
+    ///
+    /// # Errors
+    ///
+    /// Returns `StoreError::Initialization` if the store cannot be initialized.
+    pub async fn new(db: Database, collection_name: Option<&str>) -> Result<Self> {
+        Self::new_inner(db, collection_name)
+            .await
+            .map_err(|e| StoreError::Initialization(e.into()))
+    }
+
+    async fn new_inner(
+        db: Database,
+        collection_name: Option<&str>,
+    ) -> mongodb::error::Result<Self> {
         let collection_name = collection_name.unwrap_or("messages");
         let meta_collection = db.collection(collection_name);
         let message_collection = db.collection(collection_name);
@@ -53,7 +92,9 @@ impl MongoDbMessageStore {
         Ok(store)
     }
 
-    async fn ensure_indexes(meta_collection: &Collection<SequenceMeta>) -> anyhow::Result<()> {
+    async fn ensure_indexes(
+        meta_collection: &Collection<SequenceMeta>,
+    ) -> mongodb::error::Result<()> {
         let meta_index = IndexModel::builder()
             .keys(doc! { "meta": 1, "_id": -1 })
             .build();
@@ -71,7 +112,7 @@ impl MongoDbMessageStore {
 
     async fn get_or_default_sequence(
         meta_collection: &Collection<SequenceMeta>,
-    ) -> anyhow::Result<SequenceMeta> {
+    ) -> mongodb::error::Result<SequenceMeta> {
         let options = FindOneOptions::builder().sort(doc! { "_id": -1 }).build();
         let res = meta_collection
             .find_one(doc! { "meta": true })
@@ -87,7 +128,7 @@ impl MongoDbMessageStore {
 
     async fn new_sequence(
         meta_collection: &Collection<SequenceMeta>,
-    ) -> anyhow::Result<SequenceMeta> {
+    ) -> mongodb::error::Result<SequenceMeta> {
         let sequence_id = ObjectId::new();
         let initial_meta = SequenceMeta {
             object_id: sequence_id,
@@ -103,7 +144,20 @@ impl MongoDbMessageStore {
 
     /// Deletes sequences older than the specified age, along with their associated messages.
     ///
-    /// Returns the number of deleted sequences.
+    /// This method is useful for cleaning up old session data from MongoDB.
+    /// The current active sequence is never deleted, even if it matches the age criteria.
+    ///
+    /// # Arguments
+    ///
+    /// * `age` - The minimum age of sequences to delete
+    ///
+    /// # Returns
+    ///
+    /// The number of deleted sequences.
+    ///
+    /// # Errors
+    ///
+    /// Returns `StoreError::Cleanup` if the cleanup operation fails.
     pub async fn cleanup_older_than(&self, age: Duration) -> Result<u64> {
         let cutoff = BsonDateTime::from_millis((Utc::now() - age).timestamp_millis());
 

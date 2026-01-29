@@ -23,7 +23,7 @@ impl<Outbound: OutboundMessage> InternalSessionRef<Outbound> {
     pub fn new<Inbound: InboundMessage>(
         config: SessionConfig,
         application: impl Application<Inbound, Outbound>,
-        store: impl MessageStore + Send + Sync + 'static,
+        store: impl MessageStore + 'static,
     ) -> Result<Self> {
         let (event_sender, event_receiver) = mpsc::channel::<SessionEvent>(100);
         let (outbound_message_sender, outbound_message_receiver) = mpsc::channel::<Outbound>(10);

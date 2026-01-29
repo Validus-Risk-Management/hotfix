@@ -1,5 +1,7 @@
-use crate::store::{MessageStore, Result, StoreError};
-use anyhow::Context;
+//! A file-based message store for persistence.
+
+use crate::MessageStore;
+use crate::error::{Result, StoreError};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
@@ -33,8 +35,17 @@ pub struct FileStore {
 }
 
 impl FileStore {
-    pub fn new(directory: impl AsRef<Path>, name: &str) -> anyhow::Result<Self> {
-        let base_path = directory.as_ref().join(name);
+    /// Creates a new file store in the specified directory with the given name.
+    ///
+    /// # Errors
+    ///
+    /// Returns `StoreError::Initialization` if the store files cannot be created or read.
+    pub fn new(directory: impl AsRef<Path>, name: &str) -> Result<Self> {
+        Self::new_inner(directory.as_ref(), name).map_err(|e| StoreError::Initialization(e.into()))
+    }
+
+    fn new_inner(directory: &Path, name: &str) -> std::io::Result<Self> {
+        let base_path = directory.join(name);
         std::fs::create_dir_all(directory)?;
 
         let body_path = base_path.with_extension("body");
@@ -84,11 +95,16 @@ impl FileStore {
     /// Retrieves the session creation time from the session file.
     ///
     /// It initialises the session file if it doesn't exist.
-    fn get_or_create_session_time(base_path: &Path) -> anyhow::Result<DateTime<Utc>> {
+    fn get_or_create_session_time(base_path: &Path) -> std::io::Result<DateTime<Utc>> {
         let session_path = base_path.with_extension("session");
         let session_time = if session_path.exists() {
             let content = std::fs::read_to_string(&session_path)?;
-            content.trim().parse::<DateTime<Utc>>()?
+            content.trim().parse::<DateTime<Utc>>().map_err(|e| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("failed to parse session time: {e}"),
+                )
+            })?
         } else {
             let now = Utc::now();
             std::fs::write(&session_path, now.to_rfc3339())?;
@@ -101,11 +117,15 @@ impl FileStore {
     /// Retrieves the sequence numbers from the seqnums file.
     ///
     /// It defaults to `(0, 0)` if the file doesn't exist or if it's empty.
-    fn read_initial_seqnums(base_path: &Path) -> anyhow::Result<(u64, u64)> {
+    fn read_initial_seqnums(base_path: &Path) -> std::io::Result<(u64, u64)> {
         let seqnums_path = base_path.with_extension("seqnums");
         let (sender_seq_number, target_seq_number) = if seqnums_path.exists() {
-            let content =
-                std::fs::read_to_string(&seqnums_path).context("failed to read seqnums file")?;
+            let content = std::fs::read_to_string(&seqnums_path).map_err(|e| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("failed to read seqnums file: {e}"),
+                )
+            })?;
             if content.trim().is_empty() {
                 (0u64, 0u64)
             } else {
@@ -118,32 +138,41 @@ impl FileStore {
         Ok((sender_seq_number, target_seq_number))
     }
 
-    fn parse_seqnums(content: &str) -> anyhow::Result<(u64, u64)> {
+    fn parse_seqnums(content: &str) -> std::io::Result<(u64, u64)> {
         let parts: Vec<&str> = content.trim().split(':').map(|s| s.trim()).collect();
         if parts.len() != 2 {
-            anyhow::bail!("invalid seqnums format");
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "invalid seqnums format",
+            ));
         }
-        let sender = parts[0]
-            .parse::<u64>()
-            .context("failed to parse sender sequence number")?;
-        let target = parts[1]
-            .parse::<u64>()
-            .context("failed to parse target sequence number")?;
+        let sender = parts[0].parse::<u64>().map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("failed to parse sender sequence number: {e}"),
+            )
+        })?;
+        let target = parts[1].parse::<u64>().map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("failed to parse target sequence number: {e}"),
+            )
+        })?;
         Ok((sender, target))
     }
 
-    fn load_message_index(header_path: &Path) -> anyhow::Result<HashMap<u64, MessageDef>> {
+    fn load_message_index(header_path: &Path) -> std::io::Result<HashMap<u64, MessageDef>> {
         let mut index = HashMap::new();
 
         if !header_path.exists() {
             return Ok(index);
         }
 
-        let file = File::open(header_path).context("failed to open header file for reading")?;
+        let file = File::open(header_path)?;
         let reader = BufReader::new(file);
 
         for line in reader.lines() {
-            let line = line.context("failed to read header line")?;
+            let line = line?;
             let parts: Vec<&str> = line.trim().split(',').collect();
             if parts.len() != 3 {
                 continue;

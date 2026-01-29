@@ -1,8 +1,12 @@
-#![cfg(feature = "mongodb")]
+//! MongoDB-specific tests for MongoDbMessageStore.
+//!
+//! These tests cover MongoDB-specific functionality such as connection failure handling
+//! and the cleanup_older_than method.
 
 use chrono::Duration;
-use hotfix::store::mongodb::{Client, MongoDbMessageStore};
-use hotfix::store::{MessageStore, StoreError};
+use hotfix_store::MessageStore;
+use hotfix_store::error::StoreError;
+use hotfix_store_mongodb::{Client, MongoDbMessageStore};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, GenericImage};
 

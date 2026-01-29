@@ -30,7 +30,7 @@ impl<Outbound: OutboundMessage> Initiator<Outbound> {
     pub async fn start<Inbound: InboundMessage>(
         config: SessionConfig,
         application: impl Application<Inbound, Outbound>,
-        store: impl MessageStore + Send + Sync + 'static,
+        store: impl MessageStore + 'static,
     ) -> Result<Self> {
         let session_ref = InternalSessionRef::new(config.clone(), application, store)?;
         let (completion_tx, completion_rx) = watch::channel(false);

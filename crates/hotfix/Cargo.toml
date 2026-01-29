@@ -14,21 +14,22 @@ categories.workspace = true
 [features]
 default = ["test-utils"]
 fix44 = ["hotfix-message/fix44"]
-mongodb = ["dep:mongodb"]
-test-utils = []
+mongodb = ["dep:hotfix-store-mongodb"]
+test-utils = ["hotfix-store/test-utils"]
 
 [lints]
 workspace = true
 
 [dependencies]
 hotfix-message = { version = "0.3.0", path = "../hotfix-message", features = ["utils-chrono"] }
+hotfix-store = { version = "0.1.0", path = "../hotfix-store" }
+hotfix-store-mongodb = { version = "0.1.0", path = "../hotfix-store-mongodb", optional = true }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 chrono-tz = { workspace = true, features = ["serde"] }
 futures = { workspace = true }
-mongodb = { workspace = true, optional = true }
 rustls-pki-types = { workspace = true }
 rustls = { workspace = true }
 rustls-native-certs = { workspace = true }
@@ -48,5 +49,4 @@ hotfix-message = { version = "0.3.0", path = "../hotfix-message", features = ["f
 rcgen = "0.13"
 rustls = { workspace = true, features = ["ring"] }
 tempfile = "3"
-testcontainers = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }

@@ -1,0 +1,30 @@
+[package]
+name = "hotfix-store"
+description = "Message store traits and implementations for the HotFIX engine"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = []
+test-utils = ["dep:tokio"]
+
+[lints]
+workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"], optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
+uuid = { workspace = true, features = ["v4"] }
+tempfile = "3"

@@ -1,7 +1,13 @@
-use crate::store::{MessageStore, Result};
+//! An in-memory message store that loses its state on restart.
+
+use crate::{MessageStore, Result};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 
+/// An in-memory message store implementation.
+///
+/// This store keeps all messages in memory and does not persist them.
+/// Use this only for testing or when persistence is not required.
 #[derive(Debug)]
 pub struct InMemoryMessageStore {
     sender_seq_number: u64,

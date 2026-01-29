@@ -1,0 +1,29 @@
+[package]
+name = "hotfix-store-mongodb"
+description = "MongoDB message store implementation for the hotfix FIX engine"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+hotfix-store = { version = "0.1.0", path = "../hotfix-store" }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+mongodb = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+hotfix-store = { version = "0.1.0", path = "../hotfix-store", features = ["test-utils"] }
+testcontainers = { workspace = true }
+tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
+uuid = { workspace = true, features = ["v4"] }

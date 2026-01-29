@@ -1288,7 +1288,8 @@ dependencies = [
  "chrono-tz",
  "futures",
  "hotfix-message",
- "mongodb",
+ "hotfix-store",
+ "hotfix-store-mongodb",
  "rcgen",
  "rustls",
  "rustls-native-certs",
@@ -1296,7 +1297,6 @@ dependencies = [
  "rustls-pki-types",
  "serde",
  "tempfile",
- "testcontainers",
  "thiserror",
  "tokio",
  "tokio-rustls",
@@ -1371,6 +1371,33 @@ dependencies = [
  "quickcheck",
  "quickcheck_macros",
  "thiserror",
+]
+
+[[package]]
+name = "hotfix-store"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "hotfix-store-mongodb"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "futures",
+ "hotfix-store",
+ "mongodb",
+ "serde",
+ "testcontainers",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]

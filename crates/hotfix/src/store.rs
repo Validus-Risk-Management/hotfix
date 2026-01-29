@@ -1,34 +1,24 @@
-//! Implementations of in-memory and persistent message stores holding session state.
+//! Message store implementations (re-exported from hotfix-store).
 //!
 //! By default, only the [in_memory] store is included. Further message store implementations,
-//! such as `mongodb` and `redb` can be enabled through feature flags.
+//! such as `mongodb` can be enabled through feature flags.
 
 /// Error types for store operations.
-pub mod error;
+pub use hotfix_store::error;
 
 /// An in-memory message store that loses its state on restart. Only use this for testing.
-pub mod in_memory;
+pub use hotfix_store::in_memory;
+
+/// A file-based message store for persistence.
+pub use hotfix_store::file;
 
 #[cfg(feature = "mongodb")]
 /// A message store using MongoDB for persistence.
-pub mod mongodb;
+pub use hotfix_store_mongodb as mongodb;
 
-/// A file-based message store for persistence.
-pub mod file;
+#[cfg(feature = "test-utils")]
+/// Test utilities for message store implementations.
+pub use hotfix_store::test_utils;
 
-pub use error::*;
-
-use chrono::DateTime;
-
-#[async_trait::async_trait]
-pub trait MessageStore {
-    async fn add(&mut self, sequence_number: u64, message: &[u8]) -> Result<()>;
-    async fn get_slice(&self, begin: usize, end: usize) -> Result<Vec<Vec<u8>>>;
-    fn next_sender_seq_number(&self) -> u64;
-    fn next_target_seq_number(&self) -> u64;
-    async fn increment_sender_seq_number(&mut self) -> Result<()>;
-    async fn increment_target_seq_number(&mut self) -> Result<()>;
-    async fn set_target_seq_number(&mut self, seq_number: u64) -> Result<()>;
-    async fn reset(&mut self) -> Result<()>;
-    fn creation_time(&self) -> DateTime<chrono::Utc>;
-}
+pub use hotfix_store::error::*;
+pub use hotfix_store::{FileStore, InMemoryMessageStore, MessageStore};

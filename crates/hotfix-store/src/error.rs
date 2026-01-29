@@ -8,6 +8,10 @@ pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 /// Errors that can occur during message store operations.
 #[derive(Debug, Error)]
 pub enum StoreError {
+    /// Failed to initialize the store.
+    #[error("failed to initialize store: {0}")]
+    Initialization(#[source] BoxError),
+
     /// Failed to persist a message to the store.
     #[error("failed to persist message (seq_num: {sequence_number})")]
     PersistMessage {

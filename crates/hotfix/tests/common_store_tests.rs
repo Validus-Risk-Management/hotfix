@@ -1,3 +1,8 @@
+//! Common store tests for all MessageStore implementations.
+//!
+//! This test file uses the test harness from hotfix-store to test
+//! InMemoryMessageStore and FileStore implementations.
+
 use std::path::PathBuf;
 use std::{env, fs};
 
@@ -5,6 +10,7 @@ use chrono::Utc;
 use hotfix::store::MessageStore;
 use hotfix::store::file::FileStore;
 use hotfix::store::in_memory::InMemoryMessageStore;
+use hotfix::store::test_utils::TestStoreFactory;
 
 #[tokio::test]
 async fn test_new_store_initialization() {
@@ -330,32 +336,13 @@ async fn test_creation_time_gets_reset_correctly() {
     }
 }
 
-#[async_trait::async_trait]
-pub trait TestStoreFactory {
-    async fn create_store(&self) -> Box<dyn MessageStore>;
-    fn is_persistent(&self) -> bool {
-        true
-    }
-}
-
 async fn create_test_store_factories() -> Vec<Box<dyn TestStoreFactory>> {
-    #[allow(unused_mut)]
-    let mut stores: Vec<Box<dyn TestStoreFactory>> = vec![
+    vec![
         // Add in-memory store factory
         Box::new(InMemoryMessageStoreTestFactory {}) as Box<dyn TestStoreFactory>,
         // Add file store factory
         Box::new(FileStoreTestFactory::new()) as Box<dyn TestStoreFactory>,
-    ];
-
-    #[cfg(feature = "mongodb")]
-    {
-        stores.push(
-            Box::new(mongodb_test_utils::MongodbTestStoreFactory::new().await)
-                as Box<dyn TestStoreFactory>,
-        );
-    }
-
-    stores
+    ]
 }
 
 struct InMemoryMessageStoreTestFactory;
@@ -371,13 +358,13 @@ impl TestStoreFactory for InMemoryMessageStoreTestFactory {
     }
 }
 
-pub(crate) struct FileStoreTestFactory {
+struct FileStoreTestFactory {
     directory: PathBuf,
     name: String,
 }
 
 impl FileStoreTestFactory {
-    pub(crate) fn new() -> Self {
+    fn new() -> Self {
         Self {
             directory: env::temp_dir(),
             name: format!("file_store_test_{}", uuid::Uuid::new_v4()),
@@ -397,55 +384,6 @@ impl Drop for FileStoreTestFactory {
         let base_path = self.directory.join(&self.name);
         for ext in ["header", "body", "seqnums", "session"] {
             let _ = fs::remove_file(base_path.with_extension(ext));
-        }
-    }
-}
-
-#[cfg(feature = "mongodb")]
-mod mongodb_test_utils {
-    use crate::TestStoreFactory;
-    use hotfix::store::MessageStore;
-    use hotfix::store::mongodb::MongoDbMessageStore;
-    use mongodb::Client;
-    use testcontainers::runners::AsyncRunner;
-    use testcontainers::{ContainerAsync, GenericImage};
-    use tokio::sync::OnceCell;
-
-    static MONGO_CONTAINER: OnceCell<ContainerAsync<GenericImage>> = OnceCell::const_new();
-    const MONGO_PORT: u16 = 27017;
-
-    pub(crate) struct MongodbTestStoreFactory {
-        client: Client,
-        collection_name: String,
-    }
-
-    impl MongodbTestStoreFactory {
-        pub(crate) async fn new() -> Self {
-            let container = MONGO_CONTAINER.get_or_init(Self::init_container).await;
-            let host = container.get_host().await.unwrap();
-            let port = container.get_host_port_ipv4(MONGO_PORT).await.unwrap();
-            let uri = format!("mongodb://{host}:{port}");
-            let client = Client::with_uri_str(&uri).await.unwrap();
-
-            Self {
-                client,
-                collection_name: uuid::Uuid::new_v4().to_string(),
-            }
-        }
-
-        async fn init_container() -> ContainerAsync<GenericImage> {
-            GenericImage::new("mongo", "8.0").start().await.unwrap()
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl TestStoreFactory for MongodbTestStoreFactory {
-        async fn create_store(&self) -> Box<dyn MessageStore> {
-            let db = self.client.database("hotfixIntegrationTests");
-            let store = MongoDbMessageStore::new(db, Some(&self.collection_name))
-                .await
-                .unwrap();
-            Box::new(store)
         }
     }
 }
