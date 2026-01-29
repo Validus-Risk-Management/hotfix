@@ -326,23 +326,124 @@ pub async fn test_creation_time_gets_reset_correctly(factory: &dyn TestStoreFact
     assert_eq!(reset_creation_time, store.creation_time());
 }
 
-/// Runs all conformance tests for a message store implementation.
+/// Generates conformance tests for a message store implementation.
 ///
-/// This is a convenience function that runs all the standard tests
-/// for a given store factory.
-pub async fn run_all_conformance_tests(factory: &dyn TestStoreFactory) {
-    test_new_store_initialization(factory).await;
-    test_add_and_get_messages(factory).await;
-    test_get_slice_partial_range(factory).await;
-    test_get_slice_empty_range(factory).await;
-    test_increment_sender_seq_number(factory).await;
-    test_increment_target_seq_number(factory).await;
-    test_set_target_seq_number(factory).await;
-    test_reset_store(factory).await;
-    test_persistence_across_store_instances(factory).await;
-    test_get_slice_beyond_available_messages(factory).await;
-    test_overwrite_existing_message(factory).await;
-    test_creation_time_is_set(factory).await;
-    test_creation_time_is_preserved(factory).await;
-    test_creation_time_gets_reset_correctly(factory).await;
+/// This macro creates a module containing all the standard conformance tests
+/// for a [`MessageStore`] implementation. Each test gets its own test function,
+/// allowing for parallel execution and clear test reporting.
+///
+/// # Arguments
+///
+/// * `$mod_name` - The name of the module to create (e.g., `in_memory`, `file`, `mongodb`)
+/// * `$factory` - An expression that creates a [`TestStoreFactory`] instance.
+///   This can be a sync expression (e.g., `MyFactory::new()`) or an async
+///   expression (e.g., `MyFactory::new().await`).
+///
+/// # Example
+///
+/// ```ignore
+/// use hotfix_store::conformance_tests;
+///
+/// struct MyStoreFactory;
+///
+/// #[async_trait::async_trait]
+/// impl TestStoreFactory for MyStoreFactory {
+///     async fn create_store(&self) -> Box<dyn MessageStore> {
+///         Box::new(MyStore::new())
+///     }
+/// }
+///
+/// conformance_tests!(my_store, MyStoreFactory);
+/// ```
+#[macro_export]
+macro_rules! conformance_tests {
+    ($mod_name:ident, $factory:expr) => {
+        mod $mod_name {
+            use super::*;
+
+            #[tokio::test]
+            async fn test_new_store_initialization() {
+                let factory = $factory;
+                $crate::test_utils::test_new_store_initialization(&factory).await;
+            }
+
+            #[tokio::test]
+            async fn test_add_and_get_messages() {
+                let factory = $factory;
+                $crate::test_utils::test_add_and_get_messages(&factory).await;
+            }
+
+            #[tokio::test]
+            async fn test_get_slice_partial_range() {
+                let factory = $factory;
+                $crate::test_utils::test_get_slice_partial_range(&factory).await;
+            }
+
+            #[tokio::test]
+            async fn test_get_slice_empty_range() {
+                let factory = $factory;
+                $crate::test_utils::test_get_slice_empty_range(&factory).await;
+            }
+
+            #[tokio::test]
+            async fn test_increment_sender_seq_number() {
+                let factory = $factory;
+                $crate::test_utils::test_increment_sender_seq_number(&factory).await;
+            }
+
+            #[tokio::test]
+            async fn test_increment_target_seq_number() {
+                let factory = $factory;
+                $crate::test_utils::test_increment_target_seq_number(&factory).await;
+            }
+
+            #[tokio::test]
+            async fn test_set_target_seq_number() {
+                let factory = $factory;
+                $crate::test_utils::test_set_target_seq_number(&factory).await;
+            }
+
+            #[tokio::test]
+            async fn test_reset_store() {
+                let factory = $factory;
+                $crate::test_utils::test_reset_store(&factory).await;
+            }
+
+            #[tokio::test]
+            async fn test_persistence_across_store_instances() {
+                let factory = $factory;
+                $crate::test_utils::test_persistence_across_store_instances(&factory).await;
+            }
+
+            #[tokio::test]
+            async fn test_get_slice_beyond_available_messages() {
+                let factory = $factory;
+                $crate::test_utils::test_get_slice_beyond_available_messages(&factory).await;
+            }
+
+            #[tokio::test]
+            async fn test_overwrite_existing_message() {
+                let factory = $factory;
+                $crate::test_utils::test_overwrite_existing_message(&factory).await;
+            }
+
+            #[tokio::test]
+            async fn test_creation_time_is_set() {
+                let factory = $factory;
+                $crate::test_utils::test_creation_time_is_set(&factory).await;
+            }
+
+            #[tokio::test]
+            async fn test_creation_time_is_preserved() {
+                let factory = $factory;
+                $crate::test_utils::test_creation_time_is_preserved(&factory).await;
+            }
+
+            #[tokio::test]
+            async fn test_creation_time_gets_reset_correctly() {
+                let factory = $factory;
+                $crate::test_utils::test_creation_time_gets_reset_correctly(&factory).await;
+            }
+        }
+    };
 }
