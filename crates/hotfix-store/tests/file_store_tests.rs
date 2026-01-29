@@ -1,5 +1,6 @@
-use hotfix::store::file::FileStore;
-use hotfix::store::{MessageStore, StoreError};
+//! FileStore-specific tests for error handling and edge cases.
+
+use hotfix_store::{FileStore, MessageStore, StoreError};
 use std::fs;
 use tempfile::TempDir;
 

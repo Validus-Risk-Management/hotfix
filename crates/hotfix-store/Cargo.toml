@@ -12,7 +12,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [features]
-default = []
+default = ["test-utils"]
 test-utils = ["dep:tokio"]
 
 [lints]
@@ -25,6 +25,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"], optional = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["test-util", "rt-multi-thread", "macros", "time"] }
 uuid = { workspace = true, features = ["v4"] }
 tempfile = "3"

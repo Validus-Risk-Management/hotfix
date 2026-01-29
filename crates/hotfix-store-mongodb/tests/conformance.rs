@@ -1,7 +1,7 @@
 //! Conformance tests for MongoDbMessageStore using the test harness from hotfix-store.
 
+use hotfix_store::test_utils::{self, TestStoreFactory};
 use hotfix_store::MessageStore;
-use hotfix_store::test_utils::TestStoreFactory;
 use hotfix_store_mongodb::{Client, MongoDbMessageStore};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, GenericImage};
@@ -45,8 +45,28 @@ impl TestStoreFactory for MongodbTestStoreFactory {
     }
 }
 
-#[tokio::test]
-async fn test_conformance() {
-    let factory = MongodbTestStoreFactory::new().await;
-    hotfix_store::test_utils::run_all_conformance_tests(&factory).await;
+// Each test gets its own factory with a unique collection name to ensure isolation
+macro_rules! conformance_test {
+    ($test_name:ident) => {
+        #[tokio::test]
+        async fn $test_name() {
+            let factory = MongodbTestStoreFactory::new().await;
+            test_utils::$test_name(&factory).await;
+        }
+    };
 }
+
+conformance_test!(test_new_store_initialization);
+conformance_test!(test_add_and_get_messages);
+conformance_test!(test_get_slice_partial_range);
+conformance_test!(test_get_slice_empty_range);
+conformance_test!(test_increment_sender_seq_number);
+conformance_test!(test_increment_target_seq_number);
+conformance_test!(test_set_target_seq_number);
+conformance_test!(test_reset_store);
+conformance_test!(test_persistence_across_store_instances);
+conformance_test!(test_get_slice_beyond_available_messages);
+conformance_test!(test_overwrite_existing_message);
+conformance_test!(test_creation_time_is_set);
+conformance_test!(test_creation_time_is_preserved);
+conformance_test!(test_creation_time_gets_reset_correctly);
