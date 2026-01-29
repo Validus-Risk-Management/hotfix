@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.6.0...hotfix-v0.7.0) - 2026-01-29
+
+### Added
+
+- break out message stores into their own crates ([#290](https://github.com/Validus-Risk-Management/hotfix/pull/290))
+
 ## [0.6.0](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.5.1...hotfix-v0.6.0) - 2026-01-27
 
 ### Added
