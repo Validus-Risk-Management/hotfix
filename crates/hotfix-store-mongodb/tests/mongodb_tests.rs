@@ -6,7 +6,7 @@
 use chrono::Duration;
 use hotfix_store::MessageStore;
 use hotfix_store::error::StoreError;
-use hotfix_store_mongodb::{Client, MongoDbMessageStore};
+use hotfix_store_mongodb::{Client, MongoDbMessageStore, cleanup_older_than};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, GenericImage};
 
@@ -192,4 +192,47 @@ async fn test_cleanup_after_connection_drop() {
     let result = store.cleanup_older_than(Duration::zero()).await;
 
     assert!(matches!(result, Err(StoreError::Cleanup(_))));
+}
+
+#[tokio::test]
+async fn test_standalone_cleanup_removes_old_sequences() {
+    let container = GenericImage::new("mongo", "8.0").start().await.unwrap();
+    let host = container.get_host().await.unwrap();
+    let port = container.get_host_port_ipv4(MONGO_PORT).await.unwrap();
+
+    let client = Client::with_uri_str(format!("mongodb://{host}:{port}"))
+        .await
+        .unwrap();
+    let db = client.database("test_standalone_cleanup");
+    let mut store = MongoDbMessageStore::new(db.clone(), Some("test"))
+        .await
+        .unwrap();
+
+    // Add a message to the initial sequence
+    store.add(1, b"message in sequence 1").await.unwrap();
+
+    // Reset creates a new sequence, making the first one "old"
+    store.reset().await.unwrap();
+    store.add(1, b"message in sequence 2").await.unwrap();
+
+    // Reset again to have two old sequences
+    store.reset().await.unwrap();
+    store.add(1, b"message in sequence 3").await.unwrap();
+
+    // Small delay to ensure old sequences have earlier timestamps than the cutoff
+    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+
+    // Use the standalone function to cleanup (without needing the store)
+    let deleted = cleanup_older_than(&db, Some("test"), Duration::zero())
+        .await
+        .unwrap();
+
+    assert_eq!(deleted, 2);
+
+    // Verify current sequence messages are still accessible via the store
+    let messages = store.get_slice(1, 1).await.unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0], b"message in sequence 3");
+
+    drop(container);
 }
