@@ -1280,7 +1280,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1387,7 +1387,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-store-mongodb"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1402,7 +1402,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-web"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1419,7 +1419,7 @@ dependencies = [
 
 [[package]]
 name = "hotfix-web-ui"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "anyhow",
  "askama",

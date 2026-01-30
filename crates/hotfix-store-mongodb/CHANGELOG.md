@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-store-mongodb-v0.1.1...hotfix-store-mongodb-v0.1.2) - 2026-01-30
+
+### Added
+
+- allow mongodb cleanup to be run without instantiating a store ([#295](https://github.com/Validus-Risk-Management/hotfix/pull/295))
+
 ## [0.1.1](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-store-mongodb-v0.1.0...hotfix-store-mongodb-v0.1.1) - 2026-01-30
 
 ### Other

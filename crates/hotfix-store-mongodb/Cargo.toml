@@ -1,7 +1,7 @@
 [package]
 name = "hotfix-store-mongodb"
 description = "MongoDB message store implementation for the hotfix FIX engine"
-version = "0.1.1"
+version = "0.1.2"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
