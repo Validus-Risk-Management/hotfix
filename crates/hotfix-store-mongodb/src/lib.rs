@@ -29,6 +29,8 @@ use hotfix_store::error::{Result, StoreError};
 
 pub use mongodb::Client;
 
+const DEFAULT_COLLECTION_NAME: &str = "messages";
+
 #[derive(Debug, Deserialize, Serialize)]
 struct SequenceMeta {
     #[serde(rename = "_id")]
@@ -77,7 +79,7 @@ impl MongoDbMessageStore {
         db: Database,
         collection_name: Option<&str>,
     ) -> mongodb::error::Result<Self> {
-        let collection_name = collection_name.unwrap_or("messages");
+        let collection_name = collection_name.unwrap_or(DEFAULT_COLLECTION_NAME);
         let meta_collection = db.collection(collection_name);
         let message_collection = db.collection(collection_name);
 
@@ -159,48 +161,104 @@ impl MongoDbMessageStore {
     ///
     /// Returns `StoreError::Cleanup` if the cleanup operation fails.
     pub async fn cleanup_older_than(&self, age: Duration) -> Result<u64> {
-        let cutoff = BsonDateTime::from_millis((Utc::now() - age).timestamp_millis());
-
-        // Find old sequence IDs (excluding current sequence)
-        let filter = doc! {
-            "meta": true,
-            "creation_time": { "$lt": cutoff },
-            "_id": { "$ne": self.current_sequence.object_id }
-        };
-        let mut cursor = self
-            .meta_collection
-            .find(filter)
-            .await
-            .map_err(|e| StoreError::Cleanup(e.into()))?;
-
-        let mut old_sequence_ids = Vec::new();
-        while let Some(meta) = cursor
-            .try_next()
-            .await
-            .map_err(|e| StoreError::Cleanup(e.into()))?
-        {
-            old_sequence_ids.push(meta.object_id);
-        }
-
-        if old_sequence_ids.is_empty() {
-            return Ok(0);
-        }
-
-        // Delete messages first to avoid orphaned meta documents
-        self.message_collection
-            .delete_many(doc! { "sequence_id": { "$in": &old_sequence_ids } })
-            .await
-            .map_err(|e| StoreError::Cleanup(e.into()))?;
-
-        // Delete sequence metas
-        let result = self
-            .meta_collection
-            .delete_many(doc! { "_id": { "$in": &old_sequence_ids } })
-            .await
-            .map_err(|e| StoreError::Cleanup(e.into()))?;
-
-        Ok(result.deleted_count)
+        cleanup_older_than_inner(
+            &self.meta_collection,
+            &self.message_collection,
+            age,
+            Some(self.current_sequence.object_id),
+        )
+        .await
     }
+}
+
+/// Deletes sequences older than the specified age, along with their associated messages.
+///
+/// This function is useful for cleaning up old session data from MongoDB without
+/// needing to instantiate a full [`MongoDbMessageStore`].
+/// The latest sequence is never deleted, even if it matches the age criteria.
+///
+/// # Arguments
+///
+/// * `db` - The MongoDB database to use
+/// * `collection_name` - Optional collection name (defaults to "messages")
+/// * `age` - The minimum age of sequences to delete
+///
+/// # Returns
+///
+/// The number of deleted sequences.
+///
+/// # Errors
+///
+/// Returns `StoreError::Cleanup` if the cleanup operation fails.
+pub async fn cleanup_older_than(
+    db: &Database,
+    collection_name: Option<&str>,
+    age: Duration,
+) -> Result<u64> {
+    let collection_name = collection_name.unwrap_or(DEFAULT_COLLECTION_NAME);
+    let meta_collection: Collection<SequenceMeta> = db.collection(collection_name);
+    let message_collection: Collection<Message> = db.collection(collection_name);
+
+    // Find latest sequence to exclude
+    let options = FindOneOptions::builder().sort(doc! { "_id": -1 }).build();
+    let latest = meta_collection
+        .find_one(doc! { "meta": true })
+        .with_options(options)
+        .await
+        .map_err(|e| StoreError::Cleanup(e.into()))?;
+    let exclude_id = latest.map(|m| m.object_id);
+
+    cleanup_older_than_inner(&meta_collection, &message_collection, age, exclude_id).await
+}
+
+async fn cleanup_older_than_inner(
+    meta_collection: &Collection<SequenceMeta>,
+    message_collection: &Collection<Message>,
+    age: Duration,
+    exclude_id: Option<ObjectId>,
+) -> Result<u64> {
+    let cutoff = BsonDateTime::from_millis((Utc::now() - age).timestamp_millis());
+
+    // Find old sequence IDs (excluding the specified sequence if any)
+    let mut filter = doc! {
+        "meta": true,
+        "creation_time": { "$lt": cutoff },
+    };
+    if let Some(id) = exclude_id {
+        filter.insert("_id", doc! { "$ne": id });
+    }
+
+    let mut cursor = meta_collection
+        .find(filter)
+        .await
+        .map_err(|e| StoreError::Cleanup(e.into()))?;
+
+    let mut old_sequence_ids = Vec::new();
+    while let Some(meta) = cursor
+        .try_next()
+        .await
+        .map_err(|e| StoreError::Cleanup(e.into()))?
+    {
+        old_sequence_ids.push(meta.object_id);
+    }
+
+    if old_sequence_ids.is_empty() {
+        return Ok(0);
+    }
+
+    // Delete messages first to avoid orphaned meta documents
+    message_collection
+        .delete_many(doc! { "sequence_id": { "$in": &old_sequence_ids } })
+        .await
+        .map_err(|e| StoreError::Cleanup(e.into()))?;
+
+    // Delete sequence metas
+    let result = meta_collection
+        .delete_many(doc! { "_id": { "$in": &old_sequence_ids } })
+        .await
+        .map_err(|e| StoreError::Cleanup(e.into()))?;
+
+    Ok(result.deleted_count)
 }
 
 #[async_trait]
