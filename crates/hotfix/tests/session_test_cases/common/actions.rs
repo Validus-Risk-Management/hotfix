@@ -1,6 +1,7 @@
 use crate::common::fakes::{FakeCounterparty, SessionSpy};
 use crate::common::test_messages::TestMessage;
 use hotfix::message::OutboundMessage;
+use hotfix::session::{SendError, SendOutcome};
 use std::time::Duration;
 
 pub struct When<T> {
@@ -19,9 +20,16 @@ impl When<&SessionSpy> {
     pub async fn sends_message(self, message: TestMessage) {
         self.target
             .session_handle()
-            .send_message(message)
+            .send(message)
             .await
             .expect("message to be sent successfully");
+    }
+
+    pub async fn sends_message_with_confirmation(
+        self,
+        message: TestMessage,
+    ) -> Result<SendOutcome, SendError> {
+        self.target.session_handle().send(message).await
     }
 }
 

@@ -135,7 +135,7 @@ async fn send_message(session: &Initiator<OutboundMsg>) -> Result<()> {
     let msg = OutboundMsg::NewOrderSingle(order);
 
     session
-        .send_message(msg)
+        .send_forget(msg)
         .await
         .context("failed to send message")?;
     Ok(())

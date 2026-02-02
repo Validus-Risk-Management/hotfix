@@ -8,3 +8,4 @@ mod logout_tests;
 mod received_gap_fill_tests;
 mod received_reset_tests;
 mod resend_tests;
+mod send_confirmation_tests;

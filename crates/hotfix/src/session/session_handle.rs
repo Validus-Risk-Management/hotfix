@@ -1,4 +1,6 @@
 use crate::session::admin_request::AdminRequest;
+use crate::session::error::{SendError, SendOutcome};
+use crate::session::session_ref::OutboundRequest;
 use crate::session::{InternalSessionRef, SessionInfo};
 use anyhow::anyhow;
 use tokio::sync::{mpsc, oneshot};
@@ -11,7 +13,7 @@ use tokio::sync::{mpsc, oneshot};
 /// and only exposes APIs intended for consumers of the engine.
 #[derive(Clone, Debug)]
 pub struct SessionHandle<Outbound> {
-    outbound_message_sender: mpsc::Sender<Outbound>,
+    outbound_message_sender: mpsc::Sender<OutboundRequest<Outbound>>,
     admin_request_sender: mpsc::Sender<AdminRequest>,
 }
 
@@ -24,9 +26,49 @@ impl<Outbound> SessionHandle<Outbound> {
         Ok(receiver.await?)
     }
 
+    /// Sends a message and waits for confirmation that it was persisted.
+    ///
+    /// Returns `SendOutcome::Sent` with the sequence number if the message was
+    /// successfully persisted and sent, or `SendOutcome::Dropped` if the application
+    /// callback chose to drop the message.
+    pub async fn send(&self, msg: Outbound) -> Result<SendOutcome, SendError> {
+        let (tx, rx) = oneshot::channel();
+        let request = OutboundRequest {
+            message: msg,
+            confirm: Some(tx),
+        };
+        self.outbound_message_sender
+            .send(request)
+            .await
+            .map_err(|_| SendError::Disconnected)?;
+
+        rx.await.map_err(|_| SendError::ConfirmationLost)?
+    }
+
+    /// Sends a message without waiting for confirmation.
+    ///
+    /// This is a fire-and-forget operation. The message will be queued for sending
+    /// but no confirmation is provided about whether it was actually sent.
+    pub async fn send_forget(&self, msg: Outbound) -> Result<(), SendError> {
+        let request = OutboundRequest {
+            message: msg,
+            confirm: None,
+        };
+        self.outbound_message_sender
+            .send(request)
+            .await
+            .map_err(|_| SendError::Disconnected)?;
+
+        Ok(())
+    }
+
+    #[deprecated(since = "0.5.0", note = "use `send` or `send_forget` instead")]
     pub async fn send_message(&self, msg: Outbound) -> anyhow::Result<()> {
         self.outbound_message_sender
-            .send(msg)
+            .send(OutboundRequest {
+                message: msg,
+                confirm: None,
+            })
             .await
             .map_err(|_| anyhow!("failed to send message"))?;
 

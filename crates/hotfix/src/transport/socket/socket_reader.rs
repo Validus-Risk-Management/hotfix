@@ -87,6 +87,7 @@ mod tests {
     use crate::message::Message;
     use crate::session::admin_request::AdminRequest;
     use crate::session::event::SessionEvent;
+    use crate::session::session_ref::OutboundRequest;
     use tokio::io::{AsyncWriteExt, duplex};
     use tokio::sync::mpsc;
 
@@ -107,7 +108,8 @@ mod tests {
         mpsc::Receiver<SessionEvent>,
     ) {
         let (event_sender, event_receiver) = mpsc::channel::<SessionEvent>(100);
-        let (outbound_message_sender, _outbound_receiver) = mpsc::channel::<TestMessage>(10);
+        let (outbound_message_sender, _outbound_receiver) =
+            mpsc::channel::<OutboundRequest<TestMessage>>(10);
         let (admin_request_sender, _admin_receiver) = mpsc::channel::<AdminRequest>(10);
 
         let session_ref = InternalSessionRef {

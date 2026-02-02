@@ -7,15 +7,22 @@ use crate::config::SessionConfig;
 use crate::message::{InboundMessage, OutboundMessage, RawFixMessage};
 use crate::session::Session;
 use crate::session::admin_request::AdminRequest;
+use crate::session::error::{SendError, SendOutcome};
 use crate::session::event::{AwaitingActiveSessionResponse, SessionEvent};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
 use crate::{Application, session};
 
+/// A request to send an outbound message, optionally with confirmation.
+pub(crate) struct OutboundRequest<M> {
+    pub message: M,
+    pub confirm: Option<oneshot::Sender<Result<SendOutcome, SendError>>>,
+}
+
 #[derive(Clone)]
 pub struct InternalSessionRef<Outbound> {
     pub(crate) event_sender: mpsc::Sender<SessionEvent>,
-    pub(crate) outbound_message_sender: mpsc::Sender<Outbound>,
+    pub(crate) outbound_message_sender: mpsc::Sender<OutboundRequest<Outbound>>,
     pub(crate) admin_request_sender: mpsc::Sender<AdminRequest>,
 }
 
@@ -26,7 +33,8 @@ impl<Outbound: OutboundMessage> InternalSessionRef<Outbound> {
         store: impl MessageStore + 'static,
     ) -> Result<Self> {
         let (event_sender, event_receiver) = mpsc::channel::<SessionEvent>(100);
-        let (outbound_message_sender, outbound_message_receiver) = mpsc::channel::<Outbound>(10);
+        let (outbound_message_sender, outbound_message_receiver) =
+            mpsc::channel::<OutboundRequest<Outbound>>(10);
         let (admin_request_sender, admin_request_receiver) = mpsc::channel::<AdminRequest>(10);
         let session = Session::new(config, application, store)?;
         tokio::spawn(session::run_session(

@@ -15,6 +15,7 @@ use tracing::{debug, warn};
 use crate::application::Application;
 use crate::config::SessionConfig;
 use crate::message::{InboundMessage, OutboundMessage};
+use crate::session::error::{SendError, SendOutcome};
 use crate::session::{InternalSessionRef, SessionHandle};
 use crate::store::MessageStore;
 use crate::transport::connect;
@@ -50,6 +51,25 @@ impl<Outbound: OutboundMessage> Initiator<Outbound> {
         Ok(initiator)
     }
 
+    /// Sends a message and waits for confirmation that it was persisted.
+    ///
+    /// Returns `SendOutcome::Sent` with the sequence number if the message was
+    /// successfully persisted and sent, or `SendOutcome::Dropped` if the application
+    /// callback chose to drop the message.
+    pub async fn send(&self, msg: Outbound) -> Result<SendOutcome, SendError> {
+        self.session_handle.send(msg).await
+    }
+
+    /// Sends a message without waiting for confirmation.
+    ///
+    /// This is a fire-and-forget operation. The message will be queued for sending
+    /// but no confirmation is provided about whether it was actually sent.
+    pub async fn send_forget(&self, msg: Outbound) -> Result<(), SendError> {
+        self.session_handle.send_forget(msg).await
+    }
+
+    #[deprecated(since = "0.7.2", note = "use `send` or `send_forget` instead")]
+    #[allow(deprecated)]
     pub async fn send_message(&self, msg: Outbound) -> Result<()> {
         self.session_handle.send_message(msg).await?;
 

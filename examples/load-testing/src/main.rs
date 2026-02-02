@@ -131,7 +131,7 @@ async fn submit_message(session_handle: &SessionHandle<OutboundMsg>) {
     });
 
     session_handle
-        .send_message(order)
+        .send_forget(order)
         .await
         .expect("session to accept message");
 }
