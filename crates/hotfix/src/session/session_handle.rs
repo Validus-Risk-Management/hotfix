@@ -2,7 +2,6 @@ use crate::session::admin_request::AdminRequest;
 use crate::session::error::{SendError, SendOutcome};
 use crate::session::session_ref::OutboundRequest;
 use crate::session::{InternalSessionRef, SessionInfo};
-use anyhow::anyhow;
 use tokio::sync::{mpsc, oneshot};
 
 /// A public handle to the session that can be used to interact with the session.
@@ -58,19 +57,6 @@ impl<Outbound> SessionHandle<Outbound> {
             .send(request)
             .await
             .map_err(|_| SendError::Disconnected)?;
-
-        Ok(())
-    }
-
-    #[deprecated(since = "0.5.0", note = "use `send` or `send_forget` instead")]
-    pub async fn send_message(&self, msg: Outbound) -> anyhow::Result<()> {
-        self.outbound_message_sender
-            .send(OutboundRequest {
-                message: msg,
-                confirm: None,
-            })
-            .await
-            .map_err(|_| anyhow!("failed to send message"))?;
 
         Ok(())
     }

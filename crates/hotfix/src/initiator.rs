@@ -68,14 +68,6 @@ impl<Outbound: OutboundMessage> Initiator<Outbound> {
         self.session_handle.send_forget(msg).await
     }
 
-    #[deprecated(since = "0.7.2", note = "use `send` or `send_forget` instead")]
-    #[allow(deprecated)]
-    pub async fn send_message(&self, msg: Outbound) -> Result<()> {
-        self.session_handle.send_message(msg).await?;
-
-        Ok(())
-    }
-
     pub fn is_interested(&self, sender_comp_id: &str, target_comp_id: &str) -> bool {
         self.config.sender_comp_id == sender_comp_id && self.config.target_comp_id == target_comp_id
     }

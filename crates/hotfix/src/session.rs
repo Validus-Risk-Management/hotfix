@@ -802,36 +802,14 @@ where
             .reset_peer_timer(self.config.heartbeat_interval, test_request_id);
     }
 
-    async fn send_app_message(&mut self, message: Outbound) -> Result<()> {
-        match self.application.on_outbound_message(&message).await {
-            OutboundDecision::Send => {
-                self.send_message(message)
-                    .await
-                    .context("failed to send app message")?;
-            }
-            OutboundDecision::Drop => {
-                debug!("dropped outbound message as instructed by the application");
-            }
-            OutboundDecision::TerminateSession => {
-                warn!("the application indicated we should terminate the session");
-                self.state.disconnect_writer().await;
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn send_app_message_with_confirmation(
-        &mut self,
-        message: Outbound,
-    ) -> Result<SendOutcome, SendError> {
+    async fn send_app_message(&mut self, message: Outbound) -> Result<SendOutcome, SendError> {
         if !self.state.is_connected() {
             return Err(SendError::Disconnected);
         }
 
         match self.application.on_outbound_message(&message).await {
             OutboundDecision::Send => {
-                let sequence_number = self.send_message_returning_seq(message).await?;
+                let sequence_number = self.send_message(message).await?;
                 Ok(SendOutcome::Sent { sequence_number })
             }
             OutboundDecision::Drop => {
@@ -846,10 +824,7 @@ where
         }
     }
 
-    async fn send_message_returning_seq(
-        &mut self,
-        message: impl OutboundMessage,
-    ) -> Result<u64, SendError> {
+    async fn send_message(&mut self, message: impl OutboundMessage) -> Result<u64, SendError> {
         let seq_num = self.store.next_sender_seq_number();
         let msg_type = message.message_type().as_bytes().to_vec();
         let msg = generate_message(
@@ -881,31 +856,6 @@ where
         Ok(seq_num)
     }
 
-    async fn send_message(&mut self, message: impl OutboundMessage) -> Result<()> {
-        let seq_num = self.store.next_sender_seq_number();
-        let msg_type = message.message_type().as_bytes().to_vec();
-        let msg = generate_message(
-            &self.config.begin_string,
-            &self.config.sender_comp_id,
-            &self.config.target_comp_id,
-            seq_num,
-            message,
-        )
-        .context("failed to generate message")?;
-        self.store
-            .increment_sender_seq_number()
-            .await
-            .context("failed to increment sender seq number")?;
-
-        self.store
-            .add(seq_num, &msg)
-            .await
-            .context("failed to add message to store")?;
-        self.send_raw(&msg_type, msg).await;
-
-        Ok(())
-    }
-
     async fn send_raw(&mut self, message_type: &[u8], data: Vec<u8>) {
         self.state
             .send_message(message_type, RawFixMessage::new(data))
@@ -935,7 +885,8 @@ where
 
     async fn send_resend_request(&mut self, begin: u64, end: u64) -> Result<()> {
         let request = ResendRequest::new(begin, end);
-        self.send_message(request).await
+        self.send_message(request).await.map(|_| ())?;
+        Ok(())
     }
 
     async fn send_logon(&mut self) -> Result<()> {
@@ -949,12 +900,14 @@ where
 
         let logon = Logon::new(self.config.heartbeat_interval, reset_config);
 
-        self.send_message(logon).await
+        self.send_message(logon).await.map(|_| ())?;
+        Ok(())
     }
 
     async fn send_logout(&mut self, reason: &str) -> Result<()> {
         let logout = Logout::with_reason(reason.to_string());
-        self.send_message(logout).await
+        self.send_message(logout).await.map(|_| ())?;
+        Ok(())
     }
 
     /// Sends a logout message and immediately disconnects the counterparty.
@@ -1021,14 +974,14 @@ where
 
     async fn handle_outbound_message(&mut self, request: OutboundRequest<Outbound>) {
         let OutboundRequest { message, confirm } = request;
+        let result = self.send_app_message(message).await;
         match confirm {
             Some(tx) => {
-                let result = self.send_app_message_with_confirmation(message).await;
                 // Ignore send errors - receiver may have been dropped
                 let _ = tx.send(result);
             }
             None => {
-                if let Err(err) = self.send_app_message(message).await {
+                if let Err(err) = result {
                     error!(err = ?err, "failed to send app message: {err}");
                 }
             }
