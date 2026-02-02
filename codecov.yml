@@ -10,3 +10,22 @@ coverage:
     project:
       default:
         target: auto
+
+flags:
+  core:
+    paths:
+      - crates/hotfix/
+      - crates/hotfix-cli/
+      - crates/hotfix-codegen/
+      - crates/hotfix-derive/
+      - crates/hotfix-dictionary/
+      - crates/hotfix-message/
+      - crates/hotfix-store/
+      - crates/hotfix-web/
+      - crates/hotfix-web-ui/
+    carryforward: true
+
+  mongodb:
+    paths:
+      - crates/hotfix-store-mongodb/
+    carryforward: true
