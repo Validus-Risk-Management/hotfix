@@ -20,6 +20,7 @@ pub enum InboundDecision {
     TerminateSession,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OutboundDecision {
     Send,
     Drop,

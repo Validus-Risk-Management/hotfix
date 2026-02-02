@@ -31,6 +31,13 @@ impl When<&SessionSpy> {
     ) -> Result<SendOutcome, SendError> {
         self.target.session_handle().send(message).await
     }
+
+    pub async fn sends_message_without_confirmation(
+        self,
+        message: TestMessage,
+    ) -> Result<(), SendError> {
+        self.target.session_handle().send_forget(message).await
+    }
 }
 
 impl When<&mut FakeCounterparty<TestMessage>> {

@@ -2,6 +2,8 @@ use crate::common::actions::when;
 use crate::common::assertions::then;
 use crate::common::fakes::{FakeApplication, FakeCounterparty, SessionSpy};
 use crate::common::test_messages::TestMessage;
+use crate::session_test_cases::common::fakes::DisconnectedSession;
+use hotfix::application::OutboundDecision;
 use hotfix::config::SessionConfig;
 use hotfix::session::InternalSessionRef;
 use hotfix::session::Status;
@@ -37,6 +39,51 @@ pub async fn given_a_connected_session_with_store(
         .expect("failed to start FakeCounterparty");
 
     (session_spy, mock_counterparty)
+}
+
+/// Creates an active session with a configurable application.
+pub async fn given_an_active_session_with_outbound_decision(
+    decision: OutboundDecision,
+) -> (SessionSpy, FakeCounterparty<TestMessage>) {
+    let config = create_session_config();
+    let counterparty_config = create_counterparty_session_config(config.clone());
+    let message_store = InMemoryMessageStore::default();
+
+    let (message_tx, message_rx) = tokio::sync::mpsc::unbounded_channel();
+    let app = FakeApplication::with_outbound_decision(message_tx, decision);
+    let session = InternalSessionRef::new(config, app, message_store)
+        .expect("session to be created successfully");
+
+    let mut session_spy = SessionSpy::new(session.clone().into(), message_rx);
+    let mut mock_counterparty = FakeCounterparty::start(session.clone(), counterparty_config)
+        .await
+        .expect("failed to start FakeCounterparty");
+
+    then(&mut mock_counterparty)
+        .receives(|msg| assert_eq!(msg.header().get::<&str>(MSG_TYPE).unwrap(), "A"))
+        .await;
+    when(&mut mock_counterparty).sends_logon().await;
+    then(&mut session_spy)
+        .status_changes_to(Status::Active)
+        .await;
+
+    (session_spy, mock_counterparty)
+}
+
+/// Creates a session that has not yet established a transport connection.
+/// This is useful for testing the Disconnected error case.
+pub fn given_a_disconnected_session() -> DisconnectedSession {
+    let config = create_session_config();
+    let message_store = InMemoryMessageStore::default();
+
+    let (message_tx, _message_rx) = tokio::sync::mpsc::unbounded_channel();
+    let session_ref =
+        InternalSessionRef::new(config, FakeApplication::new(message_tx), message_store)
+            .expect("session to be created successfully");
+
+    let session_handle = session_ref.clone().into();
+
+    DisconnectedSession::new(session_ref, session_handle)
 }
 
 pub async fn given_an_active_session() -> (SessionSpy, FakeCounterparty<TestMessage>) {

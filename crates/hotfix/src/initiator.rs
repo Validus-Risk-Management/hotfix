@@ -278,4 +278,46 @@ mod tests {
             "Initiator should reconnect after disconnect"
         );
     }
+
+    #[tokio::test]
+    async fn test_send_delegates_to_session_handle() {
+        use crate::session::error::SendOutcome;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let config = create_test_config("127.0.0.1", port);
+
+        let initiator = Initiator::start(config, NoOpApp, InMemoryMessageStore::default())
+            .await
+            .unwrap();
+
+        // Wait for connection to be established
+        let _ = tokio::time::timeout(Duration::from_secs(2), listener.accept())
+            .await
+            .expect("initiator should connect");
+
+        // Message should be received by session and persisted (seq 2 after Logon)
+        let result = initiator.send(DummyMessage).await;
+        assert!(matches!(result, Ok(SendOutcome::Sent { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_send_forget_delegates_to_session_handle() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let config = create_test_config("127.0.0.1", port);
+
+        let initiator = Initiator::start(config, NoOpApp, InMemoryMessageStore::default())
+            .await
+            .unwrap();
+
+        // Wait for connection to be established
+        let _ = tokio::time::timeout(Duration::from_secs(2), listener.accept())
+            .await
+            .expect("initiator should connect");
+
+        // Message should be successfully queued to the session
+        let result = initiator.send_forget(DummyMessage).await;
+        assert!(result.is_ok());
+    }
 }
