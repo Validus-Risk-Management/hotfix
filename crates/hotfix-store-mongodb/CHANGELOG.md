@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-store-mongodb-v0.1.2...hotfix-store-mongodb-v0.1.3) - 2026-02-03
+
+### Other
+
+- only run mongodb tests when hotfix-store-mongodb code has changed ([#297](https://github.com/Validus-Risk-Management/hotfix/pull/297))
+
 ## [0.1.2](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-store-mongodb-v0.1.1...hotfix-store-mongodb-v0.1.2) - 2026-01-30
 
 ### Added
