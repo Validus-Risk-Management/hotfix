@@ -14,7 +14,7 @@ use crate::message::parser::RawFixMessage;
 use crate::message::{InboundMessage, generate_message};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
 use hotfix_message::dict::Dictionary;
 use hotfix_message::message::{Config as MessageConfig, Message};
@@ -36,6 +36,7 @@ use crate::message::verification::verify_message;
 use crate::message::verification_error::{CompIdType, MessageVerificationError};
 use crate::message_utils::{is_admin, prepare_message_for_resend};
 use crate::session::admin_request::AdminRequest;
+use crate::session::error::SessionCreationError;
 pub use crate::session::error::{SendError, SendOutcome};
 pub use crate::session::info::{SessionInfo, Status};
 pub use crate::session::session_handle::SessionHandle;
@@ -80,7 +81,7 @@ where
         config: SessionConfig,
         application: App,
         store: Store,
-    ) -> Result<Session<App, Inbound, Outbound, Store>> {
+    ) -> std::result::Result<Session<App, Inbound, Outbound, Store>, SessionCreationError> {
         let schedule_check_timer = sleep(Duration::from_secs(SCHEDULE_CHECK_INTERVAL));
 
         let dictionary = Self::get_data_dictionary(&config)?;
@@ -104,12 +105,14 @@ where
         Ok(session)
     }
 
-    fn get_data_dictionary(config: &SessionConfig) -> Result<Dictionary> {
+    fn get_data_dictionary(config: &SessionConfig) -> Result<Dictionary, SessionCreationError> {
         match &config.data_dictionary_path {
             None => match config.begin_string.as_str() {
                 #[cfg(feature = "fix44")]
                 "FIX.4.4" => Ok(Dictionary::fix44()),
-                _ => bail!("unsupported begin string: {}", config.begin_string),
+                _ => Err(SessionCreationError::UnsupportedBeginString(
+                    config.begin_string.to_string(),
+                )),
             },
             Some(dictionary_path) => Ok(Dictionary::load_from_file(dictionary_path)?),
         }

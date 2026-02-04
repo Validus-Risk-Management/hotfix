@@ -3,7 +3,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum SessionError {
-    #[error("Schedule configuration is invalid: {0}")]
+    #[error("schedule configuration is invalid: {0}")]
     InvalidSchedule(String),
 
     #[error("store operation failed")]
@@ -11,6 +11,21 @@ pub enum SessionError {
 }
 
 pub type Result<T> = std::result::Result<T, SessionError>;
+
+#[derive(Debug, Error)]
+pub enum SessionCreationError {
+    #[error("unsupported BeginString: {0}")]
+    UnsupportedBeginString(String),
+
+    #[error("dictionary failed to parse")]
+    MalformedDictionary(#[from] hotfix_message::dict::ParseError),
+
+    #[error("dictionary contents are invalid")]
+    InvalidDictionary(#[from] hotfix_message::error::ParserError),
+
+    #[error("schedule configuration is invalid: {0}")]
+    InvalidSchedule(String),
+}
 
 /// Outcome of a successful message send operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,7 +36,7 @@ pub enum SendOutcome {
     Dropped,
 }
 
-/// Error that can occur when sending a message.
+/// Error that can occur when sending an outbound message to the session.
 #[derive(Debug, Error)]
 pub enum SendError {
     #[error("session is disconnected")]

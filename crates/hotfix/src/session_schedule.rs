@@ -1,5 +1,5 @@
 use crate::config::ScheduleConfig;
-use crate::session::error::SessionError;
+use crate::session::error::{SessionCreationError, SessionError};
 use chrono::{DateTime, Datelike, Days, NaiveDate, NaiveTime, TimeDelta, Utc, Weekday};
 use chrono_tz::Tz;
 
@@ -29,7 +29,6 @@ pub enum SessionSchedule {
     },
 }
 
-#[allow(dead_code)]
 impl SessionSchedule {
     pub fn is_active_at(&self, datetime: &DateTime<Utc>) -> bool {
         match self {
@@ -130,6 +129,7 @@ impl SessionSchedule {
     }
 
     #[allow(unused_variables)]
+    #[allow(dead_code)]
     fn check_weekly_schedule(
         datetime: &DateTime<Utc>,
         start_day: Weekday,
@@ -141,7 +141,7 @@ impl SessionSchedule {
 }
 
 impl TryFrom<&ScheduleConfig> for SessionSchedule {
-    type Error = SessionError;
+    type Error = SessionCreationError;
 
     fn try_from(config: &ScheduleConfig) -> Result<Self, Self::Error> {
         match config {
@@ -175,7 +175,7 @@ impl TryFrom<&ScheduleConfig> for SessionSchedule {
                         })
                     }
                 } else if start == end {
-                    Err(SessionError::InvalidSchedule(
+                    Err(SessionCreationError::InvalidSchedule(
                         "Start and end times cannot be equal when weekdays is set".to_string(),
                     ))
                 } else {
@@ -199,8 +199,8 @@ impl TryFrom<&ScheduleConfig> for SessionSchedule {
             } => {
                 // Weekdays should be empty for weekly sessions
                 if !weekdays.is_empty() {
-                    return Err(SessionError::InvalidSchedule(
-                        "Weekly sessions cannot have weekdays specified".to_string(),
+                    return Err(SessionCreationError::InvalidSchedule(
+                        "weekly sessions cannot have weekdays specified".to_string(),
                     ));
                 }
 
@@ -214,15 +214,15 @@ impl TryFrom<&ScheduleConfig> for SessionSchedule {
             }
 
             // Invalid combinations
-            _ => Err(SessionError::InvalidSchedule(
-                "Invalid schedule configuration: incomplete or conflicting parameters".to_string(),
+            _ => Err(SessionCreationError::InvalidSchedule(
+                "invalid schedule configuration: incomplete or conflicting parameters".to_string(),
             )),
         }
     }
 }
 
 impl TryFrom<Option<&ScheduleConfig>> for SessionSchedule {
-    type Error = SessionError;
+    type Error = SessionCreationError;
 
     fn try_from(maybe_schedule: Option<&ScheduleConfig>) -> Result<Self, Self::Error> {
         match maybe_schedule {
@@ -1040,7 +1040,7 @@ mod tests {
         let result = SessionSchedule::try_from(&config);
         assert!(result.is_err());
         match result.unwrap_err() {
-            SessionError::InvalidSchedule(msg) => {
+            SessionCreationError::InvalidSchedule(msg) => {
                 assert!(msg.contains("Weekly sessions cannot have weekdays specified"));
             }
             other => panic!("unexpected error: {other}"),
