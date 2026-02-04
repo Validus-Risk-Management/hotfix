@@ -70,12 +70,6 @@ impl From<tokio::sync::oneshot::error::RecvError> for SendError {
 /// which only make sense in the context of the public API.
 #[derive(Debug, Error)]
 pub(crate) enum InternalSendError {
-    /// The session is disconnected. Currently unused as internal sends don't
-    /// check connection state, but kept for symmetry with `SendError`.
-    #[allow(dead_code)]
-    #[error("session is disconnected")]
-    Disconnected,
-
     #[error("failed to persist message")]
     Persist(#[source] StoreError),
 
@@ -86,7 +80,6 @@ pub(crate) enum InternalSendError {
 impl From<InternalSendError> for SendError {
     fn from(err: InternalSendError) -> Self {
         match err {
-            InternalSendError::Disconnected => SendError::Disconnected,
             InternalSendError::Persist(e) => SendError::Persist(e),
             InternalSendError::SequenceNumber(e) => SendError::SequenceNumber(e),
         }
@@ -158,13 +151,6 @@ mod tests {
 
         let err: SendError = recv_err.into();
         assert!(matches!(err, SendError::SessionGone));
-    }
-
-    #[test]
-    fn internal_send_error_disconnected_converts_to_send_error() {
-        let internal_err = InternalSendError::Disconnected;
-        let send_err: SendError = internal_err.into();
-        assert!(matches!(send_err, SendError::Disconnected));
     }
 
     #[test]

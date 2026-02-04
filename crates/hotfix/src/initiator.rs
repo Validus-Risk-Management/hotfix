@@ -303,7 +303,7 @@ mod tests {
         }
     }
 
-    async fn given_logged_on_initiator() -> (Initiator<DummyMessage>, TestCounterparty) {
+    async fn create_logged_on_initiator() -> (Initiator<DummyMessage>, TestCounterparty) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let config = create_test_config("127.0.0.1", port);
@@ -438,7 +438,7 @@ mod tests {
     async fn test_session_handle_returns_working_handle() {
         use crate::session::error::SendOutcome;
 
-        let (initiator, mut counterparty) = given_logged_on_initiator().await;
+        let (initiator, mut counterparty) = create_logged_on_initiator().await;
 
         // Get the session handle and use it to send a message
         let handle = initiator.session_handle();
@@ -452,7 +452,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_shutdown_with_logout_handshake() {
-        let (initiator, mut counterparty) = given_logged_on_initiator().await;
+        let (initiator, mut counterparty) = create_logged_on_initiator().await;
 
         assert!(!initiator.is_shutdown());
 
