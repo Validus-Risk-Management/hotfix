@@ -6,15 +6,6 @@ mod session_handle;
 pub mod session_ref;
 mod state;
 
-use crate::config::SessionConfig;
-use crate::message::OutboundMessage;
-use crate::message::heartbeat::Heartbeat;
-use crate::message::logon::{Logon, ResetSeqNumConfig};
-use crate::message::parser::RawFixMessage;
-use crate::message::{InboundMessage, generate_message};
-use crate::session::error::{InternalSendError, SessionOperationError};
-use crate::store::MessageStore;
-use crate::transport::writer::WriterRef;
 use chrono::Utc;
 use hotfix_message::dict::Dictionary;
 use hotfix_message::message::{Config as MessageConfig, Message};
@@ -27,16 +18,23 @@ use tracing::{debug, enabled, error, info, warn};
 
 use crate::Application;
 use crate::application::{InboundDecision, OutboundDecision};
+use crate::config::SessionConfig;
+use crate::message::OutboundMessage;
+use crate::message::heartbeat::Heartbeat;
+use crate::message::logon::{Logon, ResetSeqNumConfig};
 use crate::message::logout::Logout;
+use crate::message::parser::RawFixMessage;
 use crate::message::reject::Reject;
 use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
 use crate::message::verification::verify_message;
 use crate::message::verification_error::{CompIdType, MessageVerificationError};
+use crate::message::{InboundMessage, generate_message};
 use crate::message_utils::{is_admin, prepare_message_for_resend};
 use crate::session::admin_request::AdminRequest;
 use crate::session::error::SessionCreationError;
+use crate::session::error::{InternalSendError, InternalSendResultExt, SessionOperationError};
 pub use crate::session::error::{SendError, SendOutcome};
 pub use crate::session::info::{SessionInfo, Status};
 pub use crate::session::session_handle::SessionHandle;
@@ -48,6 +46,8 @@ use crate::session::session_ref::OutboundRequest;
 use crate::session::state::SessionState;
 use crate::session::state::{AwaitingResendTransitionOutcome, TestRequestId};
 use crate::session_schedule::{SessionPeriodComparison, SessionSchedule};
+use crate::store::MessageStore;
+use crate::transport::writer::WriterRef;
 use event::SessionEvent;
 use hotfix_message::parsed_message::{InvalidReason, ParsedMessage};
 use hotfix_message::session_fields::{
@@ -147,12 +147,9 @@ where
                             let reject = Reject::new(msg_seq_num)
                                 .session_reject_reason(SessionRejectReason::InvalidTagNumber)
                                 .text(&format!("invalid field {tag}"));
-                            self.send_message(reject).await.map_err(|e| {
-                                SessionOperationError::Send {
-                                    source: e,
-                                    context: "reject for invalid field",
-                                }
-                            })?;
+                            self.send_message(reject)
+                                .await
+                                .with_send_context("reject for invalid field")?;
                         }
                         Err(err) => {
                             error!("failed to get message seq num: {:?}", err);
@@ -174,12 +171,9 @@ where
                                     SessionRejectReason::RepeatingGroupFieldsOutOfOrder,
                                 )
                                 .text(&format!("field appears in incorrect order:{tag}"));
-                            self.send_message(reject).await.map_err(|e| {
-                                SessionOperationError::Send {
-                                    source: e,
-                                    context: "reject for invalid group order",
-                                }
-                            })?;
+                            self.send_message(reject)
+                                .await
+                                .with_send_context("reject for invalid group order")?;
                         }
                         Err(err) => {
                             error!("failed to get message seq num: {:?}", err);
@@ -259,10 +253,7 @@ where
                     error!("failed to send inbound message to application");
                     self.state.disconnect_writer().await;
                 }
-                self.store
-                    .increment_target_seq_number()
-                    .await
-                    .map_err(SessionOperationError::Store)?;
+                self.store.increment_target_seq_number().await?;
             }
             Err(err) => self.handle_verification_error(err).await?,
         }
@@ -351,10 +342,7 @@ where
                     self.state =
                         SessionState::new_active(writer.clone(), self.config.heartbeat_interval);
                     self.application.on_logon().await;
-                    self.store
-                        .increment_target_seq_number()
-                        .await
-                        .map_err(SessionOperationError::Store)?;
+                    self.store.increment_target_seq_number().await?;
                 }
                 Err(err) => self.handle_verification_error(err).await?,
             }
@@ -382,10 +370,7 @@ where
             }
         }
 
-        self.store
-            .increment_target_seq_number()
-            .await
-            .map_err(SessionOperationError::Store)?;
+        self.store.increment_target_seq_number().await?;
         Ok(())
     }
 
@@ -399,10 +384,7 @@ where
             self.reset_peer_timer(None);
         }
 
-        self.store
-            .increment_target_seq_number()
-            .await
-            .map_err(SessionOperationError::Store)?;
+        self.store.increment_target_seq_number().await?;
         Ok(())
     }
 
@@ -412,17 +394,11 @@ where
             todo!()
         });
 
-        self.store
-            .increment_target_seq_number()
-            .await
-            .map_err(SessionOperationError::Store)?;
+        self.store.increment_target_seq_number().await?;
 
         self.send_message(Heartbeat::for_request(req_id.to_string()))
             .await
-            .map_err(|e| SessionOperationError::Send {
-                source: e,
-                context: "heartbeat response",
-            })?;
+            .with_send_context("heartbeat response")?;
 
         Ok(())
     }
@@ -440,10 +416,7 @@ where
                     .text("missing begin sequence number for resend request");
                 self.send_message(reject)
                     .await
-                    .map_err(|e| SessionOperationError::Send {
-                        source: e,
-                        context: "reject for missing BEGIN_SEQ_NO",
-                    })?;
+                    .with_send_context("reject for missing BEGIN_SEQ_NO")?;
                 return Ok(());
             }
         };
@@ -463,18 +436,12 @@ where
                     .text("missing end sequence number for resend request");
                 self.send_message(reject)
                     .await
-                    .map_err(|e| SessionOperationError::Send {
-                        source: e,
-                        context: "reject for missing END_SEQ_NO",
-                    })?;
+                    .with_send_context("reject for missing END_SEQ_NO")?;
                 return Ok(());
             }
         };
 
-        self.store
-            .increment_target_seq_number()
-            .await
-            .map_err(SessionOperationError::Store)?;
+        self.store.increment_target_seq_number().await?;
 
         self.resend_messages(begin_seq_number, end_seq_number, message)
             .await?;
@@ -490,10 +457,7 @@ where
         if let Ok(seq_num) = message.get::<u64>(MSG_SEQ_NUM)
             && seq_num == self.store.next_target_seq_number()
         {
-            self.store
-                .increment_target_seq_number()
-                .await
-                .map_err(SessionOperationError::Store)?;
+            self.store.increment_target_seq_number().await?;
         }
 
         Ok(())
@@ -519,10 +483,7 @@ where
                     .text("missing NewSeqNo tag in sequence reset message");
                 self.send_message(reject)
                     .await
-                    .map_err(|e| SessionOperationError::Send {
-                        source: e,
-                        context: "reject for missing NEW_SEQ_NO",
-                    })?;
+                    .with_send_context("reject for missing NEW_SEQ_NO")?;
 
                 // note: we don't increment the target seq number here
                 // this is an ambiguous case in the specification, but leaving the
@@ -544,17 +505,11 @@ where
                 .text(&text);
             self.send_message(reject)
                 .await
-                .map_err(|e| SessionOperationError::Send {
-                    source: e,
-                    context: "reject for invalid sequence reset",
-                })?;
+                .with_send_context("reject for invalid sequence reset")?;
             return Ok(());
         }
 
-        self.store
-            .set_target_seq_number(end - 1)
-            .await
-            .map_err(SessionOperationError::Store)?;
+        self.store.set_target_seq_number(end - 1).await?;
         Ok(())
     }
 
@@ -751,11 +706,7 @@ where
         _message: &Message,
     ) -> Result<(), SessionOperationError> {
         info!(begin, end, "resending messages as requested");
-        let messages = self
-            .store
-            .get_slice(begin as usize, end as usize)
-            .await
-            .map_err(SessionOperationError::Store)?;
+        let messages = self.store.get_slice(begin as usize, end as usize).await?;
 
         let no = messages.len();
         debug!(number_of_messages = no, "number of messages");
@@ -802,9 +753,7 @@ where
             }
             self.send_raw(
                 message_type.as_bytes(),
-                message
-                    .encode(&self.message_config)
-                    .map_err(SessionOperationError::MessageEncoding)?,
+                message.encode(&self.message_config)?,
             )
             .await;
 
@@ -849,7 +798,7 @@ where
 
         match self.application.on_outbound_message(&message).await {
             OutboundDecision::Send => {
-                let sequence_number = self.send_message(message).await.map_err(SendError::from)?;
+                let sequence_number = self.send_message(message).await?;
                 Ok(SendOutcome::Sent { sequence_number })
             }
             OutboundDecision::Drop => {
@@ -921,8 +870,7 @@ where
             &self.config.target_comp_id,
             begin,
             sequence_reset,
-        )
-        .map_err(SessionOperationError::MessageEncoding)?;
+        )?;
 
         self.send_raw(b"4", raw_message).await;
         debug!(begin, end, "sent reset sequence");
@@ -938,19 +886,13 @@ where
         let request = ResendRequest::new(begin, end);
         self.send_message(request)
             .await
-            .map(|_| ())
-            .map_err(|e| SessionOperationError::Send {
-                source: e,
-                context: "resend request",
-            })
+            .with_send_context("resend request")?;
+        Ok(())
     }
 
     async fn send_logon(&mut self) -> Result<(), SessionOperationError> {
         let reset_config = if self.config.reset_on_logon || self.reset_on_next_logon {
-            self.store
-                .reset()
-                .await
-                .map_err(SessionOperationError::Store)?;
+            self.store.reset().await?;
             ResetSeqNumConfig::Reset
         } else {
             ResetSeqNumConfig::NoReset(Some(self.store.next_target_seq_number()))
@@ -958,25 +900,16 @@ where
         self.reset_on_next_logon = false;
 
         let logon = Logon::new(self.config.heartbeat_interval, reset_config);
-
-        self.send_message(logon)
-            .await
-            .map(|_| ())
-            .map_err(|e| SessionOperationError::Send {
-                source: e,
-                context: "logon",
-            })
+        self.send_message(logon).await.with_send_context("logon")?;
+        Ok(())
     }
 
     async fn send_logout(&mut self, reason: &str) -> Result<(), SessionOperationError> {
         let logout = Logout::with_reason(reason.to_string());
         self.send_message(logout)
             .await
-            .map(|_| ())
-            .map_err(|e| SessionOperationError::Send {
-                source: e,
-                context: "logout",
-            })
+            .with_send_context("logout")?;
+        Ok(())
     }
 
     /// Sends a logout message and immediately disconnects the counterparty.

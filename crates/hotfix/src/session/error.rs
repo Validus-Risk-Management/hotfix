@@ -96,11 +96,11 @@ pub(crate) enum SessionOperationError {
 
     /// A store operation failed.
     #[error("store operation failed")]
-    Store(#[source] StoreError),
+    Store(#[from] StoreError),
 
     /// Failed to encode a message.
     #[error("failed to encode message")]
-    MessageEncoding(#[source] EncodingError),
+    MessageEncoding(#[from] EncodingError),
 
     /// Failed to parse a stored message.
     #[error("failed to parse stored message: {0}")]
@@ -109,4 +109,16 @@ pub(crate) enum SessionOperationError {
     /// A required field was missing from a message.
     #[error("missing required field: {0}")]
     MissingField(&'static str),
+}
+
+/// Extension trait to convert `Result<T, InternalSendError>` to `Result<T, SessionOperationError>`
+/// with context about what send operation failed.
+pub(crate) trait InternalSendResultExt<T> {
+    fn with_send_context(self, context: &'static str) -> Result<T, SessionOperationError>;
+}
+
+impl<T> InternalSendResultExt<T> for Result<T, InternalSendError> {
+    fn with_send_context(self, context: &'static str) -> Result<T, SessionOperationError> {
+        self.map_err(|source| SessionOperationError::Send { source, context })
+    }
 }
