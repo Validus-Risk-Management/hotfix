@@ -1286,7 +1286,6 @@ dependencies = [
  "async-trait",
  "chrono",
  "chrono-tz",
- "futures",
  "hotfix-message",
  "hotfix-store",
  "hotfix-store-mongodb",
@@ -1302,7 +1301,6 @@ dependencies = [
  "tokio-rustls",
  "toml",
  "tracing",
- "uuid",
  "webpki-roots",
 ]
 
