@@ -41,7 +41,7 @@ impl<Outbound> SessionHandle<Outbound> {
             .await
             .map_err(|_| SendError::Disconnected)?;
 
-        rx.await.map_err(|_| SendError::ConfirmationLost)?
+        rx.await.map_err(|_| SendError::SessionGone)?
     }
 
     /// Sends a message without waiting for confirmation.

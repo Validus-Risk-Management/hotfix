@@ -12,9 +12,9 @@ use crate::message::heartbeat::Heartbeat;
 use crate::message::logon::{Logon, ResetSeqNumConfig};
 use crate::message::parser::RawFixMessage;
 use crate::message::{InboundMessage, generate_message};
+use crate::session::error::{InternalSendError, SessionOperationError};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
-use anyhow::{Context, Result};
 use chrono::Utc;
 use hotfix_message::dict::Dictionary;
 use hotfix_message::message::{Config as MessageConfig, Message};
@@ -118,7 +118,10 @@ where
         }
     }
 
-    async fn on_incoming(&mut self, raw_message: RawFixMessage) -> Result<()> {
+    async fn on_incoming(
+        &mut self,
+        raw_message: RawFixMessage,
+    ) -> Result<(), SessionOperationError> {
         debug!("received message: {}", raw_message);
         if !self.state.is_expecting_test_response() {
             // if we are not awaiting a specific test response, any message can reset the timer
@@ -144,9 +147,12 @@ where
                             let reject = Reject::new(msg_seq_num)
                                 .session_reject_reason(SessionRejectReason::InvalidTagNumber)
                                 .text(&format!("invalid field {tag}"));
-                            self.send_message(reject)
-                                .await
-                                .context("failed to send reject")?;
+                            self.send_message(reject).await.map_err(|e| {
+                                SessionOperationError::Send {
+                                    source: e,
+                                    context: "reject for invalid field",
+                                }
+                            })?;
                         }
                         Err(err) => {
                             error!("failed to get message seq num: {:?}", err);
@@ -168,9 +174,12 @@ where
                                     SessionRejectReason::RepeatingGroupFieldsOutOfOrder,
                                 )
                                 .text(&format!("field appears in incorrect order:{tag}"));
-                            self.send_message(reject)
-                                .await
-                                .context("failed to send reject")?;
+                            self.send_message(reject).await.map_err(|e| {
+                                SessionOperationError::Send {
+                                    source: e,
+                                    context: "reject for invalid group order",
+                                }
+                            })?;
                         }
                         Err(err) => {
                             error!("failed to get message seq num: {:?}", err);
@@ -186,8 +195,11 @@ where
         Ok(())
     }
 
-    async fn process_message(&mut self, message: Message) -> Result<()> {
-        let message_type = message.header().get(MSG_TYPE)?;
+    async fn process_message(&mut self, message: Message) -> Result<(), SessionOperationError> {
+        let message_type: &str = message
+            .header()
+            .get(MSG_TYPE)
+            .map_err(|_| SessionOperationError::MissingField("MSG_TYPE"))?;
 
         if let SessionState::AwaitingResend(state) = &mut self.state {
             let seq_number = get_msg_seq_num(&message);
@@ -233,7 +245,10 @@ where
         Ok(())
     }
 
-    async fn process_app_message(&mut self, message: &Message) -> Result<()> {
+    async fn process_app_message(
+        &mut self,
+        message: &Message,
+    ) -> Result<(), SessionOperationError> {
         match self.verify_message(message, true) {
             Ok(_) => {
                 let parsed_message = Inbound::parse(message);
@@ -244,18 +259,18 @@ where
                     error!("failed to send inbound message to application");
                     self.state.disconnect_writer().await;
                 }
-                self.store.increment_target_seq_number().await?;
+                self.store
+                    .increment_target_seq_number()
+                    .await
+                    .map_err(SessionOperationError::Store)?;
             }
-            Err(err) => self
-                .handle_verification_error(err)
-                .await
-                .context("failed to handle verification error")?,
+            Err(err) => self.handle_verification_error(err).await?,
         }
 
         Ok(())
     }
 
-    async fn check_end_of_resend(&mut self) -> Result<()> {
+    async fn check_end_of_resend(&mut self) -> Result<(), SessionOperationError> {
         let ended_state = if let SessionState::AwaitingResend(state) = &mut self.state {
             if self.store.next_target_seq_number() > state.end_seq_number {
                 let new_state =
@@ -299,7 +314,7 @@ where
         verify_message(message, &self.config, expected_seq_number)
     }
 
-    async fn on_connect(&mut self, writer: WriterRef) -> Result<()> {
+    async fn on_connect(&mut self, writer: WriterRef) -> Result<(), SessionOperationError> {
         self.state = SessionState::AwaitingLogon {
             writer,
             logon_sent: false,
@@ -328,7 +343,7 @@ where
         }
     }
 
-    async fn on_logon(&mut self, message: &Message) -> Result<()> {
+    async fn on_logon(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         if let SessionState::AwaitingLogon { writer, .. } = &self.state {
             match self.verify_message(message, true) {
                 Ok(_) => {
@@ -336,12 +351,12 @@ where
                     self.state =
                         SessionState::new_active(writer.clone(), self.config.heartbeat_interval);
                     self.application.on_logon().await;
-                    self.store.increment_target_seq_number().await?;
+                    self.store
+                        .increment_target_seq_number()
+                        .await
+                        .map_err(SessionOperationError::Store)?;
                 }
-                Err(err) => self
-                    .handle_verification_error(err)
-                    .await
-                    .context("failed to handle verification error")?,
+                Err(err) => self.handle_verification_error(err).await?,
             }
         } else {
             error!("received unexpected logon message");
@@ -350,7 +365,7 @@ where
         Ok(())
     }
 
-    async fn on_logout(&mut self) -> Result<()> {
+    async fn on_logout(&mut self) -> Result<(), SessionOperationError> {
         if self.state.is_logged_on() {
             self.send_logout("Logout acknowledged").await?;
         }
@@ -367,11 +382,14 @@ where
             }
         }
 
-        self.store.increment_target_seq_number().await?;
+        self.store
+            .increment_target_seq_number()
+            .await
+            .map_err(SessionOperationError::Store)?;
         Ok(())
     }
 
-    async fn on_heartbeat(&mut self, message: &Message) -> Result<()> {
+    async fn on_heartbeat(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         if let (Some(expected_req_id), Ok(message_req_id)) = (
             &self.state.expected_test_response_id(),
             message.get::<&str>(TEST_REQ_ID),
@@ -381,26 +399,35 @@ where
             self.reset_peer_timer(None);
         }
 
-        self.store.increment_target_seq_number().await?;
+        self.store
+            .increment_target_seq_number()
+            .await
+            .map_err(SessionOperationError::Store)?;
         Ok(())
     }
 
-    async fn on_test_request(&mut self, message: &Message) -> Result<()> {
+    async fn on_test_request(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         let req_id: &str = message.get(TEST_REQ_ID).unwrap_or_else(|_| {
             // TODO: send reject?
             todo!()
         });
 
-        self.store.increment_target_seq_number().await?;
+        self.store
+            .increment_target_seq_number()
+            .await
+            .map_err(SessionOperationError::Store)?;
 
         self.send_message(Heartbeat::for_request(req_id.to_string()))
             .await
-            .context("failed to send heartbeat in response to test request")?;
+            .map_err(|e| SessionOperationError::Send {
+                source: e,
+                context: "heartbeat response",
+            })?;
 
         Ok(())
     }
 
-    async fn on_resend_request(&mut self, message: &Message) -> Result<()> {
+    async fn on_resend_request(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         if !self.state.is_connected() {
             warn!("received resend request while disconnected, ignoring");
         }
@@ -413,7 +440,10 @@ where
                     .text("missing begin sequence number for resend request");
                 self.send_message(reject)
                     .await
-                    .context("failed to send reject for invalid resend request")?;
+                    .map_err(|e| SessionOperationError::Send {
+                        source: e,
+                        context: "reject for missing BEGIN_SEQ_NO",
+                    })?;
                 return Ok(());
             }
         };
@@ -433,12 +463,18 @@ where
                     .text("missing end sequence number for resend request");
                 self.send_message(reject)
                     .await
-                    .context("failed to send reject for invalid resend request")?;
+                    .map_err(|e| SessionOperationError::Send {
+                        source: e,
+                        context: "reject for missing END_SEQ_NO",
+                    })?;
                 return Ok(());
             }
         };
 
-        self.store.increment_target_seq_number().await?;
+        self.store
+            .increment_target_seq_number()
+            .await
+            .map_err(SessionOperationError::Store)?;
 
         self.resend_messages(begin_seq_number, end_seq_number, message)
             .await?;
@@ -450,17 +486,20 @@ where
     ///
     /// Returns whether the message should be processed as usual
     /// and whether the target sequence number should be incremented.
-    async fn on_reject(&mut self, message: &Message) -> Result<()> {
+    async fn on_reject(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         if let Ok(seq_num) = message.get::<u64>(MSG_SEQ_NUM)
             && seq_num == self.store.next_target_seq_number()
         {
-            self.store.increment_target_seq_number().await?;
+            self.store
+                .increment_target_seq_number()
+                .await
+                .map_err(SessionOperationError::Store)?;
         }
 
         Ok(())
     }
 
-    async fn on_sequence_reset(&mut self, message: &Message) -> Result<()> {
+    async fn on_sequence_reset(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         let msg_seq_num = get_msg_seq_num(message);
         let is_gap_fill: bool = message.get(GAP_FILL_FLAG).unwrap_or(false);
         if let Err(err) = self.verify_message(message, is_gap_fill) {
@@ -478,9 +517,12 @@ where
                 let reject = Reject::new(msg_seq_num)
                     .session_reject_reason(SessionRejectReason::RequiredTagMissing)
                     .text("missing NewSeqNo tag in sequence reset message");
-                self.send_message(reject).await.context(
-                    "failed to send reject message in response to invalid sequence reset message",
-                )?;
+                self.send_message(reject)
+                    .await
+                    .map_err(|e| SessionOperationError::Send {
+                        source: e,
+                        context: "reject for missing NEW_SEQ_NO",
+                    })?;
 
                 // note: we don't increment the target seq number here
                 // this is an ambiguous case in the specification, but leaving the
@@ -500,17 +542,26 @@ where
             let reject = Reject::new(msg_seq_num)
                 .session_reject_reason(SessionRejectReason::ValueIsIncorrect)
                 .text(&text);
-            self.send_message(reject).await.context(
-                "failed to send reject message in response to invalid sequence reset message",
-            )?;
+            self.send_message(reject)
+                .await
+                .map_err(|e| SessionOperationError::Send {
+                    source: e,
+                    context: "reject for invalid sequence reset",
+                })?;
             return Ok(());
         }
 
-        self.store.set_target_seq_number(end - 1).await?;
+        self.store
+            .set_target_seq_number(end - 1)
+            .await
+            .map_err(SessionOperationError::Store)?;
         Ok(())
     }
 
-    async fn handle_verification_error(&mut self, error: MessageVerificationError) -> Result<()> {
+    async fn handle_verification_error(
+        &mut self,
+        error: MessageVerificationError,
+    ) -> Result<(), SessionOperationError> {
         match error {
             MessageVerificationError::SeqNumberTooLow {
                 expected,
@@ -607,7 +658,11 @@ where
         self.state = SessionState::new_disconnected(false, &reason);
     }
 
-    async fn handle_sequence_number_too_high(&mut self, expected: u64, actual: u64) -> Result<()> {
+    async fn handle_sequence_number_too_high(
+        &mut self,
+        expected: u64,
+        actual: u64,
+    ) -> Result<(), SessionOperationError> {
         match self
             .state
             .try_transition_to_awaiting_resend(expected, actual)
@@ -616,9 +671,7 @@ where
                 debug!(
                     "we are behind target (ours: {expected}, theirs: {actual}), requesting resend."
                 );
-                self.send_resend_request(expected, actual)
-                    .await
-                    .context("failed to send resend request")?;
+                self.send_resend_request(expected, actual).await?;
             }
             AwaitingResendTransitionOutcome::InvalidState(reason) => {
                 error!("failed to request resend: {reason}");
@@ -691,13 +744,18 @@ where
         };
     }
 
-    async fn resend_messages(&mut self, begin: u64, end: u64, _message: &Message) -> Result<()> {
+    async fn resend_messages(
+        &mut self,
+        begin: u64,
+        end: u64,
+        _message: &Message,
+    ) -> Result<(), SessionOperationError> {
         info!(begin, end, "resending messages as requested");
         let messages = self
             .store
             .get_slice(begin as usize, end as usize)
             .await
-            .context("failed to retrieve messages from store")?;
+            .map_err(SessionOperationError::Store)?;
 
         let no = messages.len();
         debug!(number_of_messages = no, "number of messages");
@@ -710,12 +768,16 @@ where
                 .message_builder
                 .build(msg.as_slice())
                 .into_message()
-                .with_context(|| format!("failed to build message for raw message: {msg:?}"))?;
+                .ok_or_else(|| {
+                    SessionOperationError::StoredMessageParse(format!(
+                        "failed to build message for raw message: {msg:?}"
+                    ))
+                })?;
             sequence_number = get_msg_seq_num(&message);
             let message_type: String = message
                 .header()
                 .get::<&str>(MSG_TYPE)
-                .context("message type in message to resend is unexpectedly missing")?
+                .map_err(|_| SessionOperationError::MissingField("MSG_TYPE"))?
                 .to_string();
 
             if is_admin(message_type.as_str()) {
@@ -728,9 +790,7 @@ where
             if let Some(begin) = reset_start {
                 let end = sequence_number;
                 Self::log_skipped_admin_messages(begin, end);
-                self.send_sequence_reset(begin, end)
-                    .await
-                    .context("failed to send sequence reset")?;
+                self.send_sequence_reset(begin, end).await?;
                 reset_start = None;
             }
 
@@ -744,7 +804,7 @@ where
                 message_type.as_bytes(),
                 message
                     .encode(&self.message_config)
-                    .context("failed to encode message")?,
+                    .map_err(SessionOperationError::MessageEncoding)?,
             )
             .await;
 
@@ -759,9 +819,7 @@ where
             // the final reset if needed
             let end = sequence_number;
             Self::log_skipped_admin_messages(begin, end);
-            self.send_sequence_reset(begin, end)
-                .await
-                .context("failed to send sequence reset")?;
+            self.send_sequence_reset(begin, end).await?;
         }
 
         Ok(())
@@ -791,7 +849,7 @@ where
 
         match self.application.on_outbound_message(&message).await {
             OutboundDecision::Send => {
-                let sequence_number = self.send_message(message).await?;
+                let sequence_number = self.send_message(message).await.map_err(SendError::from)?;
                 Ok(SendOutcome::Sent { sequence_number })
             }
             OutboundDecision::Drop => {
@@ -806,7 +864,10 @@ where
         }
     }
 
-    async fn send_message(&mut self, message: impl OutboundMessage) -> Result<u64, SendError> {
+    async fn send_message(
+        &mut self,
+        message: impl OutboundMessage,
+    ) -> Result<u64, InternalSendError> {
         let seq_num = self.store.next_sender_seq_number();
         let msg_type = message.message_type().as_bytes().to_vec();
         let msg = generate_message(
@@ -817,7 +878,7 @@ where
             message,
         )
         .map_err(|e| {
-            SendError::Persist(crate::store::StoreError::PersistMessage {
+            InternalSendError::Persist(crate::store::StoreError::PersistMessage {
                 sequence_number: seq_num,
                 source: e.into(),
             })
@@ -826,12 +887,12 @@ where
         self.store
             .increment_sender_seq_number()
             .await
-            .map_err(SendError::SequenceNumber)?;
+            .map_err(InternalSendError::SequenceNumber)?;
 
         self.store
             .add(seq_num, &msg)
             .await
-            .map_err(SendError::Persist)?;
+            .map_err(InternalSendError::Persist)?;
 
         self.send_raw(&msg_type, msg).await;
 
@@ -845,7 +906,11 @@ where
         self.reset_heartbeat_timer();
     }
 
-    async fn send_sequence_reset(&mut self, begin: u64, end: u64) -> Result<()> {
+    async fn send_sequence_reset(
+        &mut self,
+        begin: u64,
+        end: u64,
+    ) -> Result<(), SessionOperationError> {
         let sequence_reset = SequenceReset {
             gap_fill: true,
             new_seq_no: end,
@@ -857,7 +922,7 @@ where
             begin,
             sequence_reset,
         )
-        .context("failed to generate message")?;
+        .map_err(SessionOperationError::MessageEncoding)?;
 
         self.send_raw(b"4", raw_message).await;
         debug!(begin, end, "sent reset sequence");
@@ -865,15 +930,27 @@ where
         Ok(())
     }
 
-    async fn send_resend_request(&mut self, begin: u64, end: u64) -> Result<()> {
+    async fn send_resend_request(
+        &mut self,
+        begin: u64,
+        end: u64,
+    ) -> Result<(), SessionOperationError> {
         let request = ResendRequest::new(begin, end);
-        self.send_message(request).await.map(|_| ())?;
-        Ok(())
+        self.send_message(request)
+            .await
+            .map(|_| ())
+            .map_err(|e| SessionOperationError::Send {
+                source: e,
+                context: "resend request",
+            })
     }
 
-    async fn send_logon(&mut self) -> Result<()> {
+    async fn send_logon(&mut self) -> Result<(), SessionOperationError> {
         let reset_config = if self.config.reset_on_logon || self.reset_on_next_logon {
-            self.store.reset().await?;
+            self.store
+                .reset()
+                .await
+                .map_err(SessionOperationError::Store)?;
             ResetSeqNumConfig::Reset
         } else {
             ResetSeqNumConfig::NoReset(Some(self.store.next_target_seq_number()))
@@ -882,14 +959,24 @@ where
 
         let logon = Logon::new(self.config.heartbeat_interval, reset_config);
 
-        self.send_message(logon).await.map(|_| ())?;
-        Ok(())
+        self.send_message(logon)
+            .await
+            .map(|_| ())
+            .map_err(|e| SessionOperationError::Send {
+                source: e,
+                context: "logon",
+            })
     }
 
-    async fn send_logout(&mut self, reason: &str) -> Result<()> {
+    async fn send_logout(&mut self, reason: &str) -> Result<(), SessionOperationError> {
         let logout = Logout::with_reason(reason.to_string());
-        self.send_message(logout).await.map(|_| ())?;
-        Ok(())
+        self.send_message(logout)
+            .await
+            .map(|_| ())
+            .map_err(|e| SessionOperationError::Send {
+                source: e,
+                context: "logout",
+            })
     }
 
     /// Sends a logout message and immediately disconnects the counterparty.
@@ -911,7 +998,11 @@ where
     /// The session waits for a configurable timeout period for the counterparty to
     /// respond with a `Logout` message. If no response is received within the timeout
     /// period, it disconnects the counterparty.
-    async fn initiate_graceful_logout(&mut self, reason: &str, reconnect: bool) -> Result<()> {
+    async fn initiate_graceful_logout(
+        &mut self,
+        reason: &str,
+        reconnect: bool,
+    ) -> Result<(), SessionOperationError> {
         if self.state.try_transition_to_awaiting_logout(
             Duration::from_secs(self.config.logout_timeout),
             reconnect,
