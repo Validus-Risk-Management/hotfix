@@ -14,7 +14,7 @@ use crate::message::parser::RawFixMessage;
 use crate::message::{InboundMessage, generate_message};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use chrono::Utc;
 use hotfix_message::dict::Dictionary;
 use hotfix_message::message::{Config as MessageConfig, Message};
@@ -190,10 +190,7 @@ where
         let message_type = message.header().get(MSG_TYPE)?;
 
         if let SessionState::AwaitingResend(state) = &mut self.state {
-            let seq_number: u64 = message
-                .header()
-                .get(MSG_SEQ_NUM)
-                .map_err(|e| anyhow!("failed to get seq number: {:?}", e))?;
+            let seq_number = get_msg_seq_num(&message);
             if seq_number > state.end_seq_number {
                 state.inbound_queue.push_back(message);
                 return Ok(());
@@ -411,14 +408,9 @@ where
         let begin_seq_number: u64 = match message.get(BEGIN_SEQ_NO) {
             Ok(seq_number) => seq_number,
             Err(_) => {
-                let reject = Reject::new(
-                    message
-                        .header()
-                        .get(MSG_SEQ_NUM)
-                        .map_err(|_| anyhow!("failed to get seq number"))?,
-                )
-                .session_reject_reason(SessionRejectReason::RequiredTagMissing)
-                .text("missing begin sequence number for resend request");
+                let reject = Reject::new(get_msg_seq_num(message))
+                    .session_reject_reason(SessionRejectReason::RequiredTagMissing)
+                    .text("missing begin sequence number for resend request");
                 self.send_message(reject)
                     .await
                     .context("failed to send reject for invalid resend request")?;
@@ -436,14 +428,9 @@ where
                 }
             }
             Err(_) => {
-                let reject = Reject::new(
-                    message
-                        .header()
-                        .get(MSG_SEQ_NUM)
-                        .map_err(|_| anyhow!("failed to get seq number"))?,
-                )
-                .session_reject_reason(SessionRejectReason::RequiredTagMissing)
-                .text("missing end sequence number for resend request");
+                let reject = Reject::new(get_msg_seq_num(message))
+                    .session_reject_reason(SessionRejectReason::RequiredTagMissing)
+                    .text("missing end sequence number for resend request");
                 self.send_message(reject)
                     .await
                     .context("failed to send reject for invalid resend request")?;
@@ -474,10 +461,7 @@ where
     }
 
     async fn on_sequence_reset(&mut self, message: &Message) -> Result<()> {
-        let msg_seq_num = message
-            .header()
-            .get(MSG_SEQ_NUM)
-            .map_err(|_| anyhow!("failed to get seq number"))?;
+        let msg_seq_num = get_msg_seq_num(message);
         let is_gap_fill: bool = message.get(GAP_FILL_FLAG).unwrap_or(false);
         if let Err(err) = self.verify_message(message, is_gap_fill) {
             self.handle_verification_error(err).await?;
@@ -727,12 +711,7 @@ where
                 .build(msg.as_slice())
                 .into_message()
                 .with_context(|| format!("failed to build message for raw message: {msg:?}"))?;
-            sequence_number = message.header().get::<u64>(MSG_SEQ_NUM).map_err(|e| {
-                anyhow!(
-                    "sequence number in message to resend is unexpectedly missing: {:?}",
-                    e
-                )
-            })?;
+            sequence_number = get_msg_seq_num(&message);
             let message_type: String = message
                 .header()
                 .get::<&str>(MSG_TYPE)
@@ -1105,6 +1084,22 @@ where
             status: self.state.as_status(),
         }
     }
+}
+
+/// Extracts MsgSeqNum from a message header.
+///
+/// To be removed once https://github.com/Validus-Risk-Management/hotfix/issues/301
+/// is implemented.
+///
+/// # Panics
+/// Panics if the message does not contain a valid MsgSeqNum field.
+/// This should never happen for messages that have passed validation.
+#[allow(clippy::expect_used)]
+fn get_msg_seq_num(message: &Message) -> u64 {
+    message
+        .header()
+        .get(MSG_SEQ_NUM)
+        .expect("MsgSeqNum missing from validated message - parser bug")
 }
 
 async fn run_session<App, Inbound, Outbound, Store>(
