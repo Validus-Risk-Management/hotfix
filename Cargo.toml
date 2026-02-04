@@ -48,13 +48,14 @@ rustls = "0.23"
 rustls-native-certs = "0.8"
 rustls-pemfile = "2.2"
 rustls-pki-types = { version = "1" }
-webpki-roots = "1.0"
+rcgen = "0.13"
 serde = "^1.0.177"
 serde_json = "1.0.143"
 smartstring = "1"
 strum = "0.27"
 strum_macros = "0.27"
 syn = "2"
+tempfile = "3"
 testcontainers = "0.25"
 thiserror = "2"
 tokio = { version = "1" }
@@ -65,6 +66,7 @@ tower = "0.5"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 uuid = { version = "1.5.0" }
+webpki-roots = "1.0"
 wiremock = "0.6"
 
 [workspace.lints.rust]

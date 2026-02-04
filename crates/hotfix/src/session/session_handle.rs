@@ -17,7 +17,7 @@ pub struct SessionHandle<Outbound> {
 }
 
 impl<Outbound> SessionHandle<Outbound> {
-    pub async fn get_session_info(&self) -> anyhow::Result<SessionInfo> {
+    pub async fn get_session_info(&self) -> Result<SessionInfo, SendError> {
         let (sender, receiver) = oneshot::channel::<SessionInfo>();
         self.admin_request_sender
             .send(AdminRequest::RequestSessionInfo(sender))
