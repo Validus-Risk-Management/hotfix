@@ -36,12 +36,8 @@ impl<Outbound> SessionHandle<Outbound> {
             message: msg,
             confirm: Some(tx),
         };
-        self.outbound_message_sender
-            .send(request)
-            .await
-            .map_err(|_| SendError::Disconnected)?;
-
-        rx.await.map_err(|_| SendError::SessionGone)?
+        self.outbound_message_sender.send(request).await?;
+        rx.await?
     }
 
     /// Sends a message without waiting for confirmation.
@@ -53,27 +49,21 @@ impl<Outbound> SessionHandle<Outbound> {
             message: msg,
             confirm: None,
         };
-        self.outbound_message_sender
-            .send(request)
-            .await
-            .map_err(|_| SendError::Disconnected)?;
-
+        self.outbound_message_sender.send(request).await?;
         Ok(())
     }
 
-    pub async fn shutdown(&self, reconnect: bool) -> anyhow::Result<()> {
+    pub async fn shutdown(&self, reconnect: bool) -> Result<(), SendError> {
         self.admin_request_sender
             .send(AdminRequest::InitiateGracefulShutdown { reconnect })
             .await?;
-
         Ok(())
     }
 
-    pub async fn request_reset_on_next_logon(&self) -> anyhow::Result<()> {
+    pub async fn request_reset_on_next_logon(&self) -> Result<(), SendError> {
         self.admin_request_sender
             .send(AdminRequest::ResetSequenceNumbersOnNextLogon)
             .await?;
-
         Ok(())
     }
 }

@@ -1,4 +1,3 @@
-use anyhow::Result;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tracing::debug;
@@ -7,7 +6,7 @@ use crate::config::SessionConfig;
 use crate::message::{InboundMessage, OutboundMessage, RawFixMessage};
 use crate::session::Session;
 use crate::session::admin_request::AdminRequest;
-use crate::session::error::{SendError, SendOutcome};
+use crate::session::error::{SendError, SendOutcome, SessionCreationError};
 use crate::session::event::{AwaitingActiveSessionResponse, SessionEvent};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
@@ -31,7 +30,7 @@ impl<Outbound: OutboundMessage> InternalSessionRef<Outbound> {
         config: SessionConfig,
         application: impl Application<Inbound, Outbound>,
         store: impl MessageStore + 'static,
-    ) -> Result<Self> {
+    ) -> Result<Self, SessionCreationError> {
         let (event_sender, event_receiver) = mpsc::channel::<SessionEvent>(100);
         let (outbound_message_sender, outbound_message_receiver) =
             mpsc::channel::<OutboundRequest<Outbound>>(10);

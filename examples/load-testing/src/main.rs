@@ -94,17 +94,19 @@ async fn start_session(
     db_config: Database,
     app: LoadTestingApplication,
 ) -> Result<Initiator<OutboundMsg>> {
-    match db_config {
+    let initiator = match db_config {
         Database::Memory => {
             let store = hotfix::store::in_memory::InMemoryMessageStore::default();
-            Initiator::start(session_config, app, store).await
+            Initiator::start(session_config, app, store).await?
         }
         Database::File => {
             let store = hotfix::store::file::FileStore::new("data", "load-testing-store")
                 .expect("be able to create store");
-            Initiator::start(session_config, app, store).await
+            Initiator::start(session_config, app, store).await?
         }
-    }
+    };
+
+    Ok(initiator)
 }
 
 async fn submit_messages(session_handle: SessionHandle<OutboundMsg>, message_count: u32) {

@@ -6,7 +6,6 @@
 //! The initiator establishes the transport layer connection with
 //! the peer, and sends the initial Logon (35=A) message. For transport,
 //! `HotFIX` supports plain TCP and encrypted TLS over TCP connections.
-use anyhow::Result;
 use std::time::Duration;
 use tokio::sync::watch;
 use tokio::time::sleep;
@@ -15,7 +14,7 @@ use tracing::{debug, warn};
 use crate::application::Application;
 use crate::config::SessionConfig;
 use crate::message::{InboundMessage, OutboundMessage};
-use crate::session::error::{SendError, SendOutcome};
+use crate::session::error::{SendError, SendOutcome, SessionCreationError};
 use crate::session::{InternalSessionRef, SessionHandle};
 use crate::store::MessageStore;
 use crate::transport::connect;
@@ -32,7 +31,7 @@ impl<Outbound: OutboundMessage> Initiator<Outbound> {
         config: SessionConfig,
         application: impl Application<Inbound, Outbound>,
         store: impl MessageStore + 'static,
-    ) -> Result<Self> {
+    ) -> Result<Self, SessionCreationError> {
         let session_ref = InternalSessionRef::new(config.clone(), application, store)?;
         let (completion_tx, completion_rx) = watch::channel(false);
 
@@ -76,9 +75,11 @@ impl<Outbound: OutboundMessage> Initiator<Outbound> {
         self.session_handle.clone()
     }
 
-    pub async fn shutdown(self, reconnect: bool) -> Result<()> {
+    pub async fn shutdown(self, reconnect: bool) -> Result<(), SendError> {
         self.session_handle.shutdown(reconnect).await?;
-        tokio::time::timeout(Duration::from_secs(5), self.wait_for_shutdown()).await?;
+        tokio::time::timeout(Duration::from_secs(5), self.wait_for_shutdown())
+            .await
+            .map_err(|_| SendError::SessionGone)?;
 
         Ok(())
     }

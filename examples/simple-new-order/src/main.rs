@@ -152,17 +152,19 @@ async fn start_session(
         .pop()
         .context("config must include a session")?;
 
-    match db_config {
+    let initiator = match db_config {
         Database::Memory => {
             let store = hotfix::store::in_memory::InMemoryMessageStore::default();
-            Initiator::start(session_config, app, store).await
+            Initiator::start(session_config, app, store).await?
         }
         Database::File => {
             let store = hotfix::store::file::FileStore::new("data", "simple-new-order-store")
                 .context("failed to create file store")?;
-            Initiator::start(session_config, app, store).await
+            Initiator::start(session_config, app, store).await?
         }
-    }
+    };
+
+    Ok(initiator)
 }
 
 async fn start_web_service(

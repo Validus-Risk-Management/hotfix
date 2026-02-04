@@ -52,6 +52,18 @@ pub enum SendError {
     SessionGone,
 }
 
+impl<T> From<tokio::sync::mpsc::error::SendError<T>> for SendError {
+    fn from(_: tokio::sync::mpsc::error::SendError<T>) -> Self {
+        SendError::SessionGone
+    }
+}
+
+impl From<tokio::sync::oneshot::error::RecvError> for SendError {
+    fn from(_: tokio::sync::oneshot::error::RecvError) -> Self {
+        SendError::SessionGone
+    }
+}
+
 /// Error that can occur when sending a message internally within the session.
 ///
 /// This is a subset of `SendError` without `SessionTerminated` and `SessionGone`,
