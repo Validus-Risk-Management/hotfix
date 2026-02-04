@@ -363,7 +363,12 @@ where
         match self.state {
             // if the session is already disconnected, we have nothing else to do
             SessionState::Disconnected(..) => {}
-            // otherwise set the state to disconnected and assume it makes sense to try to reconnect
+            // if we initiated the logout, preserve the reconnect flag
+            SessionState::AwaitingLogout { reconnect, .. } => {
+                self.state.disconnect_writer().await;
+                self.state = SessionState::new_disconnected(reconnect, "logout completed");
+            }
+            // otherwise assume it makes sense to try to reconnect
             _ => {
                 self.state.disconnect_writer().await;
                 self.state = SessionState::new_disconnected(true, "peer has logged us out")

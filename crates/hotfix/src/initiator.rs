@@ -152,15 +152,22 @@ async fn establish_connection<Outbound: OutboundMessage>(
     completion_tx.send_replace(true);
 }
 
-#[cfg(all(test, feature = "fix44"))]
+#[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use super::*;
     use crate::application::{Application, InboundDecision, OutboundDecision};
-    use crate::message::InboundMessage;
+    use crate::message::logon::{Logon, ResetSeqNumConfig};
+    use crate::message::logout::Logout;
+    use crate::message::parser::Parser;
+    use crate::message::{InboundMessage, generate_message};
     use crate::store::in_memory::InMemoryMessageStore;
+    use hotfix_message::Part;
     use hotfix_message::message::Message;
+    use hotfix_message::session_fields::MSG_TYPE;
     use std::time::Duration;
-    use tokio::net::TcpListener;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::{TcpListener, TcpStream};
 
     // Minimal message type for tests
     #[derive(Clone)]
@@ -194,6 +201,90 @@ mod tests {
         async fn on_logon(&mut self) {}
     }
 
+    /// A minimal FIX counterparty for testing the Initiator over TCP.
+    struct TestCounterparty {
+        stream: TcpStream,
+        parser: Parser,
+        seq_num: u64,
+        // Counterparty's view: sender is TEST-TARGET, target is TEST-SENDER
+        sender_comp_id: String,
+        target_comp_id: String,
+    }
+
+    impl TestCounterparty {
+        async fn accept(listener: &TcpListener, config: &SessionConfig) -> Self {
+            let (stream, _) = tokio::time::timeout(Duration::from_secs(2), listener.accept())
+                .await
+                .expect("timeout waiting for connection")
+                .expect("failed to accept connection");
+
+            Self {
+                stream,
+                parser: Parser::default(),
+                seq_num: 1,
+                // Swap sender/target for counterparty perspective
+                sender_comp_id: config.target_comp_id.clone(),
+                target_comp_id: config.sender_comp_id.clone(),
+            }
+        }
+
+        async fn read_message(&mut self) -> Message {
+            let mut buf = [0u8; 4096];
+            loop {
+                let n = self.stream.read(&mut buf).await.expect("read failed");
+                if n == 0 {
+                    panic!("connection closed before receiving complete message");
+                }
+                let messages = self.parser.parse(&buf[..n]);
+                if let Some(raw_msg) = messages.into_iter().next() {
+                    let builder = hotfix_message::MessageBuilder::new(
+                        hotfix_message::dict::Dictionary::fix44(),
+                        hotfix_message::message::Config::default(),
+                    )
+                    .expect("failed to create message builder");
+                    match builder.build(raw_msg.as_bytes()) {
+                        hotfix_message::parsed_message::ParsedMessage::Valid(msg) => return msg,
+                        _ => panic!("received invalid FIX message"),
+                    }
+                }
+            }
+        }
+
+        async fn expect_message(&mut self, expected_type: &str) -> Message {
+            let msg = tokio::time::timeout(Duration::from_secs(2), self.read_message())
+                .await
+                .expect("timeout waiting for message");
+            let msg_type: &str = msg.header().get(MSG_TYPE).expect("missing MSG_TYPE");
+            assert_eq!(msg_type, expected_type, "unexpected message type");
+            msg
+        }
+
+        async fn send_logon(&mut self, heartbeat_interval: u64) {
+            let logon = Logon::new(heartbeat_interval, ResetSeqNumConfig::NoReset(None));
+            self.send_message(logon).await;
+        }
+
+        async fn send_logout(&mut self) {
+            self.send_message(Logout::default()).await;
+        }
+
+        async fn send_message(&mut self, message: impl OutboundMessage) {
+            let raw = generate_message(
+                "FIX.4.4",
+                &self.sender_comp_id,
+                &self.target_comp_id,
+                self.seq_num,
+                message,
+            )
+            .expect("failed to generate message");
+            self.seq_num += 1;
+            self.stream
+                .write_all(&raw)
+                .await
+                .expect("failed to send message");
+        }
+    }
+
     fn create_test_config(host: &str, port: u16) -> SessionConfig {
         SessionConfig {
             begin_string: "FIX.4.4".to_string(),
@@ -210,6 +301,27 @@ mod tests {
             reset_on_logon: false,
             schedule: None,
         }
+    }
+
+    async fn given_logged_on_initiator() -> (Initiator<DummyMessage>, TestCounterparty) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let config = create_test_config("127.0.0.1", port);
+
+        let initiator = Initiator::start(config.clone(), NoOpApp, InMemoryMessageStore::default())
+            .await
+            .unwrap();
+
+        let mut counterparty = TestCounterparty::accept(&listener, &config).await;
+
+        // Complete the logon handshake
+        counterparty.expect_message("A").await; // Receive Logon
+        counterparty.send_logon(30).await; // Send Logon response
+
+        // Give the session a moment to process the logon
+        sleep(Duration::from_millis(50)).await;
+
+        (initiator, counterparty)
     }
 
     #[tokio::test]
@@ -320,5 +432,42 @@ mod tests {
         // Message should be successfully queued to the session
         let result = initiator.send_forget(DummyMessage).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_session_handle_returns_working_handle() {
+        use crate::session::error::SendOutcome;
+
+        let (initiator, mut counterparty) = given_logged_on_initiator().await;
+
+        // Get the session handle and use it to send a message
+        let handle = initiator.session_handle();
+        let result = handle.send(DummyMessage).await;
+
+        assert!(matches!(result, Ok(SendOutcome::Sent { .. })));
+
+        // Verify counterparty received the message (msg type "0" = Heartbeat)
+        counterparty.expect_message("0").await;
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_with_logout_handshake() {
+        let (initiator, mut counterparty) = given_logged_on_initiator().await;
+
+        assert!(!initiator.is_shutdown());
+
+        // Spawn shutdown in background - it sends Logout and waits for response
+        let shutdown_handle = tokio::spawn(async move { initiator.shutdown(false).await });
+
+        // Counterparty receives Logout and responds
+        counterparty.expect_message("5").await; // Logout
+        counterparty.send_logout().await;
+
+        // Close the TCP connection - this completes the disconnect
+        drop(counterparty);
+
+        // Shutdown should complete successfully
+        let result = shutdown_handle.await.expect("shutdown task panicked");
+        assert!(result.is_ok(), "Shutdown should complete, got {:?}", result);
     }
 }
