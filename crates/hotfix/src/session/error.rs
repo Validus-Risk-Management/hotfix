@@ -134,3 +134,71 @@ impl<T> InternalSendResultExt<T> for Result<T, InternalSendError> {
         self.map_err(|source| SessionOperationError::Send { source, context })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_store_error() -> StoreError {
+        StoreError::Initialization("test".into())
+    }
+
+    #[test]
+    fn mpsc_send_error_converts_to_session_gone() {
+        let err: SendError = tokio::sync::mpsc::error::SendError(()).into();
+        assert!(matches!(err, SendError::SessionGone));
+    }
+
+    #[tokio::test]
+    async fn oneshot_recv_error_converts_to_session_gone() {
+        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        drop(tx);
+        // await the receiver to get RecvError (not TryRecvError)
+        let recv_err = rx.await.unwrap_err();
+
+        let err: SendError = recv_err.into();
+        assert!(matches!(err, SendError::SessionGone));
+    }
+
+    #[test]
+    fn internal_send_error_disconnected_converts_to_send_error() {
+        let internal_err = InternalSendError::Disconnected;
+        let send_err: SendError = internal_err.into();
+        assert!(matches!(send_err, SendError::Disconnected));
+    }
+
+    #[test]
+    fn internal_send_error_persist_converts_to_send_error() {
+        let internal_err = InternalSendError::Persist(test_store_error());
+        let send_err: SendError = internal_err.into();
+        assert!(matches!(send_err, SendError::Persist(_)));
+    }
+
+    #[test]
+    fn internal_send_error_sequence_number_converts_to_send_error() {
+        let internal_err = InternalSendError::SequenceNumber(test_store_error());
+        let send_err: SendError = internal_err.into();
+        assert!(matches!(send_err, SendError::SequenceNumber(_)));
+    }
+
+    #[test]
+    fn with_send_context_converts_error() {
+        let result: Result<(), InternalSendError> =
+            Err(InternalSendError::Persist(test_store_error()));
+
+        let op_err = result.with_send_context("heartbeat").unwrap_err();
+        match op_err {
+            SessionOperationError::Send { context, .. } => {
+                assert_eq!(context, "heartbeat");
+            }
+            _ => panic!("expected SessionOperationError::Send"),
+        }
+    }
+
+    #[test]
+    fn with_send_context_passes_through_ok() {
+        let result: Result<u64, InternalSendError> = Ok(42);
+        let op_result = result.with_send_context("heartbeat");
+        assert_eq!(op_result.unwrap(), 42);
+    }
+}
