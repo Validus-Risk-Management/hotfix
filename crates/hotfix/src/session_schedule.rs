@@ -1,12 +1,38 @@
 use crate::config::ScheduleConfig;
-use crate::session::error::{SessionCreationError, SessionError};
+use crate::session::error::SessionCreationError;
 use chrono::{DateTime, Datelike, Days, NaiveDate, NaiveTime, TimeDelta, Utc, Weekday};
 use chrono_tz::Tz;
+use thiserror::Error;
 
-type Result<T, E = SessionError> = std::result::Result<T, E>;
+/// Result of comparing two times to determine if they fall within the same session period.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionPeriodComparison {
+    SamePeriod,
+    DifferentPeriod,
+    OutsideSessionTime { which: WhichTime },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WhichTime {
+    First,
+    Second,
+    Both,
+}
+
+#[derive(Debug, Error)]
+pub enum ScheduleError {
+    #[error("ambiguous or missing time: {date} {time} in timezone {timezone} (DST transition)")]
+    AmbiguousOrMissingTime {
+        date: NaiveDate,
+        time: NaiveTime,
+        timezone: Tz,
+    },
+
+    #[error("date calculation overflow: {context}")]
+    DateCalculationOverflow { context: String },
+}
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub enum SessionSchedule {
     NonStop,
     Daily {
@@ -20,6 +46,7 @@ pub enum SessionSchedule {
         weekdays: Vec<Weekday>,
         timezone: Tz,
     },
+    #[allow(dead_code)]
     Weekly {
         start_day: Weekday,
         start_time: NaiveTime,
@@ -54,21 +81,36 @@ impl SessionSchedule {
         }
     }
 
-    pub fn is_same_session_period(&self, dt1: &DateTime<Utc>, dt2: &DateTime<Utc>) -> Result<bool> {
-        if !self.is_active_at(dt1) || !self.is_active_at(dt2) {
-            return Err(SessionError::InvalidSchedule(
-                "Time doesn't fall in any session period".to_string(),
-            ));
+    pub fn is_same_session_period(
+        &self,
+        dt1: &DateTime<Utc>,
+        dt2: &DateTime<Utc>,
+    ) -> Result<SessionPeriodComparison, ScheduleError> {
+        let dt1_active = self.is_active_at(dt1);
+        let dt2_active = self.is_active_at(dt2);
+
+        if !dt1_active || !dt2_active {
+            let which = match (dt1_active, dt2_active) {
+                (false, false) => WhichTime::Both,
+                (false, true) => WhichTime::First,
+                (true, false) => WhichTime::Second,
+                (true, true) => unreachable!(),
+            };
+            return Ok(SessionPeriodComparison::OutsideSessionTime { which });
         }
 
         let (start, end) = self.get_session_bounds(dt1)?;
-        Ok(start <= *dt2 && *dt2 < end)
+        if start <= *dt2 && *dt2 < end {
+            Ok(SessionPeriodComparison::SamePeriod)
+        } else {
+            Ok(SessionPeriodComparison::DifferentPeriod)
+        }
     }
 
     fn get_session_bounds(
         &self,
         datetime: &DateTime<Utc>,
-    ) -> Result<(DateTime<Utc>, DateTime<Utc>)> {
+    ) -> Result<(DateTime<Utc>, DateTime<Utc>), ScheduleError> {
         match self {
             SessionSchedule::NonStop => {
                 Ok((DateTime::default(), Utc::now() + TimeDelta::weeks(1000)))
@@ -204,13 +246,17 @@ impl TryFrom<&ScheduleConfig> for SessionSchedule {
                     ));
                 }
 
-                Ok(SessionSchedule::Weekly {
+                let _ = SessionSchedule::Weekly {
                     start_day: *start_day,
                     start_time: *start,
                     end_day: *end_day,
                     end_time: *end,
                     timezone: timezone.unwrap_or(Tz::UTC),
-                })
+                };
+
+                Err(SessionCreationError::InvalidSchedule(
+                    "weekly sessions are not supported yet".to_string(),
+                ))
             }
 
             // Invalid combinations
@@ -232,15 +278,19 @@ impl TryFrom<Option<&ScheduleConfig>> for SessionSchedule {
     }
 }
 
-fn construct_utc(date: &NaiveDate, time: &NaiveTime, timezone: &Tz) -> Result<DateTime<Utc>> {
-    // TODO: do we want to handle Ambiguous and None outcomes?
-    // these variants correspond to Python's gap and fold: https://peps.python.org/pep-0495/#terminology
+fn construct_utc(
+    date: &NaiveDate,
+    time: &NaiveTime,
+    timezone: &Tz,
+) -> Result<DateTime<Utc>, ScheduleError> {
     if let Some(dt) = date.and_time(*time).and_local_timezone(*timezone).single() {
         Ok(dt.to_utc())
     } else {
-        Err(SessionError::InvalidSchedule(
-            "Invalid schedule configuration: invalid time".to_string(),
-        ))
+        Err(ScheduleError::AmbiguousOrMissingTime {
+            date: *date,
+            time: *time,
+            timezone: *timezone,
+        })
     }
 }
 
@@ -249,7 +299,7 @@ fn calculate_single_day_session_bounds(
     start_time: &NaiveTime,
     end_time: &NaiveTime,
     timezone: &Tz,
-) -> Result<(DateTime<Utc>, DateTime<Utc>)> {
+) -> Result<(DateTime<Utc>, DateTime<Utc>), ScheduleError> {
     let local_datetime = datetime.with_timezone(timezone);
 
     if local_datetime.time() >= *start_time {
@@ -261,7 +311,9 @@ fn calculate_single_day_session_bounds(
             local_datetime
                 .date_naive()
                 .checked_add_days(Days::new(1))
-                .ok_or_else(|| SessionError::InvalidSchedule("Failed to add day".to_string()))?
+                .ok_or_else(|| ScheduleError::DateCalculationOverflow {
+                    context: "failed to add day for end date".to_string(),
+                })?
         } else {
             local_datetime.date_naive()
         };
@@ -272,8 +324,8 @@ fn calculate_single_day_session_bounds(
         let start_date = local_datetime
             .date_naive()
             .checked_sub_days(Days::new(1))
-            .ok_or_else(|| {
-                SessionError::InvalidSchedule("Failed to get previous day".to_string())
+            .ok_or_else(|| ScheduleError::DateCalculationOverflow {
+                context: "failed to get previous day for start date".to_string(),
             })?;
         let start = construct_utc(&start_date, start_time, timezone)?;
         let end = construct_utc(&local_datetime.date_naive(), end_time, timezone)?;
@@ -981,7 +1033,7 @@ mod tests {
     }
 
     #[test]
-    fn test_into_weekly_session() {
+    fn test_into_weekly_session_not_supported() {
         let config = ScheduleConfig {
             start_time: Some(NaiveTime::from_hms_opt(18, 0, 0).unwrap()),
             end_time: Some(NaiveTime::from_hms_opt(17, 0, 0).unwrap()),
@@ -991,27 +1043,18 @@ mod tests {
             timezone: None,
         };
 
-        let schedule = SessionSchedule::try_from(&config).unwrap();
-        match schedule {
-            SessionSchedule::Weekly {
-                start_day,
-                start_time,
-                end_day,
-                end_time,
-                timezone,
-            } => {
-                assert_eq!(start_day, Weekday::Sun);
-                assert_eq!(start_time, NaiveTime::from_hms_opt(18, 0, 0).unwrap());
-                assert_eq!(end_day, Weekday::Fri);
-                assert_eq!(end_time, NaiveTime::from_hms_opt(17, 0, 0).unwrap());
-                assert_eq!(timezone, Tz::UTC);
+        let result = SessionSchedule::try_from(&config);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            SessionCreationError::InvalidSchedule(msg) => {
+                assert!(msg.contains("weekly sessions are not supported yet"));
             }
-            _ => panic!("Expected Weekly schedule"),
+            other => panic!("unexpected error: {other}"),
         }
     }
 
     #[test]
-    fn test_into_weekly_session_with_equal_times_is_still_weekly() {
+    fn test_into_weekly_session_with_equal_times_not_supported() {
         let time = NaiveTime::from_hms_opt(12, 0, 0).unwrap();
         let config = ScheduleConfig {
             start_time: Some(time),
@@ -1022,8 +1065,14 @@ mod tests {
             timezone: None,
         };
 
-        let schedule = SessionSchedule::try_from(&config).unwrap();
-        assert!(matches!(schedule, SessionSchedule::Weekly { .. }));
+        let result = SessionSchedule::try_from(&config);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            SessionCreationError::InvalidSchedule(msg) => {
+                assert!(msg.contains("weekly sessions are not supported yet"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
     }
 
     #[test]
@@ -1041,7 +1090,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             SessionCreationError::InvalidSchedule(msg) => {
-                assert!(msg.contains("Weekly sessions cannot have weekdays specified"));
+                assert!(msg.contains("weekly sessions cannot have weekdays specified"));
             }
             other => panic!("unexpected error: {other}"),
         }
@@ -1153,7 +1202,10 @@ mod tests {
         let dt2 = DateTime::parse_from_rfc3339("2026-01-15T23:30:00-05:00")
             .unwrap()
             .to_utc();
-        assert!(schedule.is_same_session_period(&dt1, &dt2).unwrap());
+        assert_eq!(
+            schedule.is_same_session_period(&dt1, &dt2).unwrap(),
+            SessionPeriodComparison::SamePeriod
+        );
     }
 
     #[test]
@@ -1164,7 +1216,7 @@ mod tests {
             timezone: Tz::UTC,
         };
 
-        // two times within the same session period return true
+        // two times within the same session period return SamePeriod
         let dt1 = DateTime::from_naive_utc_and_offset(
             NaiveDate::from_ymd_opt(2025, 6, 27)
                 .unwrap()
@@ -1179,10 +1231,16 @@ mod tests {
                 .unwrap(),
             Utc,
         );
-        assert!(schedule.is_same_session_period(&dt1, &dt2).unwrap());
-        assert!(schedule.is_same_session_period(&dt2, &dt1).unwrap());
+        assert_eq!(
+            schedule.is_same_session_period(&dt1, &dt2).unwrap(),
+            SessionPeriodComparison::SamePeriod
+        );
+        assert_eq!(
+            schedule.is_same_session_period(&dt2, &dt1).unwrap(),
+            SessionPeriodComparison::SamePeriod
+        );
 
-        // time for the next session period returns false
+        // time for the next session period returns DifferentPeriod
         let dt3 = DateTime::from_naive_utc_and_offset(
             NaiveDate::from_ymd_opt(2025, 6, 28)
                 .unwrap()
@@ -1190,10 +1248,16 @@ mod tests {
                 .unwrap(),
             Utc,
         );
-        assert!(!schedule.is_same_session_period(&dt1, &dt3).unwrap());
-        assert!(!schedule.is_same_session_period(&dt3, &dt1).unwrap());
+        assert_eq!(
+            schedule.is_same_session_period(&dt1, &dt3).unwrap(),
+            SessionPeriodComparison::DifferentPeriod
+        );
+        assert_eq!(
+            schedule.is_same_session_period(&dt3, &dt1).unwrap(),
+            SessionPeriodComparison::DifferentPeriod
+        );
 
-        // time on the same day but outside session time returns error
+        // time on the same day but outside session time returns OutsideSessionTime
         let dt4 = DateTime::from_naive_utc_and_offset(
             NaiveDate::from_ymd_opt(2025, 6, 27)
                 .unwrap()
@@ -1201,8 +1265,18 @@ mod tests {
                 .unwrap(),
             Utc,
         );
-        assert!(schedule.is_same_session_period(&dt1, &dt4).is_err());
-        assert!(schedule.is_same_session_period(&dt4, &dt1).is_err());
+        assert!(matches!(
+            schedule.is_same_session_period(&dt1, &dt4).unwrap(),
+            SessionPeriodComparison::OutsideSessionTime {
+                which: WhichTime::Second
+            }
+        ));
+        assert!(matches!(
+            schedule.is_same_session_period(&dt4, &dt1).unwrap(),
+            SessionPeriodComparison::OutsideSessionTime {
+                which: WhichTime::First
+            }
+        ));
     }
 
     #[test]
@@ -1220,7 +1294,10 @@ mod tests {
         let dt2 = DateTime::parse_from_rfc3339("2025-01-15T22:45:00-05:00")
             .unwrap()
             .to_utc();
-        assert!(schedule.is_same_session_period(&dt1, &dt2).unwrap());
+        assert_eq!(
+            schedule.is_same_session_period(&dt1, &dt2).unwrap(),
+            SessionPeriodComparison::SamePeriod
+        );
 
         // different session periods on consecutive days
         let dt3 = DateTime::parse_from_rfc3339("2024-01-15T22:30:00-05:00")
@@ -1229,7 +1306,10 @@ mod tests {
         let dt4 = DateTime::parse_from_rfc3339("2024-01-16T02:30:00-05:00")
             .unwrap()
             .to_utc();
-        assert!(!schedule.is_same_session_period(&dt3, &dt4).unwrap());
+        assert_eq!(
+            schedule.is_same_session_period(&dt3, &dt4).unwrap(),
+            SessionPeriodComparison::DifferentPeriod
+        );
 
         // session boundary testing - end of session vs start of next session
         let dt5 = DateTime::parse_from_rfc3339("2024-01-15T22:59:59-05:00")
@@ -1238,7 +1318,10 @@ mod tests {
         let dt6 = DateTime::parse_from_rfc3339("2024-01-16T01:00:01-05:00")
             .unwrap()
             .to_utc();
-        assert!(!schedule.is_same_session_period(&dt5, &dt6).unwrap());
+        assert_eq!(
+            schedule.is_same_session_period(&dt5, &dt6).unwrap(),
+            SessionPeriodComparison::DifferentPeriod
+        );
 
         // time that doesn't fall into any session period
         let dt7 = DateTime::parse_from_rfc3339("2024-01-15T23:30:00-05:00")
@@ -1247,7 +1330,12 @@ mod tests {
         let dt8 = DateTime::parse_from_rfc3339("2024-01-15T10:00:00-05:00")
             .unwrap()
             .to_utc();
-        assert!(schedule.is_same_session_period(&dt7, &dt8).is_err());
+        assert!(matches!(
+            schedule.is_same_session_period(&dt7, &dt8).unwrap(),
+            SessionPeriodComparison::OutsideSessionTime {
+                which: WhichTime::First
+            }
+        ));
     }
 
     #[test]
@@ -1266,8 +1354,14 @@ mod tests {
         let dt2 = DateTime::parse_from_rfc3339("2025-01-16T00:45:00-05:00")
             .unwrap()
             .to_utc();
-        assert!(schedule.is_same_session_period(&dt1, &dt2).unwrap());
-        assert!(schedule.is_same_session_period(&dt2, &dt1).unwrap());
+        assert_eq!(
+            schedule.is_same_session_period(&dt1, &dt2).unwrap(),
+            SessionPeriodComparison::SamePeriod
+        );
+        assert_eq!(
+            schedule.is_same_session_period(&dt2, &dt1).unwrap(),
+            SessionPeriodComparison::SamePeriod
+        );
 
         // different session period on the same day
         let dt1 = DateTime::parse_from_rfc3339("2025-01-15T15:30:00-05:00")
@@ -1276,8 +1370,14 @@ mod tests {
         let dt2 = DateTime::parse_from_rfc3339("2025-01-15T00:45:00-05:00")
             .unwrap()
             .to_utc();
-        assert!(!schedule.is_same_session_period(&dt1, &dt2).unwrap());
-        assert!(!schedule.is_same_session_period(&dt2, &dt1).unwrap());
+        assert_eq!(
+            schedule.is_same_session_period(&dt1, &dt2).unwrap(),
+            SessionPeriodComparison::DifferentPeriod
+        );
+        assert_eq!(
+            schedule.is_same_session_period(&dt2, &dt1).unwrap(),
+            SessionPeriodComparison::DifferentPeriod
+        );
     }
 
     #[test]
@@ -1296,7 +1396,7 @@ mod tests {
         };
 
         // 10/07/2025 is a Thursday
-        // two times within the same session period return true
+        // two times within the same session period return SamePeriod
         let dt1 = DateTime::from_naive_utc_and_offset(
             NaiveDate::from_ymd_opt(2025, 7, 10)
                 .unwrap()
@@ -1311,10 +1411,16 @@ mod tests {
                 .unwrap(),
             Utc,
         );
-        assert!(schedule.is_same_session_period(&dt1, &dt2).unwrap());
-        assert!(schedule.is_same_session_period(&dt2, &dt1).unwrap());
+        assert_eq!(
+            schedule.is_same_session_period(&dt1, &dt2).unwrap(),
+            SessionPeriodComparison::SamePeriod
+        );
+        assert_eq!(
+            schedule.is_same_session_period(&dt2, &dt1).unwrap(),
+            SessionPeriodComparison::SamePeriod
+        );
 
-        // time for the next session period returns false
+        // time for the next session period returns DifferentPeriod
         let dt3 = DateTime::from_naive_utc_and_offset(
             NaiveDate::from_ymd_opt(2025, 7, 11)
                 .unwrap()
@@ -1322,10 +1428,16 @@ mod tests {
                 .unwrap(),
             Utc,
         );
-        assert!(!schedule.is_same_session_period(&dt1, &dt3).unwrap());
-        assert!(!schedule.is_same_session_period(&dt3, &dt1).unwrap());
+        assert_eq!(
+            schedule.is_same_session_period(&dt1, &dt3).unwrap(),
+            SessionPeriodComparison::DifferentPeriod
+        );
+        assert_eq!(
+            schedule.is_same_session_period(&dt3, &dt1).unwrap(),
+            SessionPeriodComparison::DifferentPeriod
+        );
 
-        // time on the same day but outside session time returns error
+        // time on the same day but outside session time returns OutsideSessionTime
         let dt4 = DateTime::from_naive_utc_and_offset(
             NaiveDate::from_ymd_opt(2025, 7, 10)
                 .unwrap()
@@ -1333,19 +1445,39 @@ mod tests {
                 .unwrap(),
             Utc,
         );
-        assert!(schedule.is_same_session_period(&dt1, &dt4).is_err());
-        assert!(schedule.is_same_session_period(&dt4, &dt1).is_err());
+        assert!(matches!(
+            schedule.is_same_session_period(&dt1, &dt4).unwrap(),
+            SessionPeriodComparison::OutsideSessionTime {
+                which: WhichTime::Second
+            }
+        ));
+        assert!(matches!(
+            schedule.is_same_session_period(&dt4, &dt1).unwrap(),
+            SessionPeriodComparison::OutsideSessionTime {
+                which: WhichTime::First
+            }
+        ));
 
-        // time falls on the Saturday (outside session period) returns error
-        let dt4 = DateTime::from_naive_utc_and_offset(
+        // time falls on the Saturday (outside session period) returns OutsideSessionTime
+        let dt5 = DateTime::from_naive_utc_and_offset(
             NaiveDate::from_ymd_opt(2025, 7, 12)
                 .unwrap()
                 .and_hms_opt(13, 0, 0)
                 .unwrap(),
             Utc,
         );
-        assert!(schedule.is_same_session_period(&dt1, &dt4).is_err());
-        assert!(schedule.is_same_session_period(&dt4, &dt1).is_err());
+        assert!(matches!(
+            schedule.is_same_session_period(&dt1, &dt5).unwrap(),
+            SessionPeriodComparison::OutsideSessionTime {
+                which: WhichTime::Second
+            }
+        ));
+        assert!(matches!(
+            schedule.is_same_session_period(&dt5, &dt1).unwrap(),
+            SessionPeriodComparison::OutsideSessionTime {
+                which: WhichTime::First
+            }
+        ));
     }
 
     #[test]
@@ -1357,7 +1489,10 @@ mod tests {
 
         let result = construct_utc(&date, &time, &timezone);
 
-        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(ScheduleError::AmbiguousOrMissingTime { .. })
+        ));
     }
 
     #[test]
@@ -1369,6 +1504,9 @@ mod tests {
 
         let result = construct_utc(&date, &time, &timezone);
 
-        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(ScheduleError::AmbiguousOrMissingTime { .. })
+        ));
     }
 }

@@ -47,7 +47,7 @@ pub use crate::session::session_ref::InternalSessionRef;
 use crate::session::session_ref::OutboundRequest;
 use crate::session::state::SessionState;
 use crate::session::state::{AwaitingResendTransitionOutcome, TestRequestId};
-use crate::session_schedule::SessionSchedule;
+use crate::session_schedule::{SessionPeriodComparison, SessionSchedule};
 use event::SessionEvent;
 use hotfix_message::parsed_message::{InvalidReason, ParsedMessage};
 use hotfix_message::session_fields::{
@@ -1052,10 +1052,10 @@ where
                 .schedule
                 .is_same_session_period(&self.store.creation_time(), &now)
             {
-                Ok(true) => {
+                Ok(SessionPeriodComparison::SamePeriod) => {
                     // we are in the same period, nothing needs to be done
                 }
-                Ok(false) => {
+                Ok(SessionPeriodComparison::DifferentPeriod) => {
                     // the message store is for a previous session,
                     // we need to terminate this session, reset the store, and reestablish the session
                     self.logout_and_terminate("session period changed").await;
@@ -1065,7 +1065,20 @@ where
                             SessionState::new_disconnected(false, "unexpected error in reset");
                     }
                 }
+                Ok(SessionPeriodComparison::OutsideSessionTime { .. }) => {
+                    // the creation_time was recorded outside the session schedule,
+                    // treat this similarly to a different period - reset the store
+                    warn!("store creation time is outside session schedule, resetting store");
+                    self.logout_and_terminate("creation time outside schedule")
+                        .await;
+                    if let Err(err) = self.store.reset().await {
+                        error!("error resetting session store: {err:}");
+                        self.state =
+                            SessionState::new_disconnected(false, "unexpected error in reset");
+                    }
+                }
                 Err(err) => {
+                    // actual schedule calculation error (e.g., DST transition, date overflow)
                     error!("error checking session period: {err:?}");
                     self.logout_and_terminate("internal error").await;
                 }
@@ -1373,6 +1386,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_schedule_check_active_different_period() {
+        use crate::session_schedule::SessionPeriodComparison;
+
         // Use a Daily schedule that's currently active
         let schedule = create_active_schedule();
         let writer = create_writer_ref();
@@ -1390,13 +1405,13 @@ mod tests {
             .schedule
             .is_same_session_period(&creation_time, &now);
         assert!(
-            matches!(same_period, Ok(false)),
+            matches!(same_period, Ok(SessionPeriodComparison::DifferentPeriod)),
             "Schedule should identify different periods"
         );
 
         session.handle_schedule_check().await;
 
-        // Store reset should have been called (indicates Ok(false) branch was taken)
+        // Store reset should have been called (indicates DifferentPeriod branch was taken)
         // Note: logout_and_terminate disconnects the writer but state transition to
         // Disconnected happens asynchronously via event processing, not in this call
         assert!(
@@ -1438,7 +1453,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_handle_schedule_check_active_period_error() {
+    async fn test_handle_schedule_check_active_creation_time_outside_schedule() {
+        use crate::session_schedule::SessionPeriodComparison;
+
         // Use a narrow schedule that's currently active but creation_time is outside
         let now = Utc::now();
         let current_hour = now.time().hour();
@@ -1475,22 +1492,24 @@ mod tests {
 
         let mut session = create_test_session(schedule, state, store);
 
-        // Verify that is_same_session_period will return an error
+        // Verify that is_same_session_period returns OutsideSessionTime
         let same_period = session
             .schedule
             .is_same_session_period(&creation_time, &now);
         assert!(
-            same_period.is_err(),
-            "Schedule should return error when creation_time is outside active window"
+            matches!(
+                same_period,
+                Ok(SessionPeriodComparison::OutsideSessionTime { .. })
+            ),
+            "Schedule should return OutsideSessionTime when creation_time is outside active window"
         );
 
         session.handle_schedule_check().await;
 
-        // The Err branch calls logout_and_terminate which disconnects the writer.
-        // Store reset is NOT called in the Err branch, only in Ok(false).
+        // The OutsideSessionTime branch now triggers a store reset (same as DifferentPeriod)
         assert!(
-            !session.store.was_reset_called(),
-            "Store reset should not be called on period check error"
+            session.store.was_reset_called(),
+            "Store reset should be called when creation_time is outside schedule"
         );
     }
 

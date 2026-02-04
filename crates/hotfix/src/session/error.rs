@@ -3,14 +3,9 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum SessionError {
-    #[error("schedule configuration is invalid: {0}")]
-    InvalidSchedule(String),
-
     #[error("store operation failed")]
     Store(#[from] StoreError),
 }
-
-pub type Result<T> = std::result::Result<T, SessionError>;
 
 #[derive(Debug, Error)]
 pub enum SessionCreationError {
