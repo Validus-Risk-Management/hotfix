@@ -20,12 +20,12 @@ use crate::Application;
 use crate::application::{InboundDecision, OutboundDecision};
 use crate::config::SessionConfig;
 use crate::message::OutboundMessage;
+use crate::message::business_reject::BusinessReject;
 use crate::message::generate_message;
 use crate::message::heartbeat::Heartbeat;
 use crate::message::logon::{Logon, ResetSeqNumConfig};
 use crate::message::logout::Logout;
 use crate::message::parser::RawFixMessage;
-use crate::message::business_reject::BusinessReject;
 use crate::message::reject::Reject;
 use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
@@ -249,9 +249,8 @@ where
                             .header()
                             .get(MSG_TYPE)
                             .map_err(|_| SessionOperationError::MissingField("MSG_TYPE"))?;
-                        let mut reject =
-                            BusinessReject::new(msg_type, reason)
-                                .ref_seq_num(get_msg_seq_num(message));
+                        let mut reject = BusinessReject::new(msg_type, reason)
+                            .ref_seq_num(get_msg_seq_num(message));
                         if let Some(text) = text {
                             reject = reject.text(&text);
                         }

@@ -1,9 +1,9 @@
 use crate::common::actions::when;
 use crate::common::assertions::then;
 use crate::common::cleanup::finally;
+use crate::common::fakes::FakeApplication;
 use crate::common::setup::{
-    given_a_disconnected_session, given_an_active_session,
-    given_an_active_session_with_outbound_decision,
+    given_a_disconnected_session, given_an_active_session, given_an_active_session_with_app,
 };
 use crate::common::test_messages::TestMessage;
 use hotfix::application::OutboundDecision;
@@ -129,8 +129,11 @@ async fn test_send_returns_disconnected_when_not_connected() {
 #[tokio::test]
 async fn test_send_returns_dropped_when_app_drops_message() {
     // Create an active session with an application configured to drop messages
-    let (session, mut counterparty) =
-        given_an_active_session_with_outbound_decision(OutboundDecision::Drop).await;
+    let (message_tx, message_rx) = tokio::sync::mpsc::unbounded_channel();
+    let app = FakeApplication::builder(message_tx)
+        .outbound_decision_fn(|_| OutboundDecision::Drop)
+        .build();
+    let (session, mut counterparty) = given_an_active_session_with_app(app, message_rx).await;
 
     // Send a message - should be dropped by the application
     let result = when(&session)
@@ -153,8 +156,11 @@ async fn test_send_returns_dropped_when_app_drops_message() {
 #[tokio::test]
 async fn test_send_returns_session_terminated_when_app_terminates() {
     // Create an active session with an application configured to terminate session
-    let (session, mut counterparty) =
-        given_an_active_session_with_outbound_decision(OutboundDecision::TerminateSession).await;
+    let (message_tx, message_rx) = tokio::sync::mpsc::unbounded_channel();
+    let app = FakeApplication::builder(message_tx)
+        .outbound_decision_fn(|_| OutboundDecision::TerminateSession)
+        .build();
+    let (session, mut counterparty) = given_an_active_session_with_app(app, message_rx).await;
 
     // Send a message - should cause session termination
     let result = when(&session)

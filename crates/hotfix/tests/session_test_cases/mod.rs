@@ -1,4 +1,5 @@
 mod admin_request_tests;
+mod business_reject_tests;
 mod business_tests;
 pub(crate) mod common;
 mod heartbeat_tests;

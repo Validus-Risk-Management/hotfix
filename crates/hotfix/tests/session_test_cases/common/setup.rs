@@ -3,13 +3,13 @@ use crate::common::assertions::then;
 use crate::common::fakes::{FakeApplication, FakeCounterparty, SessionSpy};
 use crate::common::test_messages::TestMessage;
 use crate::session_test_cases::common::fakes::DisconnectedSession;
-use hotfix::application::OutboundDecision;
 use hotfix::config::SessionConfig;
 use hotfix::session::InternalSessionRef;
 use hotfix::session::Status;
 use hotfix::store::in_memory::InMemoryMessageStore;
 use hotfix_message::Part;
 use hotfix_message::fix44::MSG_TYPE;
+use hotfix_message::message::Message;
 
 pub const HEARTBEAT_INTERVAL: u64 = 30;
 pub const LOGON_TIMEOUT: u64 = 10;
@@ -30,8 +30,12 @@ pub async fn given_a_connected_session_with_store(
     let counterparty_config = create_counterparty_session_config(config.clone());
 
     let (message_tx, message_rx) = tokio::sync::mpsc::unbounded_channel();
-    let session = InternalSessionRef::new(config, FakeApplication::new(message_tx), message_store)
-        .expect("session to be created successfully");
+    let session = InternalSessionRef::new(
+        config,
+        FakeApplication::builder(message_tx).build(),
+        message_store,
+    )
+    .expect("session to be created successfully");
 
     let session_spy = SessionSpy::new(session.clone().into(), message_rx);
     let mock_counterparty = FakeCounterparty::start(session.clone(), counterparty_config)
@@ -42,15 +46,14 @@ pub async fn given_a_connected_session_with_store(
 }
 
 /// Creates an active session with a configurable application.
-pub async fn given_an_active_session_with_outbound_decision(
-    decision: OutboundDecision,
+pub async fn given_an_active_session_with_app(
+    app: FakeApplication,
+    message_rx: tokio::sync::mpsc::UnboundedReceiver<Message>,
 ) -> (SessionSpy, FakeCounterparty<TestMessage>) {
     let config = create_session_config();
     let counterparty_config = create_counterparty_session_config(config.clone());
     let message_store = InMemoryMessageStore::default();
 
-    let (message_tx, message_rx) = tokio::sync::mpsc::unbounded_channel();
-    let app = FakeApplication::with_outbound_decision(message_tx, decision);
     let session = InternalSessionRef::new(config, app, message_store)
         .expect("session to be created successfully");
 
@@ -77,9 +80,12 @@ pub fn given_a_disconnected_session() -> DisconnectedSession {
     let message_store = InMemoryMessageStore::default();
 
     let (message_tx, _message_rx) = tokio::sync::mpsc::unbounded_channel();
-    let session_ref =
-        InternalSessionRef::new(config, FakeApplication::new(message_tx), message_store)
-            .expect("session to be created successfully");
+    let session_ref = InternalSessionRef::new(
+        config,
+        FakeApplication::builder(message_tx).build(),
+        message_store,
+    )
+    .expect("session to be created successfully");
 
     let session_handle = session_ref.clone().into();
 
