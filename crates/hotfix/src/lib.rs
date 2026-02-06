@@ -1,9 +1,8 @@
 //! A [Financial Information eXchange (FIX)](https://www.fixtrading.org/standards/) engine.
 //!
-//! HotFIX is a [FIX](https://www.fixtrading.org/standards/) engine implemented in Rust.
-//!
-//! The near-term goal of HotFIX is to provide a functional and useful engine for the buy-side (initiators),
-//! reaching full support of FIX 4.4 and 5.0 workflows as soon as possible.
+//! HotFIX is a [FIX](https://www.fixtrading.org/standards/) engine implemented in Rust,
+//! focused on buy-side (initiator) workflows. It fully supports FIX 4.4 and the current
+//! focus is on expanding support to other FIX versions.
 //!
 //! ### What's working already and short-term roadmap
 //!

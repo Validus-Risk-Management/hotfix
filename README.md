@@ -12,20 +12,12 @@
 
 </div>
 
-
-> **Warning**
->
-> HotFIX is currently in development with frequent breaking changes to the API
-> and some features missing.
-
 ### Overview
 
-HotFIX is a [FIX](https://www.fixtrading.org/standards/) engine implemented in Rust.
-While the ambition is to create a robust, fully compliant, ergonomic and performant engine eventually,
-this is a large undertaking.
-
-The near-term goal of HotFIX is to provide a functional and useful engine for the buy-side (initiators),
-reaching full support of FIX 4.4 and 5.0 workflows as soon as possible.
+HotFIX is a [FIX](https://www.fixtrading.org/standards/) engine implemented in Rust,
+focused on buy-side (initiator) workflows. It fully supports FIX 4.4 and the current
+focus is on expanding support to other FIX versions. Performance is roughly on par with
+various QuickFIX implementations, with long-term plans to optimise further.
 
 ### Features & status
 
@@ -42,11 +34,11 @@ reaching full support of FIX 4.4 and 5.0 workflows as soon as possible.
 
 ### FIX version support
 
-| Version | Status |
-|---------|--------|
+| Version | Status                              |
+|---------|-------------------------------------|
 | FIX 4.2 | Should work, but currently untested |
-| FIX 4.4 | Fully supported |
-| FIX 5.0 | Planned |
+| FIX 4.4 | Fully supported                     |
+| FIX 5.0 | Planned                             |
 
 Check out the [examples](https://github.com/Validus-Risk-Management/hotfix/tree/main/examples)
 to get started.
