@@ -5,9 +5,9 @@ use crate::common::setup::{HEARTBEAT_INTERVAL, given_an_active_session};
 use crate::common::test_messages::{
     TestMessage, build_execution_report_with_incorrect_body_length, build_invalid_resend_request,
 };
-use hotfix::message::{OutboundMessage, ResendRequest};
+use hotfix::message::ResendRequest;
 use hotfix::session::Status;
-use hotfix_message::fix44::{GAP_FILL_FLAG, MsgType, NEW_SEQ_NO};
+use hotfix_message::fix44::{GAP_FILL_FLAG, MSG_TYPE, MsgType, NEW_SEQ_NO, ORDER_ID};
 use hotfix_message::{FieldType, Part};
 use std::time::Duration;
 
@@ -116,7 +116,10 @@ async fn test_resent_message_previously_received_is_ignored() {
         .sends_message(TestMessage::dummy_execution_report())
         .await;
     then(&mut session)
-        .receives(|msg| assert_eq!(msg.message_type(), MsgType::ExecutionReport.to_string()))
+        .receives(|msg| {
+            let msg_type: &str = msg.header().get(MSG_TYPE).unwrap();
+            assert_eq!(msg_type, MsgType::ExecutionReport.to_string());
+        })
         .await;
     then(&mut session).target_sequence_number_reaches(2).await;
 
@@ -132,11 +135,10 @@ async fn test_resent_message_previously_received_is_ignored() {
         .await;
     then(&mut session)
         .receives(|msg| {
-            if let TestMessage::ExecutionReport { order_id, .. } = msg {
-                assert_eq!(order_id, &new_report_order_id);
-            } else {
-                panic!("Unexpected message: {:?}", msg);
-            }
+            let msg_type: &str = msg.header().get(MSG_TYPE).unwrap();
+            assert_eq!(msg_type, MsgType::ExecutionReport.to_string());
+            let order_id: &str = msg.get(ORDER_ID).unwrap();
+            assert_eq!(order_id, &new_report_order_id);
         })
         .await;
 

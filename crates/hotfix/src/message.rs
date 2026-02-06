@@ -25,10 +25,6 @@ pub trait OutboundMessage: Clone + Send + 'static {
     fn message_type(&self) -> &str;
 }
 
-pub trait InboundMessage: Clone + Send + 'static {
-    fn parse(message: &Message) -> Self;
-}
-
 pub fn generate_message(
     begin_string: &str,
     sender_comp_id: &str,

@@ -1,4 +1,4 @@
-use crate::message::{InboundMessage, OutboundMessage};
+use crate::message::OutboundMessage;
 use hotfix_message::Part;
 use hotfix_message::message::Message;
 use hotfix_message::session_fields::{
@@ -50,6 +50,20 @@ impl Reject {
         self.text = Some(text.to_string());
         self
     }
+
+    #[cfg(test)]
+    fn parse(message: &Message) -> Self {
+        Self {
+            #[allow(clippy::expect_used)]
+            ref_seq_num: message
+                .get(REF_SEQ_NUM)
+                .expect("ref_seq_num should be present"),
+            ref_tag_id: message.get(REF_TAG_ID).ok(),
+            ref_msg_type: message.get(REF_MSG_TYPE).ok(),
+            session_reject_reason: message.get(SESSION_REJECT_REASON).ok(),
+            text: message.get::<&str>(TEXT).ok().map(|s| s.to_string()),
+        }
+    }
 }
 
 impl OutboundMessage for Reject {
@@ -72,22 +86,6 @@ impl OutboundMessage for Reject {
 
     fn message_type(&self) -> &str {
         "3"
-    }
-}
-
-impl InboundMessage for Reject {
-    fn parse(message: &Message) -> Self {
-        Self {
-            // TODO: how do we handle errors in parsing messages?
-            #[allow(clippy::expect_used)]
-            ref_seq_num: message
-                .get(REF_SEQ_NUM)
-                .expect("ref_seq_num should be present"),
-            ref_tag_id: message.get(REF_TAG_ID).ok(),
-            ref_msg_type: message.get(REF_MSG_TYPE).ok(),
-            session_reject_reason: message.get(SESSION_REJECT_REASON).ok(),
-            text: message.get::<&str>(TEXT).ok().map(|s| s.to_string()),
-        }
     }
 }
 

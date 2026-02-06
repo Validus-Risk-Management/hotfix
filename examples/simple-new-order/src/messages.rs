@@ -1,7 +1,7 @@
 use hotfix::Message as HotfixMessage;
 use hotfix::field_types::{Date, Timestamp};
 use hotfix::fix44;
-use hotfix::message::{InboundMessage, OutboundMessage, Part, RepeatingGroup};
+use hotfix::message::{OutboundMessage, Part, RepeatingGroup};
 
 #[derive(Debug, Clone)]
 pub struct NewOrderSingle {
@@ -18,11 +18,6 @@ pub struct NewOrderSingle {
     pub number_of_allocations: u32,
     pub allocation_account: String,
     pub allocation_quantity: u32,
-}
-
-#[derive(Debug, Clone)]
-pub enum InboundMsg {
-    Unimplemented(Vec<u8>),
 }
 
 #[derive(Debug, Clone)]
@@ -57,12 +52,5 @@ impl OutboundMessage for OutboundMsg {
         match self {
             OutboundMsg::NewOrderSingle(_) => "D",
         }
-    }
-}
-
-impl InboundMessage for InboundMsg {
-    fn parse(message: &HotfixMessage) -> Self {
-        let message_type: &str = message.header().get(fix44::MSG_TYPE).unwrap();
-        Self::Unimplemented(message_type.as_bytes().to_vec())
     }
 }

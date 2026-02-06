@@ -1,7 +1,7 @@
 use crate::common::setup::{COUNTERPARTY_COMP_ID, OUR_COMP_ID};
 use chrono::TimeDelta;
 use hotfix::Message as HotfixMessage;
-use hotfix::message::{InboundMessage, OutboundMessage, generate_message};
+use hotfix::message::{OutboundMessage, generate_message};
 use hotfix_message::dict::{FieldLocation, FixDatatype};
 use hotfix_message::field_types::Timestamp;
 use hotfix_message::message::{Config, Message};
@@ -61,6 +61,51 @@ impl TestMessage {
             price: 100.0,
         }
     }
+
+    pub fn parse(msg: &HotfixMessage) -> Self {
+        let msg_type: &str = msg.header().get(fix44::MSG_TYPE).unwrap();
+        match msg_type {
+            "8" => {
+                let order_id: &str = msg.get(fix44::ORDER_ID).unwrap();
+                let exec_id: &str = msg.get(fix44::EXEC_ID).unwrap();
+                let exec_type = msg.get(fix44::EXEC_TYPE).unwrap();
+                let ord_status = msg.get(fix44::ORD_STATUS).unwrap();
+                let side = msg.get(fix44::SIDE).unwrap();
+                let symbol: &str = msg.get(fix44::SYMBOL).unwrap();
+                let order_qty = msg.get(fix44::ORDER_QTY).unwrap();
+                let price = msg.get(fix44::PRICE).unwrap();
+
+                Self::ExecutionReport {
+                    order_id: order_id.to_string(),
+                    exec_id: exec_id.to_string(),
+                    exec_type,
+                    ord_status,
+                    side,
+                    symbol: symbol.to_string(),
+                    order_qty,
+                    price,
+                }
+            }
+            "D" => {
+                let cl_ord_id: &str = msg.get(fix44::CL_ORD_ID).unwrap();
+                let side = msg.get(fix44::SIDE).unwrap();
+                let symbol: &str = msg.get(fix44::SYMBOL).unwrap();
+                let order_qty = msg.get(fix44::ORDER_QTY).unwrap();
+                let ord_type = msg.get(fix44::ORD_TYPE).unwrap();
+                let price = msg.get(fix44::PRICE).unwrap();
+
+                Self::NewOrderSingle {
+                    cl_ord_id: cl_ord_id.to_string(),
+                    side,
+                    symbol: symbol.to_string(),
+                    order_qty,
+                    ord_type,
+                    price,
+                }
+            }
+            _ => panic!("Invalid message type: {msg_type}"),
+        }
+    }
 }
 
 impl OutboundMessage for TestMessage {
@@ -107,55 +152,6 @@ impl OutboundMessage for TestMessage {
         match self {
             TestMessage::ExecutionReport { .. } => "8",
             TestMessage::NewOrderSingle { .. } => "D",
-        }
-    }
-}
-
-impl InboundMessage for TestMessage {
-    fn parse(msg: &HotfixMessage) -> Self {
-        let msg_type: &str = msg.header().get(fix44::MSG_TYPE).unwrap();
-        match msg_type {
-            "8" => {
-                // Execution Report
-                let order_id: &str = msg.get(fix44::ORDER_ID).unwrap();
-                let exec_id: &str = msg.get(fix44::EXEC_ID).unwrap();
-                let exec_type = msg.get(fix44::EXEC_TYPE).unwrap();
-                let ord_status = msg.get(fix44::ORD_STATUS).unwrap();
-                let side = msg.get(fix44::SIDE).unwrap();
-                let symbol: &str = msg.get(fix44::SYMBOL).unwrap();
-                let order_qty = msg.get(fix44::ORDER_QTY).unwrap();
-                let price = msg.get(fix44::PRICE).unwrap();
-
-                Self::ExecutionReport {
-                    order_id: order_id.to_string(),
-                    exec_id: exec_id.to_string(),
-                    exec_type,
-                    ord_status,
-                    side,
-                    symbol: symbol.to_string(),
-                    order_qty,
-                    price,
-                }
-            }
-            "D" => {
-                // New Order Single
-                let cl_ord_id: &str = msg.get(fix44::CL_ORD_ID).unwrap();
-                let side = msg.get(fix44::SIDE).unwrap();
-                let symbol: &str = msg.get(fix44::SYMBOL).unwrap();
-                let order_qty = msg.get(fix44::ORDER_QTY).unwrap();
-                let ord_type = msg.get(fix44::ORD_TYPE).unwrap();
-                let price = msg.get(fix44::PRICE).unwrap();
-
-                Self::NewOrderSingle {
-                    cl_ord_id: cl_ord_id.to_string(),
-                    side,
-                    symbol: symbol.to_string(),
-                    order_qty,
-                    ord_type,
-                    price,
-                }
-            }
-            _ => panic!("Invalid message type: {msg_type}"),
         }
     }
 }

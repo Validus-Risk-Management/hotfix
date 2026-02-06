@@ -10,6 +10,7 @@ use crate::parts::{Body, Header, Part, RepeatingGroup, Trailer};
 use crate::session_fields::{BEGIN_STRING, BODY_LENGTH, CHECK_SUM, MSG_TYPE};
 use hotfix_dictionary::{FieldLocation, IsFieldDefinition};
 
+#[derive(Clone)]
 pub struct Message {
     pub(crate) header: Header,
     pub(crate) body: Body,

@@ -3,8 +3,9 @@ use crate::common::assertions::then;
 use crate::common::cleanup::finally;
 use crate::common::setup::given_an_active_session;
 use crate::common::test_messages::TestMessage;
-use hotfix::message::{InboundMessage, OutboundMessage};
-use hotfix_message::{FieldType, fix44::MsgType};
+use hotfix::message::OutboundMessage;
+use hotfix_message::fix44::{MSG_TYPE, MsgType};
+use hotfix_message::{FieldType, Part};
 
 #[tokio::test]
 async fn test_new_order_single() {
@@ -25,7 +26,10 @@ async fn test_new_order_single() {
         .sends_message(TestMessage::dummy_execution_report())
         .await;
     then(&mut session)
-        .receives(|msg| assert_eq!(msg.message_type(), MsgType::ExecutionReport.to_string()))
+        .receives(|msg| {
+            let msg_type: &str = msg.header().get(MSG_TYPE).unwrap();
+            assert_eq!(msg_type, MsgType::ExecutionReport.to_string());
+        })
         .await;
 
     finally(&session, &mut counterparty).disconnect().await;

@@ -4,7 +4,7 @@ use crate::field_map::FieldMap;
 use crate::parts::Part;
 use crate::session_fields;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Header {
     pub fields: FieldMap,
 }

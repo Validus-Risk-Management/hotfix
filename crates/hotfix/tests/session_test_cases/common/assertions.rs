@@ -24,7 +24,7 @@ impl Then<&mut SessionSpy> {
 
     pub async fn receives<F>(self, assertion: F)
     where
-        F: FnOnce(&TestMessage),
+        F: FnOnce(&Message),
     {
         self.target
             .assert_next_with_timeout(assertion, DEFAULT_TIMEOUT)

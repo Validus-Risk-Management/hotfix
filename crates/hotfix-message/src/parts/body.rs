@@ -1,7 +1,7 @@
 use crate::field_map::FieldMap;
 use crate::parts::Part;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Body {
     pub(crate) fields: FieldMap,
 }

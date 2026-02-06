@@ -7,7 +7,7 @@ use crate::common::setup::{
 };
 use crate::common::test_messages::TestMessage;
 use hotfix::application::OutboundDecision;
-use hotfix::message::{InboundMessage, OutboundMessage};
+use hotfix::message::OutboundMessage;
 use hotfix::session::{SendError, SendOutcome};
 
 #[tokio::test]

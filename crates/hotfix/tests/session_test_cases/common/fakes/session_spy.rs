@@ -1,15 +1,16 @@
 use crate::common::test_messages::TestMessage;
 use hotfix::session::SessionHandle;
+use hotfix_message::message::Message;
 
 pub struct SessionSpy {
     session_handle: SessionHandle<TestMessage>,
-    message_receiver: tokio::sync::mpsc::UnboundedReceiver<TestMessage>,
+    message_receiver: tokio::sync::mpsc::UnboundedReceiver<Message>,
 }
 
 impl SessionSpy {
     pub fn new(
         session_handle: SessionHandle<TestMessage>,
-        message_receiver: tokio::sync::mpsc::UnboundedReceiver<TestMessage>,
+        message_receiver: tokio::sync::mpsc::UnboundedReceiver<Message>,
     ) -> Self {
         Self {
             session_handle,
@@ -23,7 +24,7 @@ impl SessionSpy {
 
     pub async fn assert_next_with_timeout<F>(&mut self, assertion: F, timeout: std::time::Duration)
     where
-        F: FnOnce(&TestMessage),
+        F: FnOnce(&Message),
     {
         match tokio::time::timeout(timeout, self.message_receiver.recv()).await {
             Ok(Some(message)) => {

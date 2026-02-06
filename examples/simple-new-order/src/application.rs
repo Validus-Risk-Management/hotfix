@@ -1,5 +1,6 @@
-use crate::messages::{InboundMsg, OutboundMsg};
+use crate::messages::OutboundMsg;
 use hotfix::Application;
+use hotfix::Message;
 use hotfix::application::{InboundDecision, OutboundDecision};
 use tracing::info;
 
@@ -7,23 +8,13 @@ use tracing::info;
 pub struct TestApplication {}
 
 #[async_trait::async_trait]
-impl Application<InboundMsg, OutboundMsg> for TestApplication {
+impl Application<OutboundMsg> for TestApplication {
     async fn on_outbound_message(&self, _msg: &OutboundMsg) -> OutboundDecision {
         OutboundDecision::Send
     }
 
-    async fn on_inbound_message(&self, msg: InboundMsg) -> InboundDecision {
-        match msg {
-            InboundMsg::Unimplemented(data) => {
-                let pretty_bytes: Vec<u8> = data
-                    .iter()
-                    .map(|b| if *b == b'\x01' { b'|' } else { *b })
-                    .collect();
-                let s = std::str::from_utf8(&pretty_bytes).unwrap_or("invalid characters");
-                info!("received message: {:?}", s);
-            }
-        }
-
+    async fn on_inbound_message(&self, _msg: &Message) -> InboundDecision {
+        info!("received inbound message");
         InboundDecision::Accept
     }
 

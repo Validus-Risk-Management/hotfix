@@ -13,7 +13,7 @@ use tracing::{debug, warn};
 
 use crate::application::Application;
 use crate::config::SessionConfig;
-use crate::message::{InboundMessage, OutboundMessage};
+use crate::message::OutboundMessage;
 use crate::session::error::{SendError, SendOutcome, SessionCreationError};
 use crate::session::{InternalSessionRef, SessionHandle};
 use crate::store::MessageStore;
@@ -27,9 +27,9 @@ pub struct Initiator<Outbound> {
 }
 
 impl<Outbound: OutboundMessage> Initiator<Outbound> {
-    pub async fn start<Inbound: InboundMessage>(
+    pub async fn start(
         config: SessionConfig,
-        application: impl Application<Inbound, Outbound>,
+        application: impl Application<Outbound>,
         store: impl MessageStore + 'static,
     ) -> Result<Self, SessionCreationError> {
         let session_ref = InternalSessionRef::new(config.clone(), application, store)?;
@@ -157,10 +157,10 @@ async fn establish_connection<Outbound: OutboundMessage>(
 mod tests {
     use super::*;
     use crate::application::{Application, InboundDecision, OutboundDecision};
+    use crate::message::generate_message;
     use crate::message::logon::{Logon, ResetSeqNumConfig};
     use crate::message::logout::Logout;
     use crate::message::parser::Parser;
-    use crate::message::{InboundMessage, generate_message};
     use crate::store::in_memory::InMemoryMessageStore;
     use hotfix_message::Part;
     use hotfix_message::message::Message;
@@ -180,21 +180,15 @@ mod tests {
         }
     }
 
-    impl InboundMessage for DummyMessage {
-        fn parse(_message: &Message) -> Self {
-            DummyMessage
-        }
-    }
-
     // No-op application
     struct NoOpApp;
 
     #[async_trait::async_trait]
-    impl Application<DummyMessage, DummyMessage> for NoOpApp {
+    impl Application<DummyMessage> for NoOpApp {
         async fn on_outbound_message(&self, _msg: &DummyMessage) -> OutboundDecision {
             OutboundDecision::Send
         }
-        async fn on_inbound_message(&self, _msg: DummyMessage) -> InboundDecision {
+        async fn on_inbound_message(&self, _msg: &Message) -> InboundDecision {
             InboundDecision::Accept
         }
         async fn on_logout(&mut self, _reason: &str) {}
@@ -366,13 +360,10 @@ mod tests {
         let mut config = create_test_config("127.0.0.1", port);
         config.reconnect_interval = 1; // Short interval for test
 
-        let _initiator = Initiator::<DummyMessage>::start::<DummyMessage>(
-            config,
-            NoOpApp,
-            InMemoryMessageStore::default(),
-        )
-        .await
-        .unwrap();
+        let _initiator =
+            Initiator::<DummyMessage>::start(config, NoOpApp, InMemoryMessageStore::default())
+                .await
+                .unwrap();
 
         // Accept first connection
         let (conn1, _) = tokio::time::timeout(Duration::from_secs(2), listener.accept())

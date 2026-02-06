@@ -20,6 +20,7 @@ use crate::Application;
 use crate::application::{InboundDecision, OutboundDecision};
 use crate::config::SessionConfig;
 use crate::message::OutboundMessage;
+use crate::message::generate_message;
 use crate::message::heartbeat::Heartbeat;
 use crate::message::logon::{Logon, ResetSeqNumConfig};
 use crate::message::logout::Logout;
@@ -30,7 +31,6 @@ use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
 use crate::message::verification::verify_message;
 use crate::message::verification_error::{CompIdType, MessageVerificationError};
-use crate::message::{InboundMessage, generate_message};
 use crate::message_utils::{is_admin, prepare_message_for_resend};
 use crate::session::admin_request::AdminRequest;
 use crate::session::error::SessionCreationError;
@@ -57,7 +57,7 @@ use hotfix_message::session_fields::{
 
 const SCHEDULE_CHECK_INTERVAL: u64 = 1;
 
-struct Session<A, I, O, S> {
+struct Session<A, O, S> {
     message_config: MessageConfig,
     config: SessionConfig,
     schedule: SessionSchedule,
@@ -67,13 +67,12 @@ struct Session<A, I, O, S> {
     store: S,
     schedule_check_timer: Pin<Box<Sleep>>,
     reset_on_next_logon: bool,
-    _phantom: std::marker::PhantomData<fn() -> (I, O)>,
+    _phantom: std::marker::PhantomData<fn() -> O>,
 }
 
-impl<App, Inbound, Outbound, Store> Session<App, Inbound, Outbound, Store>
+impl<App, Outbound, Store> Session<App, Outbound, Store>
 where
-    App: Application<Inbound, Outbound>,
-    Inbound: InboundMessage,
+    App: Application<Outbound>,
     Outbound: OutboundMessage,
     Store: MessageStore,
 {
@@ -81,7 +80,7 @@ where
         config: SessionConfig,
         application: App,
         store: Store,
-    ) -> Result<Session<App, Inbound, Outbound, Store>, SessionCreationError> {
+    ) -> Result<Session<App, Outbound, Store>, SessionCreationError> {
         let schedule_check_timer = sleep(Duration::from_secs(SCHEDULE_CHECK_INTERVAL));
 
         let dictionary = Self::get_data_dictionary(&config)?;
@@ -245,9 +244,8 @@ where
     ) -> Result<(), SessionOperationError> {
         match self.verify_message(message, true) {
             Ok(_) => {
-                let parsed_message = Inbound::parse(message);
                 if matches!(
-                    self.application.on_inbound_message(parsed_message).await,
+                    self.application.on_inbound_message(message).await,
                     InboundDecision::TerminateSession
                 ) {
                     error!("failed to send inbound message to application");
@@ -1131,14 +1129,13 @@ fn get_msg_seq_num(message: &Message) -> u64 {
         .expect("MsgSeqNum missing from validated message - parser bug")
 }
 
-async fn run_session<App, Inbound, Outbound, Store>(
-    mut session: Session<App, Inbound, Outbound, Store>,
+async fn run_session<App, Outbound, Store>(
+    mut session: Session<App, Outbound, Store>,
     mut event_receiver: mpsc::Receiver<SessionEvent>,
     mut outbound_message_receiver: mpsc::Receiver<OutboundRequest<Outbound>>,
     mut admin_request_receiver: mpsc::Receiver<AdminRequest>,
 ) where
-    App: Application<Inbound, Outbound>,
-    Inbound: InboundMessage,
+    App: Application<Outbound>,
     Outbound: OutboundMessage,
     Store: MessageStore + Send + 'static,
 {
@@ -1196,7 +1193,7 @@ async fn run_session<App, Inbound, Outbound, Store>(
 mod tests {
     use super::*;
     use crate::application::{InboundDecision, OutboundDecision};
-    use crate::message::{InboundMessage, OutboundMessage};
+    use crate::message::OutboundMessage;
     use crate::store::{Result as StoreResult, StoreError};
     use chrono::{DateTime, Datelike, NaiveDate, NaiveTime, TimeDelta, Timelike};
     use chrono_tz::Tz;
@@ -1293,21 +1290,15 @@ mod tests {
         }
     }
 
-    impl InboundMessage for DummyMessage {
-        fn parse(_message: &Message) -> Self {
-            DummyMessage
-        }
-    }
-
     /// Minimal no-op application for testing
     struct NoOpApp;
 
     #[async_trait::async_trait]
-    impl Application<DummyMessage, DummyMessage> for NoOpApp {
+    impl Application<DummyMessage> for NoOpApp {
         async fn on_outbound_message(&self, _: &DummyMessage) -> OutboundDecision {
             OutboundDecision::Send
         }
-        async fn on_inbound_message(&self, _: DummyMessage) -> InboundDecision {
+        async fn on_inbound_message(&self, _: &Message) -> InboundDecision {
             InboundDecision::Accept
         }
         async fn on_logout(&mut self, _: &str) {}
@@ -1341,7 +1332,7 @@ mod tests {
         schedule: SessionSchedule,
         state: SessionState,
         store: TestStore,
-    ) -> Session<NoOpApp, DummyMessage, DummyMessage, TestStore> {
+    ) -> Session<NoOpApp, DummyMessage, TestStore> {
         let config = create_test_config();
         let message_config = MessageConfig::default();
         let dictionary = Dictionary::fix44();

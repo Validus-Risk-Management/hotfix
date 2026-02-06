@@ -1,5 +1,6 @@
 use crate::messages::{ExecutionReport, InboundMsg, OutboundMsg};
 use hotfix::Application;
+use hotfix::Message;
 use hotfix::application::{InboundDecision, OutboundDecision};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::info;
@@ -15,13 +16,14 @@ impl LoadTestingApplication {
 }
 
 #[async_trait::async_trait]
-impl Application<InboundMsg, OutboundMsg> for LoadTestingApplication {
+impl Application<OutboundMsg> for LoadTestingApplication {
     async fn on_outbound_message(&self, _msg: &OutboundMsg) -> OutboundDecision {
         OutboundDecision::Send
     }
 
-    async fn on_inbound_message(&self, msg: InboundMsg) -> InboundDecision {
-        match msg {
+    async fn on_inbound_message(&self, msg: &Message) -> InboundDecision {
+        let parsed = InboundMsg::parse(msg);
+        match parsed {
             InboundMsg::Unimplemented(data) => {
                 let pretty_bytes: Vec<u8> = data
                     .iter()

@@ -9,7 +9,7 @@ use std::sync::{Arc, Once};
 
 use hotfix::Application;
 use hotfix::application::{InboundDecision, OutboundDecision};
-use hotfix::message::{InboundMessage, OutboundMessage};
+use hotfix::message::OutboundMessage;
 use hotfix_message::message::Message;
 use rcgen::{CertificateParams, DnType, IsCa, KeyPair, KeyUsagePurpose, SanType};
 use rustls::ServerConfig;
@@ -337,22 +337,16 @@ impl OutboundMessage for MinimalMessage {
     }
 }
 
-impl InboundMessage for MinimalMessage {
-    fn parse(_message: &Message) -> Self {
-        MinimalMessage
-    }
-}
-
 /// A minimal Application implementation for testing transport connectivity.
 pub struct MinimalApplication;
 
 #[async_trait::async_trait]
-impl Application<MinimalMessage, MinimalMessage> for MinimalApplication {
+impl Application<MinimalMessage> for MinimalApplication {
     async fn on_outbound_message(&self, _msg: &MinimalMessage) -> OutboundDecision {
         OutboundDecision::Send
     }
 
-    async fn on_inbound_message(&self, _msg: MinimalMessage) -> InboundDecision {
+    async fn on_inbound_message(&self, _msg: &Message) -> InboundDecision {
         InboundDecision::Accept
     }
 

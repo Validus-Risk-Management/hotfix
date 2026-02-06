@@ -3,7 +3,7 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::debug;
 
 use crate::config::SessionConfig;
-use crate::message::{InboundMessage, OutboundMessage, RawFixMessage};
+use crate::message::{OutboundMessage, RawFixMessage};
 use crate::session::Session;
 use crate::session::admin_request::AdminRequest;
 use crate::session::error::{SendError, SendOutcome, SessionCreationError};
@@ -26,9 +26,9 @@ pub struct InternalSessionRef<Outbound> {
 }
 
 impl<Outbound: OutboundMessage> InternalSessionRef<Outbound> {
-    pub fn new<Inbound: InboundMessage>(
+    pub fn new(
         config: SessionConfig,
-        application: impl Application<Inbound, Outbound>,
+        application: impl Application<Outbound>,
         store: impl MessageStore + 'static,
     ) -> Result<Self, SessionCreationError> {
         let (event_sender, event_receiver) = mpsc::channel::<SessionEvent>(100);

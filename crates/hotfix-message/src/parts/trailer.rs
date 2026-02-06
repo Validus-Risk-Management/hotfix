@@ -3,7 +3,7 @@ use crate::parts::Part;
 use crate::session_fields;
 use hotfix_dictionary::IsFieldDefinition;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Trailer {
     pub(crate) fields: FieldMap,
 }
