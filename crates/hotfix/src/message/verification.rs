@@ -323,9 +323,9 @@ mod tests {
     fn test_seq_number_too_low_with_poss_dup_flag() {
         let config = build_test_config();
         let mut msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 40);
+        let sending_time: Timestamp = msg.header().get(fix44::SENDING_TIME).unwrap();
         msg.header_mut().set(fix44::POSS_DUP_FLAG, true);
-        msg.header_mut()
-            .set(fix44::ORIG_SENDING_TIME, Timestamp::utc_now());
+        msg.header_mut().set(fix44::ORIG_SENDING_TIME, sending_time);
 
         let result = verify_message(&msg, &config, Some(42));
 
