@@ -1,12 +1,15 @@
+use crate::message::OutboundMessage;
 use hotfix_message::message::Message;
 
 #[async_trait::async_trait]
 /// The application users of HotFIX can implement to hook into the engine.
-pub trait Application<Outbound>: Send + Sync + 'static {
+pub trait Application: Send + Sync + 'static {
+    type Outbound: OutboundMessage;
+
     /// Called when a message is sent to the engine to be sent to the counterparty.
     ///
     /// This is invoked before the raw message is persisted in the message store.
-    async fn on_outbound_message(&self, msg: &Outbound) -> OutboundDecision;
+    async fn on_outbound_message(&self, msg: &Self::Outbound) -> OutboundDecision;
     /// Called when a message is received from the counterparty.
     ///
     /// This is invoked after the message is verified by the session layer.

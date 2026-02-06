@@ -28,7 +28,7 @@ pub struct InternalSessionRef<Outbound> {
 impl<Outbound: OutboundMessage> InternalSessionRef<Outbound> {
     pub fn new(
         config: SessionConfig,
-        application: impl Application<Outbound>,
+        application: impl Application<Outbound = Outbound>,
         store: impl MessageStore + 'static,
     ) -> Result<Self, SessionCreationError> {
         let (event_sender, event_receiver) = mpsc::channel::<SessionEvent>(100);

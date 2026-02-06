@@ -16,7 +16,9 @@ impl LoadTestingApplication {
 }
 
 #[async_trait::async_trait]
-impl Application<OutboundMsg> for LoadTestingApplication {
+impl Application for LoadTestingApplication {
+    type Outbound = OutboundMsg;
+
     async fn on_outbound_message(&self, _msg: &OutboundMsg) -> OutboundDecision {
         OutboundDecision::Send
     }

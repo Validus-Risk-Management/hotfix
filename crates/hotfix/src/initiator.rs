@@ -29,7 +29,7 @@ pub struct Initiator<Outbound> {
 impl<Outbound: OutboundMessage> Initiator<Outbound> {
     pub async fn start(
         config: SessionConfig,
-        application: impl Application<Outbound>,
+        application: impl Application<Outbound = Outbound>,
         store: impl MessageStore + 'static,
     ) -> Result<Self, SessionCreationError> {
         let session_ref = InternalSessionRef::new(config.clone(), application, store)?;
@@ -184,7 +184,9 @@ mod tests {
     struct NoOpApp;
 
     #[async_trait::async_trait]
-    impl Application<DummyMessage> for NoOpApp {
+    impl Application for NoOpApp {
+        type Outbound = DummyMessage;
+
         async fn on_outbound_message(&self, _msg: &DummyMessage) -> OutboundDecision {
             OutboundDecision::Send
         }

@@ -28,7 +28,9 @@ impl FakeApplication {
 }
 
 #[async_trait::async_trait]
-impl Application<TestMessage> for FakeApplication {
+impl Application for FakeApplication {
+    type Outbound = TestMessage;
+
     async fn on_outbound_message(&self, _msg: &TestMessage) -> OutboundDecision {
         self.outbound_decision
     }

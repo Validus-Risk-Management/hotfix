@@ -57,7 +57,7 @@ use hotfix_message::session_fields::{
 
 const SCHEDULE_CHECK_INTERVAL: u64 = 1;
 
-struct Session<A, O, S> {
+struct Session<A, S> {
     message_config: MessageConfig,
     config: SessionConfig,
     schedule: SessionSchedule,
@@ -67,20 +67,18 @@ struct Session<A, O, S> {
     store: S,
     schedule_check_timer: Pin<Box<Sleep>>,
     reset_on_next_logon: bool,
-    _phantom: std::marker::PhantomData<fn() -> O>,
 }
 
-impl<App, Outbound, Store> Session<App, Outbound, Store>
+impl<App, Store> Session<App, Store>
 where
-    App: Application<Outbound>,
-    Outbound: OutboundMessage,
+    App: Application,
     Store: MessageStore,
 {
     fn new(
         config: SessionConfig,
         application: App,
         store: Store,
-    ) -> Result<Session<App, Outbound, Store>, SessionCreationError> {
+    ) -> Result<Session<App, Store>, SessionCreationError> {
         let schedule_check_timer = sleep(Duration::from_secs(SCHEDULE_CHECK_INTERVAL));
 
         let dictionary = Self::get_data_dictionary(&config)?;
@@ -98,7 +96,6 @@ where
             store,
             schedule_check_timer: Box::pin(schedule_check_timer),
             reset_on_next_logon: false,
-            _phantom: std::marker::PhantomData,
         };
 
         Ok(session)
@@ -794,7 +791,7 @@ where
             .reset_peer_timer(self.config.heartbeat_interval, test_request_id);
     }
 
-    async fn send_app_message(&mut self, message: Outbound) -> Result<SendOutcome, SendError> {
+    async fn send_app_message(&mut self, message: App::Outbound) -> Result<SendOutcome, SendError> {
         if !self.state.is_connected() {
             return Err(SendError::Disconnected);
         }
@@ -981,7 +978,7 @@ where
         }
     }
 
-    async fn handle_outbound_message(&mut self, request: OutboundRequest<Outbound>) {
+    async fn handle_outbound_message(&mut self, request: OutboundRequest<App::Outbound>) {
         let OutboundRequest { message, confirm } = request;
         let result = self.send_app_message(message).await;
         match confirm {
@@ -1129,14 +1126,13 @@ fn get_msg_seq_num(message: &Message) -> u64 {
         .expect("MsgSeqNum missing from validated message - parser bug")
 }
 
-async fn run_session<App, Outbound, Store>(
-    mut session: Session<App, Outbound, Store>,
+async fn run_session<App, Store>(
+    mut session: Session<App, Store>,
     mut event_receiver: mpsc::Receiver<SessionEvent>,
-    mut outbound_message_receiver: mpsc::Receiver<OutboundRequest<Outbound>>,
+    mut outbound_message_receiver: mpsc::Receiver<OutboundRequest<App::Outbound>>,
     mut admin_request_receiver: mpsc::Receiver<AdminRequest>,
 ) where
-    App: Application<Outbound>,
-    Outbound: OutboundMessage,
+    App: Application,
     Store: MessageStore + Send + 'static,
 {
     loop {
@@ -1294,7 +1290,9 @@ mod tests {
     struct NoOpApp;
 
     #[async_trait::async_trait]
-    impl Application<DummyMessage> for NoOpApp {
+    impl Application for NoOpApp {
+        type Outbound = DummyMessage;
+
         async fn on_outbound_message(&self, _: &DummyMessage) -> OutboundDecision {
             OutboundDecision::Send
         }
@@ -1332,7 +1330,7 @@ mod tests {
         schedule: SessionSchedule,
         state: SessionState,
         store: TestStore,
-    ) -> Session<NoOpApp, DummyMessage, TestStore> {
+    ) -> Session<NoOpApp, TestStore> {
         let config = create_test_config();
         let message_config = MessageConfig::default();
         let dictionary = Dictionary::fix44();
@@ -1348,7 +1346,6 @@ mod tests {
             store,
             schedule_check_timer: Box::pin(sleep(Duration::from_secs(1))),
             reset_on_next_logon: false,
-            _phantom: std::marker::PhantomData,
         }
     }
 

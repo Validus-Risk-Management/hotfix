@@ -341,7 +341,9 @@ impl OutboundMessage for MinimalMessage {
 pub struct MinimalApplication;
 
 #[async_trait::async_trait]
-impl Application<MinimalMessage> for MinimalApplication {
+impl Application for MinimalApplication {
+    type Outbound = MinimalMessage;
+
     async fn on_outbound_message(&self, _msg: &MinimalMessage) -> OutboundDecision {
         OutboundDecision::Send
     }
