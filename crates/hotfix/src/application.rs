@@ -20,8 +20,26 @@ pub trait Application: Send + Sync + 'static {
     async fn on_logon(&mut self);
 }
 
+/// Standard FIX Business Reject Reason values (tag 380).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum BusinessRejectReason {
+    Other = 0,
+    UnknownId = 1,
+    UnknownSecurity = 2,
+    UnsupportedMessageType = 3,
+    ApplicationNotAvailable = 4,
+    ConditionallyRequiredFieldMissing = 5,
+    NotAuthorized = 6,
+    DeliverToFirmNotAvailable = 7,
+}
+
 pub enum InboundDecision {
     Accept,
+    Reject {
+        reason: BusinessRejectReason,
+        text: Option<String>,
+    },
     TerminateSession,
 }
 
