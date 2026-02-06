@@ -81,7 +81,7 @@ where
         config: SessionConfig,
         application: App,
         store: Store,
-    ) -> std::result::Result<Session<App, Inbound, Outbound, Store>, SessionCreationError> {
+    ) -> Result<Session<App, Inbound, Outbound, Store>, SessionCreationError> {
         let schedule_check_timer = sleep(Duration::from_secs(SCHEDULE_CHECK_INTERVAL));
 
         let dictionary = Self::get_data_dictionary(&config)?;
@@ -296,7 +296,7 @@ where
         &self,
         message: &Message,
         verify_target_seq_number: bool,
-    ) -> std::result::Result<(), MessageVerificationError> {
+    ) -> Result<(), MessageVerificationError> {
         let expected_seq_number = if verify_target_seq_number {
             Some(self.store.next_target_seq_number())
         } else {
