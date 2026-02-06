@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.13](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-web-v0.1.12...hotfix-web-v0.1.13) - 2026-02-06
+
+### Added
+
+- replace anyhow errors in session layer with proper error variants ([#302](https://github.com/Validus-Risk-Management/hotfix/pull/302))
+
 ## [0.1.12](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-web-v0.1.11...hotfix-web-v0.1.12) - 2026-02-03
 
 ### Other
