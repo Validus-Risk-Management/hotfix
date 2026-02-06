@@ -5,14 +5,6 @@ use hotfix_message::message::Message;
 use hotfix_message::session_fields::{REF_MSG_TYPE, REF_SEQ_NUM, TEXT};
 use hotfix_message::{Buffer, FieldType, HardCodedFixFieldDefinition, Part};
 
-#[allow(dead_code)]
-const BUSINESS_REJECT_REF_ID: &HardCodedFixFieldDefinition = &HardCodedFixFieldDefinition {
-    name: "BusinessRejectRefID",
-    tag: 379,
-    data_type: FixDatatype::String,
-    location: FieldLocation::Body,
-};
-
 const BUSINESS_REJECT_REASON: &HardCodedFixFieldDefinition = &HardCodedFixFieldDefinition {
     name: "BusinessRejectReason",
     tag: 380,
