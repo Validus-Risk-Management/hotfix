@@ -30,16 +30,23 @@ reaching full support of FIX 4.4 and 5.0 workflows as soon as possible.
 ### Features & status
 
 - [x] Network layer including TCP transport with optional TLS support using `rustls`
-- [x] Message encoding and decoding (FIX 4.4)
+- [x] Message encoding and decoding
 - [x] Session-layer supporting the core flows, such as logins, resends, etc.
 - [x] Built-in message stores
     - [x] in-memory
     - [x] file-system
     - [x] [mongodb](https://www.mongodb.com/docs/drivers/rust/current/)
-    - [x] [redb](https://www.redb.org/)
 - [x] Code-generation for FIX fields from XML specifications
-- [ ] FIX 5.0 support
+- [x] Web API and CLI for session monitoring and management
 - [ ] Code-generation for complete FIX messages from XML specification
+
+### FIX version support
+
+| Version | Status |
+|---------|--------|
+| FIX 4.2 | Should work, but currently untested |
+| FIX 4.4 | Fully supported |
+| FIX 5.0 | Planned |
 
 Check out the [examples](https://github.com/Validus-Risk-Management/hotfix/tree/main/examples)
 to get started.

@@ -30,9 +30,9 @@ RUST_LOG=info,hotfix=debug
 
 ## Message store selection
 
-You can run this example with either a `redb` message store, which
-requires no setup. This creates the `session.db` file in the working
-directory to hold state.
+By default, this example uses the file-system message store, which
+requires no setup. Message state is persisted to files in the working
+directory.
 
 Alternatively, you can try out the MongoDB store. This requires you to
 spin up MongoDB locally first using the provided `docker-compose` file.

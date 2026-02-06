@@ -8,15 +8,12 @@
 //! ### What's working already and short-term roadmap
 //!
 //! - [x] Network layer including TCP transport with optional TLS support using `rustls`
-//! - [x] Message encoding and decoding (FIX 4.4)
+//! - [x] Message encoding and decoding
 //! - [x] Session-layer supporting the core flows, such as logins, resends, etc.
-//! - [x] Built-in message stores
-//!   - [x] in-memory
-//!   - [x] [mongodb](https://www.mongodb.com/docs/drivers/rust/current/)
-//!   - [x] [redb](https://www.redb.org/)
-//!   - [x] Code-generation for FIX fields from XML specifications
-//!   - [ ] FIX 5.0 support
-//!   - [ ] Code-generation for complete FIX messages from XML specification
+//! - [x] Built-in message stores (in-memory, file-system, MongoDB)
+//! - [x] Code-generation for FIX fields from XML specifications
+//! - [x] Web API and CLI for session monitoring and management
+//! - [ ] Code-generation for complete FIX messages from XML specification
 //!
 //! Check out the [examples](https://github.com/Validus-Risk-Management/hotfix/tree/main/examples)
 //! to get started.
