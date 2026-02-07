@@ -57,16 +57,17 @@ parsing the XML specification, defining fields, etc.
 
 ### Contributions
 
-In its current state, the engine has a lot of issues that will be fixed
-in due course, so please don't create issues or PRs for individual bugs.
+If you're on the buy side and working with FIX 4.4, HotFIX should be ready for
+your use case.
+If you run into any issues, please file a bug report on
+[GitHub Issues](https://github.com/Validus-Risk-Management/hotfix/issues).
 
-We welcome committed contributors who want to work with us to turn this
-into a successful project. There are many components that can be developed
-in parallel. If you are interested in participating, don't hesitate to
-reach out.
-
-The best way to get in touch is by
-[starting a Discussion](https://github.com/Validus-Risk-Management/hotfix/discussions).
+Contributions towards larger features outside the current roadmap — for example,
+extending HotFIX to support acceptor (sell-side) workflows — are very welcome.
+For these, open an
+[Issue](https://github.com/Validus-Risk-Management/hotfix/issues) or start a
+[Discussion](https://github.com/Validus-Risk-Management/hotfix/discussions)
+to coordinate.
 
 [crates-badge]: https://img.shields.io/crates/v/hotfix.svg
 
