@@ -14,11 +14,12 @@ RUN --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
     <<EOF
 set -e
 cargo build --locked --release --package $APP_NAME
-cp ./target/release/$APP_NAME /bin/hotfix-initiator
+cp ./target/release/$APP_NAME /bin/$APP_NAME
 EOF
 
 FROM debian:bullseye-slim AS runner
 
+ARG APP_NAME
 ARG UID=10001
 RUN adduser \
     --disabled-password \
@@ -30,7 +31,8 @@ RUN adduser \
     appuser
 USER appuser
 
-COPY --from=builder /bin/hotfix-initiator /bin/
-COPY examples/order-entry/config /config
+COPY --from=builder /bin/$APP_NAME /bin/$APP_NAME
+COPY examples/$APP_NAME/config /config
 
-CMD ["/bin/hotfix-initiator", "--config", "/config/test-config-docker.toml"]
+ENV APP_NAME=$APP_NAME
+CMD /bin/$APP_NAME --config /config/test-config-docker.toml
