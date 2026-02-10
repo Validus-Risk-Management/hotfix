@@ -1,4 +1,11 @@
 services:
+  initiator-example:
+    build:
+      context: .
+      dockerfile: examples/simple-new-order/Dockerfile
+    environment:
+      RUST_LOG: debug
+    stdin_open: true
   dummy-executor:
     build: dummy-executor
     ports:
