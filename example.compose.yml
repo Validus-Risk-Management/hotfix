@@ -2,7 +2,7 @@ services:
   initiator-example:
     build:
       context: .
-      dockerfile: examples/simple-new-order/Dockerfile
+      dockerfile: examples/order-entry/Dockerfile
     environment:
       RUST_LOG: debug
     ports:

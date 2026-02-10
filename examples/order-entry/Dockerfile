@@ -1,5 +1,5 @@
 ARG RUST_VERSION=1.93.0
-ARG APP_NAME=simple-new-order
+ARG APP_NAME=order-entry
 FROM rust:${RUST_VERSION}-slim-bullseye AS builder
 
 ARG APP_NAME
@@ -31,6 +31,6 @@ RUN adduser \
 USER appuser
 
 COPY --from=builder /bin/hotfix-initiator /bin/
-COPY examples/simple-new-order/config /config
+COPY examples/order-entry/config /config
 
 CMD ["/bin/hotfix-initiator", "--config", "/config/test-config-docker.toml"]

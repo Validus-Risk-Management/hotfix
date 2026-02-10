@@ -111,7 +111,7 @@ async fn start_session(
             Initiator::start(session_config, app, store).await?
         }
         Database::File => {
-            let store = hotfix::store::file::FileStore::new("data", "simple-new-order-store")
+            let store = hotfix::store::file::FileStore::new("data", "order-entry-store")
                 .context("failed to create file store")?;
             Initiator::start(session_config, app, store).await?
         }
