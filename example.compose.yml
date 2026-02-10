@@ -1,0 +1,5 @@
+services:
+  dummy-executor:
+    build: dummy-executor
+    ports:
+      - "9880:9880"
