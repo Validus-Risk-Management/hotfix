@@ -10,12 +10,12 @@ pub struct ExecutionReport {
     order_id: String,
     cl_ord_id: String,
     exec_id: String,
-    exec_type: u32,
+    exec_type: String,
     ord_status: OrdStatus,
     side: Side,
     symbol: String,
-    leaves_qty: u32,
-    cum_qty: u32,
+    leaves_qty: f64,
+    cum_qty: f64,
     avx_px: f64,
 }
 
@@ -94,12 +94,12 @@ impl InboundMsg {
             order_id: message.get::<&str>(fix44::ORDER_ID).unwrap().to_string(),
             cl_ord_id: message.get::<&str>(fix44::CL_ORD_ID).unwrap().to_string(),
             exec_id: message.get::<&str>(fix44::EXEC_ID).unwrap().to_string(),
-            exec_type: message.get::<u32>(fix44::EXEC_TYPE).unwrap(),
+            exec_type: message.get::<&str>(fix44::EXEC_TYPE).unwrap().to_string(),
             ord_status: message.get::<OrdStatus>(fix44::ORD_STATUS).unwrap(),
             side: message.get::<Side>(fix44::SIDE).unwrap(),
             symbol: message.get::<&str>(fix44::SYMBOL).unwrap().to_string(),
-            leaves_qty: message.get::<u32>(fix44::LEAVES_QTY).unwrap(),
-            cum_qty: message.get::<u32>(fix44::CUM_QTY).unwrap(),
+            leaves_qty: message.get::<f64>(fix44::LEAVES_QTY).unwrap(),
+            cum_qty: message.get::<f64>(fix44::CUM_QTY).unwrap(),
             avx_px: message.get::<f64>(fix44::AVG_PX).unwrap(),
         };
         Self::ExecutionReport(report)

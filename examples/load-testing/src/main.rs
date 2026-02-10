@@ -18,6 +18,8 @@ use tracing_subscriber::EnvFilter;
 use crate::application::LoadTestingApplication;
 use crate::messages::{ExecutionReport, NewOrderSingle, OutboundMsg};
 
+const REPORTS_PER_ORDER: u32 = 2;
+
 #[derive(ValueEnum, Clone, Debug)]
 #[clap(rename_all = "lower")]
 enum Database {
@@ -143,7 +145,7 @@ async fn listen_for_reports(mut rx: UnboundedReceiver<ExecutionReport>, message_
     while let Some(_report) = rx.recv().await {
         count += 1;
 
-        if count == message_count {
+        if count == message_count * REPORTS_PER_ORDER {
             break;
         }
     }
