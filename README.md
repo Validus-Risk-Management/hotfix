@@ -40,8 +40,22 @@ various QuickFIX implementations, with long-term plans to optimise further.
 | FIX 4.4 | Fully supported                     |
 | FIX 5.0 | Planned                             |
 
-Check out the [examples](https://github.com/Validus-Risk-Management/hotfix/tree/main/examples)
-to get started.
+### Getting started
+
+The quickest way to see HotFIX in action is with Docker Compose. The
+repository includes an [order-entry](https://github.com/Validus-Risk-Management/hotfix/tree/main/examples/order-entry) example
+initiator and a dummy acceptor that you can start together:
+
+```shell
+docker compose -f example.compose.yml up --build
+```
+
+Once both services are running, open
+[http://localhost:9881/order](http://localhost:9881/order) to send FIX
+orders through the web UI and watch the messages flow in real time.
+
+See the [examples](https://github.com/Validus-Risk-Management/hotfix/tree/main/examples) directory for more details and
+additional ways to run.
 
 ### Prior Art
 

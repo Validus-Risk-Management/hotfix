@@ -1,40 +1,44 @@
-# Example initiator using HotFIX
+# Order Entry — HotFIX example initiator
 
-This dummy application demonstrates the current capabilities of HotFIX.
-It connects to an acceptor, and sends a hard-coded single order.
+An example FIX 4.4 initiator that connects to an acceptor and lets you
+send NewOrderSingle (D) messages through a web UI.
 
-It's mainly used for testing session-level message flows, such as
-logons, logouts, disconnects, and resends.
+## Quick start with Docker Compose
 
-## Running the app
-
-You need an acceptor capable of receiving FIX 4.4 messages. If you already have one,
-great, otherwise [the QuickFIX/J example executor](https://github.com/quickfix-j/quickfixj/tree/master/quickfixj-examples/executor)
-is straightforward to modify for this use-case.
-
-If you need to modify the configuration, you can find this in `./config/test-config.toml`.
-
-To run the application, just use `cargo run`. Pass in the config path and optionally
-the log file path as CLI arguments, e.g.
+The easiest way to run the example is with the compose file at the
+repository root. It starts both the order-entry initiator and a
+dummy acceptor so everything works out of the box:
 
 ```shell
-cargo run -- -c config/test-config.toml
+docker compose -f example.compose.yml up --build
 ```
 
-Most of HotFIX's logging is `debug` level, so you may want to adjust
-the log levels accordingly:
+Once running, open [http://localhost:9881/order](http://localhost:9881/order)
+to send orders and see FIX messages flowing.
+
+The HotFIX status dashboard is also available at
+[http://localhost:9881](http://localhost:9881).
+
+## Running locally with Cargo
+
+If you prefer to run outside Docker you need a FIX 4.4 acceptor
+listening on the host/port in `config/test-config.toml` (defaults to
+`127.0.0.1:9880`).
+
+```shell
+cargo run --package order-entry -- -c examples/order-entry/config/test-config.toml
+```
+
+Then open [http://localhost:9881/order](http://localhost:9881/order).
+
+Set `RUST_LOG` for detailed output:
 
 ```shell
 RUST_LOG=info,hotfix=debug
 ```
 
-## Message store selection
+## Message store
 
-By default, this example uses the file-system message store, which
-requires no setup. Message state is persisted to files in the working
-directory.
-
-Alternatively, you can try out the MongoDB store. This requires you to
-spin up MongoDB locally first using the provided `docker-compose` file.
-Once you have MongoDB running, you can run the application with the
-`--database mongodb` flag to use it.
+By default the in-memory message store is used. You can switch to the
+file-system store with `--database file`, which persists state to the
+working directory.
