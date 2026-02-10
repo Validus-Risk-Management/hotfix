@@ -5,7 +5,9 @@ services:
       dockerfile: examples/simple-new-order/Dockerfile
     environment:
       RUST_LOG: debug
-    stdin_open: true
+    ports:
+      - "9881:9881"
+
   dummy-executor:
     build: dummy-executor
     ports:
