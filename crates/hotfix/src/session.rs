@@ -809,7 +809,7 @@ where
                 .map_err(|_| SessionOperationError::MissingField("MSG_TYPE"))?
                 .to_string();
 
-            if is_admin(message_type.as_str()) {
+            if is_admin(&message_type) {
                 if reset_start.is_none() {
                     reset_start = Some(sequence_number);
                 }
@@ -829,11 +829,8 @@ where
                     "failed to prepare message for resend, sending original"
                 );
             }
-            self.send_raw(
-                message_type.as_bytes(),
-                message.encode(&self.message_config)?,
-            )
-            .await;
+            self.send_raw(&message_type, message.encode(&self.message_config)?)
+                .await;
 
             if enabled!(tracing::Level::DEBUG)
                 && let Ok(m) = String::from_utf8(msg.clone())
@@ -896,7 +893,7 @@ where
         message: impl OutboundMessage,
     ) -> Result<u64, InternalSendError> {
         let seq_num = self.store.next_sender_seq_number();
-        let msg_type = message.message_type().as_bytes().to_vec();
+        let msg_type = message.message_type().to_string();
         let msg = generate_message(
             &self.config.begin_string,
             &self.config.sender_comp_id,
@@ -926,7 +923,7 @@ where
         Ok(seq_num)
     }
 
-    async fn send_raw(&mut self, message_type: &[u8], data: Vec<u8>) {
+    async fn send_raw(&mut self, message_type: &str, data: Vec<u8>) {
         self.state
             .send_message(message_type, RawFixMessage::new(data))
             .await;
@@ -950,8 +947,7 @@ where
             sequence_reset,
         )?;
 
-        self.send_raw(SequenceReset::MSG_TYPE.as_bytes(), raw_message)
-            .await;
+        self.send_raw(SequenceReset::MSG_TYPE, raw_message).await;
         debug!(begin, end, "sent reset sequence");
 
         Ok(())

@@ -1,3 +1,5 @@
+use crate::message::logon::Logon;
+use crate::message::logout::Logout;
 use crate::message::parser::RawFixMessage;
 use crate::session::event::AwaitingActiveSessionResponse;
 use crate::session::info::Status as SessionInfoStatus;
@@ -61,11 +63,11 @@ impl SessionState {
         }
     }
 
-    pub async fn send_message(&mut self, message_type: &[u8], message: RawFixMessage) {
+    pub async fn send_message(&mut self, message_type: &str, message: RawFixMessage) {
         match self {
             Self::Active(ActiveState { writer, .. })
             | Self::AwaitingResend(AwaitingResendState { writer, .. }) => {
-                if message_type == b"A" {
+                if message_type == Logon::MSG_TYPE {
                     error!("logon message is invalid for active sessions")
                 } else {
                     writer.send_raw_message(message).await
@@ -73,28 +75,24 @@ impl SessionState {
             }
             Self::AwaitingLogon {
                 writer, logon_sent, ..
-            } => {
-                match message_type {
-                    b"A" => {
-                        // Logon message
-                        if *logon_sent {
-                            error!("trying to send logon twice");
-                        } else {
-                            writer.send_raw_message(message).await;
-                            *logon_sent = true;
-                        }
-                    }
-                    b"5" => {
-                        // Logout message
+            } => match message_type {
+                Logon::MSG_TYPE => {
+                    if *logon_sent {
+                        error!("trying to send logon twice");
+                    } else {
                         writer.send_raw_message(message).await;
+                        *logon_sent = true;
                     }
-                    _ => error!("invalid outgoing message for AwaitingLogon state"),
                 }
-            }
+                Logout::MSG_TYPE => {
+                    writer.send_raw_message(message).await;
+                }
+                _ => error!("invalid outgoing message for AwaitingLogon state"),
+            },
             Self::AwaitingLogout { writer, .. } => {
                 // Logout messages are allowed because we first transition into AwaitingLogout
                 // and only then send the logout message
-                if message_type == b"5" {
+                if message_type == Logout::MSG_TYPE {
                     writer.send_raw_message(message).await
                 }
             }
