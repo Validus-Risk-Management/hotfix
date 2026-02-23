@@ -9,6 +9,8 @@ pub struct Logout {
 }
 
 impl Logout {
+    pub const MSG_TYPE: &str = "5";
+
     pub fn with_reason(reason: String) -> Self {
         Self { text: Some(reason) }
     }
@@ -22,6 +24,6 @@ impl OutboundMessage for Logout {
     }
 
     fn message_type(&self) -> &str {
-        "5"
+        Self::MSG_TYPE
     }
 }

@@ -10,6 +10,8 @@ pub struct ResendRequest {
 }
 
 impl ResendRequest {
+    pub const MSG_TYPE: &str = "2";
+
     pub fn new(begin: u64, end: u64) -> Self {
         Self {
             begin_seq_no: begin,
@@ -25,6 +27,6 @@ impl OutboundMessage for ResendRequest {
     }
 
     fn message_type(&self) -> &str {
-        "2"
+        Self::MSG_TYPE
     }
 }

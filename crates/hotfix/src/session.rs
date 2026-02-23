@@ -32,7 +32,7 @@ use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
 use crate::message::verification::verify_message;
 use crate::message::verification_error::{CompIdType, MessageVerificationError};
-use crate::message_utils::{is_admin, prepare_message_for_resend};
+use crate::message::{is_admin, prepare_message_for_resend};
 use crate::session::admin_request::AdminRequest;
 use crate::session::error::SessionCreationError;
 use crate::session::error::{InternalSendError, InternalSendResultExt, SessionOperationError};
@@ -194,7 +194,7 @@ where
 
         if let SessionState::AwaitingResend(state) = &mut self.state {
             let seq_number = get_msg_seq_num(&message);
-            if seq_number > state.end_seq_number && message_type != "2" {
+            if seq_number > state.end_seq_number && message_type != ResendRequest::MSG_TYPE {
                 state.inbound_queue.push_back(message);
                 return Ok(());
             }
@@ -202,32 +202,32 @@ where
 
         if let SessionState::AwaitingLogon { .. } = &mut self.state {
             // TODO: should this (and all inbound message processing) logic be pushed into the state?
-            if message_type != "A" {
+            if message_type != Logon::MSG_TYPE {
                 self.state.disconnect_writer().await;
                 return Ok(());
             }
         }
 
         match message_type {
-            "0" => {
+            Heartbeat::MSG_TYPE => {
                 self.on_heartbeat(&message).await?;
             }
-            "1" => {
+            TestRequest::MSG_TYPE => {
                 self.on_test_request(&message).await?;
             }
-            "2" => {
+            ResendRequest::MSG_TYPE => {
                 self.on_resend_request(&message).await?;
             }
-            "3" => {
+            Reject::MSG_TYPE => {
                 self.on_reject(&message).await?;
             }
-            "4" => {
+            SequenceReset::MSG_TYPE => {
                 self.on_sequence_reset(&message).await?;
             }
-            "5" => {
+            Logout::MSG_TYPE => {
                 self.on_logout(&message).await?;
             }
-            "A" => {
+            Logon::MSG_TYPE => {
                 self.on_logon(&message).await?;
             }
             _ => self.process_app_message(&message).await?,
@@ -296,7 +296,7 @@ where
                 let msg_type: &str = msg.header().get(MSG_TYPE).unwrap_or("");
                 debug!(seq_number, msg_type, "processing queued message");
 
-                if msg_type == "2" {
+                if msg_type == ResendRequest::MSG_TYPE {
                     // ResendRequest was already processed when it arrived (it bypasses
                     // the queue in process_message). Just increment the target seq number
                     // for sequence accounting purposes.
@@ -472,10 +472,10 @@ where
 
         // If seq is too high and we're in AwaitingResend, queue it for seq accounting
         // when the gap fill catches up, but still process the resend below.
-        if msg_seq_num > expected {
-            if let SessionState::AwaitingResend(state) = &mut self.state {
-                state.inbound_queue.push_back(message.clone());
-            }
+        if msg_seq_num > expected
+            && let SessionState::AwaitingResend(state) = &mut self.state
+        {
+            state.inbound_queue.push_back(message.clone());
         }
 
         let begin_seq_number: u64 = match message.get(BEGIN_SEQ_NO) {
@@ -950,7 +950,8 @@ where
             sequence_reset,
         )?;
 
-        self.send_raw(b"4", raw_message).await;
+        self.send_raw(SequenceReset::MSG_TYPE.as_bytes(), raw_message)
+            .await;
         debug!(begin, end, "sent reset sequence");
 
         Ok(())

@@ -110,7 +110,7 @@ where
             _ => panic!("trying to resend invalid message"),
         };
 
-        if let Err(err) = hotfix::message_utils::prepare_message_for_resend(&mut message) {
+        if let Err(err) = hotfix::message::prepare_message_for_resend(&mut message) {
             panic!("failed to prepare message for resend: {err:?}");
         }
 

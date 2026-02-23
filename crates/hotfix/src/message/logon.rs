@@ -19,6 +19,8 @@ pub enum ResetSeqNumConfig {
 }
 
 impl Logon {
+    pub const MSG_TYPE: &str = "A";
+
     pub fn new(heartbeat_interval: u64, reset_config: ResetSeqNumConfig) -> Self {
         let (reset_seq_num_flag, next_expected_msg_seq_num) = match reset_config {
             ResetSeqNumConfig::Reset => (ResetSeqNumFlag::Yes, None),
@@ -45,7 +47,7 @@ impl OutboundMessage for Logon {
     }
 
     fn message_type(&self) -> &str {
-        "A"
+        Self::MSG_TYPE
     }
 }
 

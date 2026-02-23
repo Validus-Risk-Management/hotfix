@@ -49,6 +49,8 @@ pub(crate) struct BusinessReject {
 }
 
 impl BusinessReject {
+    pub(crate) const MSG_TYPE: &str = "j";
+
     pub(crate) fn new(ref_msg_type: &str, reason: BusinessRejectReason) -> Self {
         Self {
             ref_msg_type: ref_msg_type.to_string(),
@@ -100,7 +102,7 @@ impl OutboundMessage for BusinessReject {
     }
 
     fn message_type(&self) -> &str {
-        "j"
+        Self::MSG_TYPE
     }
 }
 

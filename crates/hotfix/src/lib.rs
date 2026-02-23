@@ -25,7 +25,6 @@ pub mod application;
 pub mod config;
 pub mod initiator;
 pub mod message;
-pub mod message_utils;
 pub mod session;
 mod session_schedule;
 pub mod store;

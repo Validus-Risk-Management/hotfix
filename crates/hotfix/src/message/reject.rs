@@ -16,6 +16,8 @@ pub(crate) struct Reject {
 }
 
 impl Reject {
+    pub(crate) const MSG_TYPE: &str = "3";
+
     pub(crate) fn new(ref_seq_num: u64) -> Self {
         Self {
             ref_seq_num,
@@ -85,7 +87,7 @@ impl OutboundMessage for Reject {
     }
 
     fn message_type(&self) -> &str {
-        "3"
+        Self::MSG_TYPE
     }
 }
 

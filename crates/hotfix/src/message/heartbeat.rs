@@ -9,6 +9,8 @@ pub struct Heartbeat {
 }
 
 impl Heartbeat {
+    pub const MSG_TYPE: &str = "0";
+
     pub fn for_request(test_req_id: String) -> Self {
         Self {
             test_req_id: Some(test_req_id),
@@ -24,6 +26,6 @@ impl OutboundMessage for Heartbeat {
     }
 
     fn message_type(&self) -> &str {
-        "0"
+        Self::MSG_TYPE
     }
 }

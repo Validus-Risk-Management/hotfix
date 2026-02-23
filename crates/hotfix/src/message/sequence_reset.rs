@@ -12,6 +12,10 @@ pub struct SequenceReset {
     pub new_seq_no: u64,
 }
 
+impl SequenceReset {
+    pub const MSG_TYPE: &str = "4";
+}
+
 impl OutboundMessage for SequenceReset {
     fn write(&self, msg: &mut Message) {
         msg.set(GAP_FILL_FLAG, self.gap_fill);
@@ -25,6 +29,6 @@ impl OutboundMessage for SequenceReset {
     }
 
     fn message_type(&self) -> &str {
-        "4"
+        Self::MSG_TYPE
     }
 }

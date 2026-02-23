@@ -9,6 +9,8 @@ pub struct TestRequest {
 }
 
 impl TestRequest {
+    pub const MSG_TYPE: &str = "1";
+
     pub fn new(test_req_id: String) -> Self {
         Self { test_req_id }
     }
@@ -20,6 +22,6 @@ impl OutboundMessage for TestRequest {
     }
 
     fn message_type(&self) -> &str {
-        "1"
+        Self::MSG_TYPE
     }
 }
