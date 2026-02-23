@@ -220,3 +220,60 @@ async fn test_resend_request_with_gap_fill_for_admin_messages() {
 
     finally(&session, &mut counterparty).disconnect().await;
 }
+
+/// Tests that when both sides detect a sequence gap simultaneously (each sends a ResendRequest),
+/// the session processes the counterparty's ResendRequest immediately instead of queueing it,
+/// preventing a deadlock where neither side processes the other's ResendRequest.
+#[tokio::test]
+async fn test_resend_request_not_deadlocked_when_both_sides_detect_gap() {
+    let (mut session, mut counterparty) = given_an_active_session().await;
+
+    // The counterparty previously sent an execution report which we missed
+    when(&mut counterparty)
+        .has_previously_sent(TestMessage::dummy_execution_report())
+        .await;
+
+    // The counterparty sends another message which we do receive, creating a gap
+    when(&mut counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
+        .await;
+
+    // We detect the gap and enter AwaitingResend state, sending a ResendRequest
+    then(&mut session)
+        .status_changes_to(Status::AwaitingResend {
+            begin: 2,
+            end: 3,
+            attempts: 1,
+        })
+        .await;
+    then(&mut counterparty)
+        .receives(|msg| assert_msg_type(msg, MsgType::ResendRequest))
+        .await;
+
+    // Now the counterparty also sends a ResendRequest (simulating they also detected a gap).
+    // This ResendRequest has seq number 4 (> end_seq_number 3), which would previously
+    // be queued — causing a deadlock. With the fix, it should be processed immediately.
+    let resend_request = ResendRequest::new(1, 0);
+    when(&mut counterparty).sends_message(resend_request).await;
+
+    // The session should respond to the counterparty's ResendRequest with a SequenceReset-GapFill
+    // for the logon message (admin messages are gap-filled).
+    // This proves the ResendRequest was processed and not stuck in the queue.
+    then(&mut counterparty)
+        .receives(|msg| {
+            let msg_type: &str = msg.header().get(MSG_TYPE).unwrap();
+            assert!(
+                msg_type == MsgType::SequenceReset.to_string()
+                    || msg_type == MsgType::ExecutionReport.to_string(),
+                "expected SequenceReset or resent message in response to ResendRequest, got {msg_type}"
+            );
+        })
+        .await;
+
+    // Now the counterparty fulfills our resend request so we can resume
+    when(&mut counterparty).resends_message(2).await;
+    when(&mut counterparty).resends_message(3).await;
+    then(&mut session).status_changes_to(Status::Active).await;
+
+    finally(&session, &mut counterparty).disconnect().await;
+}

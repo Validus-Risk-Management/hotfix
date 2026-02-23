@@ -194,7 +194,7 @@ where
 
         if let SessionState::AwaitingResend(state) = &mut self.state {
             let seq_number = get_msg_seq_num(&message);
-            if seq_number > state.end_seq_number {
+            if seq_number > state.end_seq_number && message_type != "2" {
                 state.inbound_queue.push_back(message);
                 return Ok(());
             }
@@ -225,7 +225,7 @@ where
                 self.on_sequence_reset(&message).await?;
             }
             "5" => {
-                self.on_logout().await?;
+                self.on_logout(&message).await?;
             }
             "A" => {
                 self.on_logon(&message).await?;
@@ -240,7 +240,7 @@ where
         &mut self,
         message: &Message,
     ) -> Result<(), SessionOperationError> {
-        match self.verify_message(message, true) {
+        match self.verify_message(message, true, true) {
             Ok(_) => {
                 match self.application.on_inbound_message(message).await {
                     InboundDecision::Accept => {}
@@ -293,8 +293,17 @@ where
                     error!("failed to get seq number: {:?}", e);
                     0
                 });
-                debug!(seq_number, "processing queued message");
-                self.process_message(msg).await?;
+                let msg_type: &str = msg.header().get(MSG_TYPE).unwrap_or("");
+                debug!(seq_number, msg_type, "processing queued message");
+
+                if msg_type == "2" {
+                    // ResendRequest was already processed when it arrived (it bypasses
+                    // the queue in process_message). Just increment the target seq number
+                    // for sequence accounting purposes.
+                    self.store.increment_target_seq_number().await?;
+                } else {
+                    self.process_message(msg).await?;
+                }
             }
             debug!("resend backlog is cleared, resuming normal operation");
         }
@@ -305,14 +314,21 @@ where
     fn verify_message(
         &self,
         message: &Message,
-        verify_target_seq_number: bool,
+        check_too_high: bool,
+        check_too_low: bool,
     ) -> Result<(), MessageVerificationError> {
-        let expected_seq_number = if verify_target_seq_number {
+        let expected_seq_number = if check_too_high || check_too_low {
             Some(self.store.next_target_seq_number())
         } else {
             None
         };
-        verify_message(message, &self.config, expected_seq_number)
+        verify_message(
+            message,
+            &self.config,
+            expected_seq_number,
+            check_too_high,
+            check_too_low,
+        )
     }
 
     async fn on_connect(&mut self, writer: WriterRef) -> Result<(), SessionOperationError> {
@@ -346,7 +362,7 @@ where
 
     async fn on_logon(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         if let SessionState::AwaitingLogon { writer, .. } = &self.state {
-            match self.verify_message(message, true) {
+            match self.verify_message(message, true, true) {
                 Ok(_) => {
                     // happy logon flow, the session is now active
                     self.state =
@@ -363,7 +379,12 @@ where
         Ok(())
     }
 
-    async fn on_logout(&mut self) -> Result<(), SessionOperationError> {
+    async fn on_logout(&mut self, message: &Message) -> Result<(), SessionOperationError> {
+        if let Err(err) = self.verify_message(message, false, false) {
+            self.handle_verification_error(err).await?;
+            return Ok(());
+        }
+
         if self.state.is_logged_on() {
             self.send_logout("Logout acknowledged").await?;
         }
@@ -390,6 +411,11 @@ where
     }
 
     async fn on_heartbeat(&mut self, message: &Message) -> Result<(), SessionOperationError> {
+        if let Err(err) = self.verify_message(message, true, true) {
+            self.handle_verification_error(err).await?;
+            return Ok(());
+        }
+
         if let (Some(expected_req_id), Ok(message_req_id)) = (
             &self.state.expected_test_response_id(),
             message.get::<&str>(TEST_REQ_ID),
@@ -404,6 +430,11 @@ where
     }
 
     async fn on_test_request(&mut self, message: &Message) -> Result<(), SessionOperationError> {
+        if let Err(err) = self.verify_message(message, true, true) {
+            self.handle_verification_error(err).await?;
+            return Ok(());
+        }
+
         let req_id: &str = message.get(TEST_REQ_ID).unwrap_or_else(|_| {
             // TODO: send reject?
             todo!()
@@ -421,12 +452,36 @@ where
     async fn on_resend_request(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         if !self.state.is_connected() {
             warn!("received resend request while disconnected, ignoring");
+            return Ok(());
+        }
+
+        // Verify with check_too_high=false so ResendRequest is never blocked by seq-too-high.
+        // This is the key part of the QFJ-673 deadlock fix: when both sides send ResendRequest
+        // simultaneously, each side's ResendRequest will have a seq number higher than expected.
+        // By not treating that as an error, we allow the ResendRequest to be processed.
+        match self.verify_message(message, false, true) {
+            Ok(_) => {}
+            Err(err) => {
+                self.handle_verification_error(err).await?;
+                return Ok(());
+            }
+        }
+
+        let msg_seq_num = get_msg_seq_num(message);
+        let expected = self.store.next_target_seq_number();
+
+        // If seq is too high and we're in AwaitingResend, queue it for seq accounting
+        // when the gap fill catches up, but still process the resend below.
+        if msg_seq_num > expected {
+            if let SessionState::AwaitingResend(state) = &mut self.state {
+                state.inbound_queue.push_back(message.clone());
+            }
         }
 
         let begin_seq_number: u64 = match message.get(BEGIN_SEQ_NO) {
             Ok(seq_number) => seq_number,
             Err(_) => {
-                let reject = Reject::new(get_msg_seq_num(message))
+                let reject = Reject::new(msg_seq_num)
                     .session_reject_reason(SessionRejectReason::RequiredTagMissing)
                     .text("missing begin sequence number for resend request");
                 self.send_message(reject)
@@ -446,7 +501,7 @@ where
                 }
             }
             Err(_) => {
-                let reject = Reject::new(get_msg_seq_num(message))
+                let reject = Reject::new(msg_seq_num)
                     .session_reject_reason(SessionRejectReason::RequiredTagMissing)
                     .text("missing end sequence number for resend request");
                 self.send_message(reject)
@@ -456,7 +511,10 @@ where
             }
         };
 
-        self.store.increment_target_seq_number().await?;
+        // Only increment target seq if seq matches expected
+        if msg_seq_num == expected {
+            self.store.increment_target_seq_number().await?;
+        }
 
         self.resend_messages(begin_seq_number, end_seq_number, message)
             .await?;
@@ -469,6 +527,11 @@ where
     /// Returns whether the message should be processed as usual
     /// and whether the target sequence number should be incremented.
     async fn on_reject(&mut self, message: &Message) -> Result<(), SessionOperationError> {
+        if let Err(err) = self.verify_message(message, false, true) {
+            self.handle_verification_error(err).await?;
+            return Ok(());
+        }
+
         if let Ok(seq_num) = message.get::<u64>(MSG_SEQ_NUM)
             && seq_num == self.store.next_target_seq_number()
         {
@@ -481,7 +544,7 @@ where
     async fn on_sequence_reset(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         let msg_seq_num = get_msg_seq_num(message);
         let is_gap_fill: bool = message.get(GAP_FILL_FLAG).unwrap_or(false);
-        if let Err(err) = self.verify_message(message, is_gap_fill) {
+        if let Err(err) = self.verify_message(message, is_gap_fill, is_gap_fill) {
             self.handle_verification_error(err).await?;
             return Ok(());
         }
