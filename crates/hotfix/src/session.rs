@@ -523,9 +523,6 @@ where
     }
 
     /// Handle Reject messages.
-    ///
-    /// Returns whether the message should be processed as usual
-    /// and whether the target sequence number should be incremented.
     async fn on_reject(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         if let Err(err) = self.verify_message(message, false, true) {
             self.handle_verification_error(err).await?;
