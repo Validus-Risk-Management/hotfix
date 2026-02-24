@@ -617,9 +617,10 @@ mod tests {
         msg.set(fix44::TARGET_COMP_ID, "SENDER");
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
 
-        // set sending time to 121 seconds in the past (beyond the threshold)
+        // set sending time to 122 seconds in the past (beyond the 120 second threshold,
+        // with margin to account for millisecond truncation in Timestamp)
         let now = chrono::Utc::now();
-        let past_time = now - Duration::seconds(121);
+        let past_time = now - Duration::seconds(122);
         let past_timestamp: Timestamp = past_time.naive_utc().into();
         msg.set(fix44::SENDING_TIME, past_timestamp);
 
@@ -644,9 +645,10 @@ mod tests {
         msg.set(fix44::TARGET_COMP_ID, "SENDER");
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
 
-        // set sending time to 121 seconds in the future (beyond the threshold)
+        // set sending time to 122 seconds in the future (beyond the 120 second threshold,
+        // with margin to account for millisecond truncation in Timestamp)
         let now = chrono::Utc::now();
-        let future_time = now + Duration::seconds(121);
+        let future_time = now + Duration::seconds(122);
         let future_timestamp: Timestamp = future_time.naive_utc().into();
         msg.set(fix44::SENDING_TIME, future_timestamp);
 

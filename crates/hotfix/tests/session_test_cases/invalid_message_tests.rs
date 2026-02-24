@@ -3,8 +3,8 @@ use crate::common::assertions::{assert_msg_type, then};
 use crate::common::cleanup::finally;
 use crate::common::setup::{COUNTERPARTY_COMP_ID, OUR_COMP_ID, given_an_active_session};
 use crate::common::test_messages::{
-    ExecutionReportWithInvalidField, TestMessage, TestReject,
-    build_execution_report_with_comp_id, build_execution_report_with_custom_msg_type,
+    ExecutionReportWithInvalidField, TestMessage, TestReject, build_execution_report_with_comp_id,
+    build_execution_report_with_custom_msg_type,
     build_execution_report_with_incorrect_begin_string,
     build_execution_report_with_incorrect_body_length,
     build_execution_report_with_incorrect_orig_sending_time,
