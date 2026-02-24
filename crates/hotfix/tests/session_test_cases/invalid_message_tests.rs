@@ -3,8 +3,8 @@ use crate::common::assertions::{assert_msg_type, then};
 use crate::common::cleanup::finally;
 use crate::common::setup::{COUNTERPARTY_COMP_ID, OUR_COMP_ID, given_an_active_session};
 use crate::common::test_messages::{
-    ExecutionReportWithInvalidField, TestMessage, build_execution_report_with_comp_id,
-    build_execution_report_with_custom_msg_type,
+    ExecutionReportWithInvalidField, TestMessage, TestReject,
+    build_execution_report_with_comp_id, build_execution_report_with_custom_msg_type,
     build_execution_report_with_incorrect_begin_string,
     build_execution_report_with_incorrect_body_length,
     build_execution_report_with_incorrect_orig_sending_time,
@@ -398,6 +398,37 @@ async fn test_scenario_2g_possdup_without_orig_sending_time() {
                 SessionRejectReason::RequiredTagMissing
             );
         })
+        .await;
+
+    finally(&session, &mut counterparty).disconnect().await;
+}
+
+/// Tests that a Reject (MsgType=3) from the counterparty is processed correctly.
+///
+/// The session should increment the target sequence number and remain active,
+/// continuing to accept subsequent messages.
+#[tokio::test]
+async fn test_processing_reject_from_counterparty() {
+    let (mut session, mut counterparty) = given_an_active_session().await;
+
+    // Counterparty sends a Reject referencing our logon (seq 1)
+    let reject_seq_num = counterparty.next_target_sequence_number();
+    when(&mut counterparty)
+        .sends_message(TestReject { ref_seq_num: 1 })
+        .await;
+
+    // The reject should be processed, incrementing the target sequence number
+    then(&mut session)
+        .target_sequence_number_reaches(reject_seq_num)
+        .await;
+
+    // The session should remain active and accept further messages
+    let next_seq_num = counterparty.next_target_sequence_number();
+    when(&mut counterparty)
+        .sends_message(TestMessage::dummy_execution_report())
+        .await;
+    then(&mut session)
+        .target_sequence_number_reaches(next_seq_num)
         .await;
 
     finally(&session, &mut counterparty).disconnect().await;

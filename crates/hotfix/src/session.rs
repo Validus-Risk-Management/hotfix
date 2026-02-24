@@ -529,12 +529,7 @@ where
             return Ok(());
         }
 
-        if let Ok(seq_num) = message.get::<u64>(MSG_SEQ_NUM)
-            && seq_num == self.store.next_target_seq_number()
-        {
-            self.store.increment_target_seq_number().await?;
-        }
-
+        self.store.increment_target_seq_number().await?;
         Ok(())
     }
 

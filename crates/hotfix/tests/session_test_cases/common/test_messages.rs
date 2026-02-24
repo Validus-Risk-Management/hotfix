@@ -389,6 +389,22 @@ pub fn build_invalid_resend_request(
     msg.encode(&Config::default()).unwrap()
 }
 
+/// A Reject message (MsgType=3) for testing counterparty-initiated rejects.
+#[derive(Clone)]
+pub struct TestReject {
+    pub ref_seq_num: u64,
+}
+
+impl OutboundMessage for TestReject {
+    fn write(&self, msg: &mut Message) {
+        msg.set(fix44::REF_SEQ_NUM, self.ref_seq_num);
+    }
+
+    fn message_type(&self) -> &str {
+        "3"
+    }
+}
+
 pub fn build_sequence_reset_without_new_seq_no(msg_seq_num: u64) -> Vec<u8> {
     let mut msg = Message::new("FIX.4.4", "4"); // MsgType 4 = SequenceReset
     msg.set(fix44::SENDER_COMP_ID, COUNTERPARTY_COMP_ID);
