@@ -45,7 +45,9 @@ pub(crate) use crate::session::session_ref::InternalSessionRef;
 pub use crate::session::session_ref::InternalSessionRef;
 use crate::session::session_ref::OutboundRequest;
 use crate::session::state::SessionState;
-use crate::session::state::{AwaitingResendTransitionOutcome, TestRequestId};
+use crate::session::state::{
+    AwaitingLogonState, AwaitingLogoutState, AwaitingResendTransitionOutcome, TestRequestId,
+};
 use crate::session_schedule::{SessionPeriodComparison, SessionSchedule};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
@@ -200,7 +202,7 @@ where
             }
         }
 
-        if let SessionState::AwaitingLogon { .. } = &mut self.state {
+        if let SessionState::AwaitingLogon(_) = &mut self.state {
             // TODO: should this (and all inbound message processing) logic be pushed into the state?
             if message_type != Logon::MSG_TYPE {
                 self.state.disconnect_writer().await;
@@ -332,11 +334,11 @@ where
     }
 
     async fn on_connect(&mut self, writer: WriterRef) -> Result<(), SessionOperationError> {
-        self.state = SessionState::AwaitingLogon {
+        self.state = SessionState::AwaitingLogon(AwaitingLogonState {
             writer,
             logon_sent: false,
             logon_timeout: Instant::now() + Duration::from_secs(self.config.logon_timeout),
-        };
+        });
         self.reset_peer_timer(None);
         self.send_logon().await?;
 
@@ -345,23 +347,23 @@ where
 
     async fn on_disconnect(&mut self, reason: String) {
         match self.state {
-            SessionState::Active { .. }
-            | SessionState::AwaitingLogon { .. }
+            SessionState::Active(_)
+            | SessionState::AwaitingLogon(_)
             | SessionState::AwaitingResend(_) => {
                 self.state.disconnect_writer().await;
                 self.state = SessionState::new_disconnected(true, &reason);
             }
-            SessionState::Disconnected { .. } => {
+            SessionState::Disconnected(_) => {
                 warn!("disconnect message was received, but the session is already disconnected")
             }
-            SessionState::AwaitingLogout { reconnect, .. } => {
+            SessionState::AwaitingLogout(AwaitingLogoutState { reconnect, .. }) => {
                 self.state = SessionState::new_disconnected(reconnect, &reason);
             }
         }
     }
 
     async fn on_logon(&mut self, message: &Message) -> Result<(), SessionOperationError> {
-        if let SessionState::AwaitingLogon { writer, .. } = &self.state {
+        if let SessionState::AwaitingLogon(AwaitingLogonState { writer, .. }) = &self.state {
             match self.verify_message(message, true, true) {
                 Ok(_) => {
                     // happy logon flow, the session is now active
@@ -395,7 +397,7 @@ where
             // if the session is already disconnected, we have nothing else to do
             SessionState::Disconnected(..) => {}
             // if we initiated the logout, preserve the reconnect flag
-            SessionState::AwaitingLogout { reconnect, .. } => {
+            SessionState::AwaitingLogout(AwaitingLogoutState { reconnect, .. }) => {
                 self.state.disconnect_writer().await;
                 self.state = SessionState::new_disconnected(reconnect, "logout completed");
             }
