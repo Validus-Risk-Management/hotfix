@@ -7,7 +7,7 @@ use crate::message::{OutboundMessage, RawFixMessage};
 use crate::session::Session;
 use crate::session::admin_request::AdminRequest;
 use crate::session::error::{SendError, SendOutcome, SessionCreationError};
-use crate::session::event::{AwaitingActiveSessionResponse, SessionEvent};
+use crate::session::event::{ScheduleResponse, SessionEvent};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
 use crate::{Application, session};
@@ -82,15 +82,15 @@ impl<Outbound: OutboundMessage> InternalSessionRef<Outbound> {
         Ok(receiver.await?)
     }
 
-    pub async fn await_active_session_time(&self) -> Result<(), SessionGone> {
-        debug!("awaiting active session time");
-        let (sender, receiver) = oneshot::channel::<AwaitingActiveSessionResponse>();
+    pub async fn await_in_schedule(&self) -> Result<(), SessionGone> {
+        debug!("awaiting in-schedule time");
+        let (sender, receiver) = oneshot::channel::<ScheduleResponse>();
         self.event_sender
-            .send(SessionEvent::AwaitingActiveSession(sender))
+            .send(SessionEvent::AwaitSchedule(sender))
             .await?;
         receiver.await?;
 
-        debug!("resuming connection as session is active");
+        debug!("resuming connection as schedule is active");
         Ok(())
     }
 }

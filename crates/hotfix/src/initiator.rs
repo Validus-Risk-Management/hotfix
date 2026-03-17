@@ -107,8 +107,8 @@ async fn establish_connection<Outbound: OutboundMessage>(
     completion_tx: watch::Sender<bool>,
 ) {
     loop {
-        if session_ref.await_active_session_time().await.is_err() {
-            warn!("session task terminated when checking active session time");
+        if session_ref.await_in_schedule().await.is_err() {
+            warn!("session task terminated when checking schedule");
             break;
         }
 

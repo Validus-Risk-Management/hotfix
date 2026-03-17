@@ -13,7 +13,7 @@ pub(crate) use disconnected::DisconnectedState;
 use crate::message::logon::Logon;
 use crate::message::logout::Logout;
 use crate::message::parser::RawFixMessage;
-use crate::session::event::AwaitingActiveSessionResponse;
+use crate::session::event::ScheduleResponse;
 use crate::session::info::Status as SessionInfoStatus;
 use crate::transport::writer::WriterRef;
 use std::time::Duration;
@@ -167,42 +167,39 @@ impl SessionState {
         }
     }
 
-    pub fn register_session_awaiter(
-        &mut self,
-        responder: oneshot::Sender<AwaitingActiveSessionResponse>,
-    ) {
+    pub fn register_schedule_awaiter(&mut self, responder: oneshot::Sender<ScheduleResponse>) {
         match self {
             SessionState::Disconnected(state) => {
-                if state.has_session_awaiter() {
+                if state.has_schedule_awaiter() {
                     let reason = &state.reason;
                     error!(
-                        "session awaiter already registered on state disconnected due to: {reason}"
+                        "schedule awaiter already registered on state disconnected due to: {reason}"
                     );
-                    if let Err(err) = responder.send(AwaitingActiveSessionResponse::Shutdown) {
-                        error!("failed to send session awaiter response: {err:?}");
+                    if let Err(err) = responder.send(ScheduleResponse::Shutdown) {
+                        error!("failed to send schedule awaiter response: {err:?}");
                     }
                 } else {
-                    state.set_session_awaiter(responder);
-                    debug!("registered session awaiter");
+                    state.set_schedule_awaiter(responder);
+                    debug!("registered schedule awaiter");
                 }
             }
             _ => {
-                error!("session awaiter can only be registered on disconnected sessions");
-                if let Err(err) = responder.send(AwaitingActiveSessionResponse::Shutdown) {
-                    error!("failed to send session awaiter response: {err:?}");
+                error!("schedule awaiter can only be registered on disconnected sessions");
+                if let Err(err) = responder.send(ScheduleResponse::Shutdown) {
+                    error!("failed to send schedule awaiter response: {err:?}");
                 }
             }
         }
     }
 
-    pub fn notify_session_awaiter(&mut self) {
+    pub fn notify_schedule_awaiter(&mut self) {
         if let SessionState::Disconnected(state) = self
-            && let Some(awaiter) = state.take_session_awaiter()
+            && let Some(awaiter) = state.take_schedule_awaiter()
         {
-            if let Err(err) = awaiter.send(AwaitingActiveSessionResponse::Active) {
-                error!("failed to send session awaiter response: {err:?}");
+            if let Err(err) = awaiter.send(ScheduleResponse::InSchedule) {
+                error!("failed to send schedule awaiter response: {err:?}");
             } else {
-                debug!("notified session awaiter");
+                debug!("notified schedule awaiter");
             }
         }
     }

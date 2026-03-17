@@ -1041,8 +1041,8 @@ where
                     warn!("tried to respond to ShouldReconnect query but the receiver is gone");
                 }
             }
-            SessionEvent::AwaitingActiveSession(responder) => {
-                self.state.register_session_awaiter(responder);
+            SessionEvent::AwaitSchedule(responder) => {
+                self.state.register_schedule_awaiter(responder);
             }
         }
     }
@@ -1119,7 +1119,7 @@ where
         let is_active = self.schedule.is_active_at(&now);
 
         if is_active {
-            self.state.notify_session_awaiter();
+            self.state.notify_schedule_awaiter();
             match self
                 .schedule
                 .is_same_session_period(&self.store.creation_time(), &now)

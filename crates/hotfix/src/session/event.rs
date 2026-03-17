@@ -13,19 +13,19 @@ pub enum SessionEvent {
     Connected(WriterRef),
     /// Ask the session whether we should attempt to reconnect.
     ShouldReconnect(oneshot::Sender<bool>),
-    /// Ask the session to notify us when the session is active.
-    AwaitingActiveSession(oneshot::Sender<AwaitingActiveSessionResponse>),
+    /// Ask the session to notify us when the schedule indicates we should connect.
+    AwaitSchedule(oneshot::Sender<ScheduleResponse>),
 }
 
-/// The response sent by the session to AwaitingActiveSession messages.
+/// The response sent by the session to AwaitSchedule messages.
 ///
-/// This doesn't include an Inactive variant, as the session won't respond until
-/// it's active or in a state that indicates it should just be shut down due to an
-/// unrecoverable error.
+/// This doesn't include an out-of-schedule variant, as the session won't respond
+/// until the schedule indicates we should connect or the session is in a state that
+/// indicates it should just be shut down due to an unrecoverable error.
 #[derive(Debug, Clone, Copy)]
-pub enum AwaitingActiveSessionResponse {
-    /// The session is now active and ready to connect.
-    Active,
+pub enum ScheduleResponse {
+    /// The schedule indicates we should connect.
+    InSchedule,
     /// The session should be shut down due to an unrecoverable error.
     Shutdown,
 }
