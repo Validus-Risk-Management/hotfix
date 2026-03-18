@@ -63,10 +63,9 @@ use hotfix_message::session_fields::{
 const SCHEDULE_CHECK_INTERVAL: u64 = 1;
 
 struct Session<A, S> {
-    ctx: SessionCtx<S>,
+    ctx: SessionCtx<A, S>,
     schedule: SessionSchedule,
     state: SessionState,
-    application: A,
     schedule_check_timer: Pin<Box<Sleep>>,
     reset_on_next_logon: bool,
 }
@@ -90,6 +89,7 @@ where
         let ctx = SessionCtx {
             config,
             store,
+            application,
             message_builder,
             message_config,
         };
@@ -98,7 +98,6 @@ where
             ctx,
             schedule,
             state: SessionState::new_disconnected(true, "initialising"),
-            application,
             schedule_check_timer: Box::pin(schedule_check_timer),
             reset_on_next_logon: false,
         };
@@ -246,7 +245,7 @@ where
     ) -> Result<(), SessionOperationError> {
         match self.verify_message(message, true, true) {
             Ok(_) => {
-                match self.application.on_inbound_message(message).await {
+                match self.ctx.application.on_inbound_message(message).await {
                     InboundDecision::Accept => {}
                     InboundDecision::Reject { reason, text } => {
                         let msg_type: &str = message
@@ -375,7 +374,7 @@ where
                         writer.clone(),
                         self.ctx.config.heartbeat_interval,
                     );
-                    self.application.on_logon().await;
+                    self.ctx.application.on_logon().await;
                     self.ctx.store.increment_target_seq_number().await?;
                 }
                 Err(err) => self.handle_verification_error(err).await?,
@@ -397,7 +396,10 @@ where
             self.send_logout("Logout acknowledged").await?;
         }
 
-        self.application.on_logout("peer has logged us out").await;
+        self.ctx
+            .application
+            .on_logout("peer has logged us out")
+            .await;
 
         match self.state {
             // if the session is already disconnected, we have nothing else to do
@@ -876,7 +878,7 @@ where
             return Err(SendError::Disconnected);
         }
 
-        match self.application.on_outbound_message(&message).await {
+        match self.ctx.application.on_outbound_message(&message).await {
             OutboundDecision::Send => {
                 let sequence_number = self.send_message(message).await?;
                 Ok(SendOutcome::Sent { sequence_number })
@@ -1420,6 +1422,7 @@ mod tests {
         let ctx = SessionCtx {
             config,
             store,
+            application: NoOpApp,
             message_builder,
             message_config,
         };
@@ -1428,7 +1431,6 @@ mod tests {
             ctx,
             schedule,
             state,
-            application: NoOpApp,
             schedule_check_timer: Box::pin(sleep(Duration::from_secs(1))),
             reset_on_next_logon: false,
         }
