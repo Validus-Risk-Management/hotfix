@@ -111,7 +111,7 @@ impl SessionState {
         }
     }
 
-    fn get_writer(&self) -> Option<&WriterRef> {
+    pub(crate) fn get_writer(&self) -> Option<&WriterRef> {
         match self {
             Self::Active(ActiveState { writer, .. })
             | Self::AwaitingLogon(AwaitingLogonState { writer, .. })

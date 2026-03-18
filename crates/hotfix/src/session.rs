@@ -3,6 +3,7 @@ mod ctx;
 pub mod error;
 pub(crate) mod event;
 mod info;
+mod outbound;
 mod session_handle;
 pub mod session_ref;
 mod state;
@@ -15,14 +16,13 @@ use std::pin::Pin;
 use tokio::select;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, Instant, Sleep, sleep, sleep_until};
-use tracing::{debug, enabled, error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::Application;
 use crate::application::{InboundDecision, OutboundDecision};
 use crate::config::SessionConfig;
 use crate::message::OutboundMessage;
 use crate::message::business_reject::BusinessReject;
-use crate::message::generate_message;
 use crate::message::heartbeat::Heartbeat;
 use crate::message::logon::{Logon, ResetSeqNumConfig};
 use crate::message::logout::Logout;
@@ -33,7 +33,6 @@ use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
 use crate::message::verification::verify_message;
 use crate::message::verification_error::{CompIdType, MessageVerificationError};
-use crate::message::{is_admin, prepare_message_for_resend};
 use crate::session::admin_request::AdminRequest;
 use crate::session::ctx::SessionCtx;
 use crate::session::error::SessionCreationError;
@@ -526,8 +525,11 @@ where
             self.ctx.store.increment_target_seq_number().await?;
         }
 
-        self.resend_messages(begin_seq_number, end_seq_number, message)
-            .await?;
+        if let Some(writer) = self.state.get_writer() {
+            outbound::resend_messages(&mut self.ctx, writer, begin_seq_number, end_seq_number)
+                .await?;
+            self.reset_heartbeat_timer();
+        }
 
         Ok(())
     }
@@ -779,90 +781,6 @@ where
         };
     }
 
-    async fn resend_messages(
-        &mut self,
-        begin: u64,
-        end: u64,
-        _message: &Message,
-    ) -> Result<(), SessionOperationError> {
-        info!(begin, end, "resending messages as requested");
-        let messages = self
-            .ctx
-            .store
-            .get_slice(begin as usize, end as usize)
-            .await?;
-
-        let no = messages.len();
-        debug!(number_of_messages = no, "number of messages");
-
-        let mut reset_start: Option<u64> = None;
-        let mut sequence_number = 0;
-
-        for msg in messages {
-            let mut message = self
-                .ctx
-                .message_builder
-                .build(msg.as_slice())
-                .into_message()
-                .ok_or_else(|| {
-                    SessionOperationError::StoredMessageParse(format!(
-                        "failed to build message for raw message: {msg:?}"
-                    ))
-                })?;
-            sequence_number = get_msg_seq_num(&message);
-            let message_type: String = message
-                .header()
-                .get::<&str>(MSG_TYPE)
-                .map_err(|_| SessionOperationError::MissingField("MSG_TYPE"))?
-                .to_string();
-
-            if is_admin(&message_type) {
-                if reset_start.is_none() {
-                    reset_start = Some(sequence_number);
-                }
-                continue;
-            }
-
-            if let Some(begin) = reset_start {
-                let end = sequence_number;
-                Self::log_skipped_admin_messages(begin, end);
-                self.send_sequence_reset(begin, end).await?;
-                reset_start = None;
-            }
-
-            if let Err(e) = prepare_message_for_resend(&mut message) {
-                error!(
-                    error = e,
-                    "failed to prepare message for resend, sending original"
-                );
-            }
-            self.send_raw(&message_type, message.encode(&self.ctx.message_config)?)
-                .await;
-
-            if enabled!(tracing::Level::DEBUG)
-                && let Ok(m) = String::from_utf8(msg.clone())
-            {
-                debug!(sequence_number, message = m, "resent message");
-            }
-        }
-
-        if let Some(begin) = reset_start {
-            // the final reset if needed
-            let end = sequence_number;
-            Self::log_skipped_admin_messages(begin, end);
-            self.send_sequence_reset(begin, end).await?;
-        }
-
-        Ok(())
-    }
-
-    fn log_skipped_admin_messages(begin: u64, end: u64) {
-        info!(
-            begin,
-            end, "skipped admin message(s) during resend, requesting reset for these"
-        );
-    }
-
     fn reset_heartbeat_timer(&mut self) {
         self.state
             .reset_heartbeat_timer(self.ctx.config.heartbeat_interval);
@@ -904,36 +822,6 @@ where
         self.state.send_message(&msg_type, prepared.raw).await;
         self.reset_heartbeat_timer();
         Ok(prepared.seq_num)
-    }
-
-    async fn send_raw(&mut self, message_type: &str, data: Vec<u8>) {
-        self.state
-            .send_message(message_type, RawFixMessage::new(data))
-            .await;
-        self.reset_heartbeat_timer();
-    }
-
-    async fn send_sequence_reset(
-        &mut self,
-        begin: u64,
-        end: u64,
-    ) -> Result<(), SessionOperationError> {
-        let sequence_reset = SequenceReset {
-            gap_fill: true,
-            new_seq_no: end,
-        };
-        let raw_message = generate_message(
-            &self.ctx.config.begin_string,
-            &self.ctx.config.sender_comp_id,
-            &self.ctx.config.target_comp_id,
-            begin,
-            sequence_reset,
-        )?;
-
-        self.send_raw(SequenceReset::MSG_TYPE, raw_message).await;
-        debug!(begin, end, "sent reset sequence");
-
-        Ok(())
     }
 
     async fn send_resend_request(
