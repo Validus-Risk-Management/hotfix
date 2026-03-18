@@ -1,4 +1,5 @@
 pub(crate) mod admin_request;
+mod ctx;
 pub mod error;
 pub(crate) mod event;
 mod info;
@@ -34,6 +35,7 @@ use crate::message::verification::verify_message;
 use crate::message::verification_error::{CompIdType, MessageVerificationError};
 use crate::message::{is_admin, prepare_message_for_resend};
 use crate::session::admin_request::AdminRequest;
+use crate::session::ctx::SessionCtx;
 use crate::session::error::SessionCreationError;
 use crate::session::error::{InternalSendError, InternalSendResultExt, SessionOperationError};
 pub use crate::session::error::{SendError, SendOutcome};
@@ -61,13 +63,10 @@ use hotfix_message::session_fields::{
 const SCHEDULE_CHECK_INTERVAL: u64 = 1;
 
 struct Session<A, S> {
-    message_config: MessageConfig,
-    config: SessionConfig,
+    ctx: SessionCtx<S>,
     schedule: SessionSchedule,
-    message_builder: MessageBuilder,
     state: SessionState,
     application: A,
-    store: S,
     schedule_check_timer: Pin<Box<Sleep>>,
     reset_on_next_logon: bool,
 }
@@ -88,15 +87,18 @@ where
         let message_config = MessageConfig::default();
         let message_builder = MessageBuilder::new(dictionary, message_config)?;
         let schedule = config.schedule.as_ref().try_into()?;
+        let ctx = SessionCtx {
+            config,
+            store,
+            message_builder,
+            message_config,
+        };
 
         let session = Self {
-            config,
+            ctx,
             schedule,
-            message_config,
-            message_builder,
             state: SessionState::new_disconnected(true, "initialising"),
             application,
-            store,
             schedule_check_timer: Box::pin(schedule_check_timer),
             reset_on_next_logon: false,
         };
@@ -128,7 +130,7 @@ where
             self.reset_peer_timer(None);
         }
 
-        match self.message_builder.build(raw_message.as_bytes()) {
+        match self.ctx.message_builder.build(raw_message.as_bytes()) {
             ParsedMessage::Valid(message) => {
                 self.process_message(message).await?;
                 self.check_end_of_resend().await?;
@@ -265,7 +267,7 @@ where
                         self.state.disconnect_writer().await;
                     }
                 }
-                self.store.increment_target_seq_number().await?;
+                self.ctx.store.increment_target_seq_number().await?;
             }
             Err(err) => self.handle_verification_error(err).await?,
         }
@@ -275,9 +277,11 @@ where
 
     async fn check_end_of_resend(&mut self) -> Result<(), SessionOperationError> {
         let ended_state = if let SessionState::AwaitingResend(state) = &mut self.state {
-            if self.store.next_target_seq_number() > state.end_seq_number {
-                let new_state =
-                    SessionState::new_active(state.writer.clone(), self.config.heartbeat_interval);
+            if self.ctx.store.next_target_seq_number() > state.end_seq_number {
+                let new_state = SessionState::new_active(
+                    state.writer.clone(),
+                    self.ctx.config.heartbeat_interval,
+                );
                 Some(std::mem::replace(&mut self.state, new_state))
             } else {
                 None
@@ -302,7 +306,7 @@ where
                     // ResendRequest was already processed when it arrived (it bypasses
                     // the queue in process_message). Just increment the target seq number
                     // for sequence accounting purposes.
-                    self.store.increment_target_seq_number().await?;
+                    self.ctx.store.increment_target_seq_number().await?;
                 } else {
                     self.process_message(msg).await?;
                 }
@@ -320,13 +324,13 @@ where
         check_too_low: bool,
     ) -> Result<(), MessageVerificationError> {
         let expected_seq_number = if check_too_high || check_too_low {
-            Some(self.store.next_target_seq_number())
+            Some(self.ctx.store.next_target_seq_number())
         } else {
             None
         };
         verify_message(
             message,
-            &self.config,
+            &self.ctx.config,
             expected_seq_number,
             check_too_high,
             check_too_low,
@@ -337,7 +341,7 @@ where
         self.state = SessionState::AwaitingLogon(AwaitingLogonState {
             writer,
             logon_sent: false,
-            logon_timeout: Instant::now() + Duration::from_secs(self.config.logon_timeout),
+            logon_timeout: Instant::now() + Duration::from_secs(self.ctx.config.logon_timeout),
         });
         self.reset_peer_timer(None);
         self.send_logon().await?;
@@ -367,10 +371,12 @@ where
             match self.verify_message(message, true, true) {
                 Ok(_) => {
                     // happy logon flow, the session is now active
-                    self.state =
-                        SessionState::new_active(writer.clone(), self.config.heartbeat_interval);
+                    self.state = SessionState::new_active(
+                        writer.clone(),
+                        self.ctx.config.heartbeat_interval,
+                    );
                     self.application.on_logon().await;
-                    self.store.increment_target_seq_number().await?;
+                    self.ctx.store.increment_target_seq_number().await?;
                 }
                 Err(err) => self.handle_verification_error(err).await?,
             }
@@ -408,7 +414,7 @@ where
             }
         }
 
-        self.store.increment_target_seq_number().await?;
+        self.ctx.store.increment_target_seq_number().await?;
         Ok(())
     }
 
@@ -427,7 +433,7 @@ where
             self.reset_peer_timer(None);
         }
 
-        self.store.increment_target_seq_number().await?;
+        self.ctx.store.increment_target_seq_number().await?;
         Ok(())
     }
 
@@ -442,7 +448,7 @@ where
             todo!()
         });
 
-        self.store.increment_target_seq_number().await?;
+        self.ctx.store.increment_target_seq_number().await?;
 
         self.send_message(Heartbeat::for_request(req_id.to_string()))
             .await
@@ -470,7 +476,7 @@ where
         }
 
         let msg_seq_num = get_msg_seq_num(message);
-        let expected = self.store.next_target_seq_number();
+        let expected = self.ctx.store.next_target_seq_number();
 
         // If seq is too high and we're in AwaitingResend, queue it for seq accounting
         // when the gap fill catches up, but still process the resend below.
@@ -495,7 +501,7 @@ where
 
         let end_seq_number: u64 = match message.get(END_SEQ_NO) {
             Ok(seq_number) => {
-                let last_seq_number = self.store.next_sender_seq_number() - 1;
+                let last_seq_number = self.ctx.store.next_sender_seq_number() - 1;
                 if seq_number == 0 {
                     last_seq_number
                 } else {
@@ -515,7 +521,7 @@ where
 
         // Only increment target seq if seq matches expected
         if msg_seq_num == expected {
-            self.store.increment_target_seq_number().await?;
+            self.ctx.store.increment_target_seq_number().await?;
         }
 
         self.resend_messages(begin_seq_number, end_seq_number, message)
@@ -531,7 +537,7 @@ where
             return Ok(());
         }
 
-        self.store.increment_target_seq_number().await?;
+        self.ctx.store.increment_target_seq_number().await?;
         Ok(())
     }
 
@@ -566,7 +572,7 @@ where
 
         // sequence resets cannot move the target seq number backwards
         // regardless of whether the message is a gap fill or not
-        if end <= self.store.next_target_seq_number() {
+        if end <= self.ctx.store.next_target_seq_number() {
             error!(
                 "received sequence reset message which would move target seq number backwards: {end}",
             );
@@ -581,7 +587,7 @@ where
             return Ok(());
         }
 
-        self.store.set_target_seq_number(end - 1).await?;
+        self.ctx.store.set_target_seq_number(end - 1).await?;
         Ok(())
     }
 
@@ -734,9 +740,9 @@ where
 
                 #[allow(clippy::collapsible_if)]
                 if let Ok(seq_num) = message.header().get::<u64>(MSG_SEQ_NUM)
-                    && self.store.next_target_seq_number() == seq_num
+                    && self.ctx.store.next_target_seq_number() == seq_num
                 {
-                    if let Err(err) = self.store.increment_target_seq_number().await {
+                    if let Err(err) = self.ctx.store.increment_target_seq_number().await {
                         error!("failed to increment target seq number: {:?}", err);
                     };
                 }
@@ -754,7 +760,7 @@ where
         if let Err(err) = self.send_message(reject).await {
             error!("failed to send reject for time accuracy problem: {err}");
         };
-        if let Err(err) = self.store.increment_target_seq_number().await {
+        if let Err(err) = self.ctx.store.increment_target_seq_number().await {
             error!("failed to increment target seq number: {:?}", err);
         };
     }
@@ -766,7 +772,7 @@ where
         if let Err(err) = self.send_message(reject).await {
             error!("failed to send reject for time missing tag: {err}");
         };
-        if let Err(err) = self.store.increment_target_seq_number().await {
+        if let Err(err) = self.ctx.store.increment_target_seq_number().await {
             error!("failed to increment target seq number: {:?}", err);
         };
     }
@@ -778,7 +784,11 @@ where
         _message: &Message,
     ) -> Result<(), SessionOperationError> {
         info!(begin, end, "resending messages as requested");
-        let messages = self.store.get_slice(begin as usize, end as usize).await?;
+        let messages = self
+            .ctx
+            .store
+            .get_slice(begin as usize, end as usize)
+            .await?;
 
         let no = messages.len();
         debug!(number_of_messages = no, "number of messages");
@@ -788,6 +798,7 @@ where
 
         for msg in messages {
             let mut message = self
+                .ctx
                 .message_builder
                 .build(msg.as_slice())
                 .into_message()
@@ -823,7 +834,7 @@ where
                     "failed to prepare message for resend, sending original"
                 );
             }
-            self.send_raw(&message_type, message.encode(&self.message_config)?)
+            self.send_raw(&message_type, message.encode(&self.ctx.message_config)?)
                 .await;
 
             if enabled!(tracing::Level::DEBUG)
@@ -852,12 +863,12 @@ where
 
     fn reset_heartbeat_timer(&mut self) {
         self.state
-            .reset_heartbeat_timer(self.config.heartbeat_interval);
+            .reset_heartbeat_timer(self.ctx.config.heartbeat_interval);
     }
 
     fn reset_peer_timer(&mut self, test_request_id: Option<TestRequestId>) {
         self.state
-            .reset_peer_timer(self.config.heartbeat_interval, test_request_id);
+            .reset_peer_timer(self.ctx.config.heartbeat_interval, test_request_id);
     }
 
     async fn send_app_message(&mut self, message: App::Outbound) -> Result<SendOutcome, SendError> {
@@ -886,12 +897,12 @@ where
         &mut self,
         message: impl OutboundMessage,
     ) -> Result<u64, InternalSendError> {
-        let seq_num = self.store.next_sender_seq_number();
+        let seq_num = self.ctx.store.next_sender_seq_number();
         let msg_type = message.message_type().to_string();
         let msg = generate_message(
-            &self.config.begin_string,
-            &self.config.sender_comp_id,
-            &self.config.target_comp_id,
+            &self.ctx.config.begin_string,
+            &self.ctx.config.sender_comp_id,
+            &self.ctx.config.target_comp_id,
             seq_num,
             message,
         )
@@ -902,12 +913,14 @@ where
             })
         })?;
 
-        self.store
+        self.ctx
+            .store
             .increment_sender_seq_number()
             .await
             .map_err(InternalSendError::SequenceNumber)?;
 
-        self.store
+        self.ctx
+            .store
             .add(seq_num, &msg)
             .await
             .map_err(InternalSendError::Persist)?;
@@ -934,9 +947,9 @@ where
             new_seq_no: end,
         };
         let raw_message = generate_message(
-            &self.config.begin_string,
-            &self.config.sender_comp_id,
-            &self.config.target_comp_id,
+            &self.ctx.config.begin_string,
+            &self.ctx.config.sender_comp_id,
+            &self.ctx.config.target_comp_id,
             begin,
             sequence_reset,
         )?;
@@ -960,15 +973,15 @@ where
     }
 
     async fn send_logon(&mut self) -> Result<(), SessionOperationError> {
-        let reset_config = if self.config.reset_on_logon || self.reset_on_next_logon {
-            self.store.reset().await?;
+        let reset_config = if self.ctx.config.reset_on_logon || self.reset_on_next_logon {
+            self.ctx.store.reset().await?;
             ResetSeqNumConfig::Reset
         } else {
-            ResetSeqNumConfig::NoReset(Some(self.store.next_target_seq_number()))
+            ResetSeqNumConfig::NoReset(Some(self.ctx.store.next_target_seq_number()))
         };
         self.reset_on_next_logon = false;
 
-        let logon = Logon::new(self.config.heartbeat_interval, reset_config);
+        let logon = Logon::new(self.ctx.config.heartbeat_interval, reset_config);
         self.send_message(logon).await.with_send_context("logon")?;
         Ok(())
     }
@@ -1006,7 +1019,7 @@ where
         reconnect: bool,
     ) -> Result<(), SessionOperationError> {
         if self.state.try_transition_to_awaiting_logout(
-            Duration::from_secs(self.config.logout_timeout),
+            Duration::from_secs(self.ctx.config.logout_timeout),
             reconnect,
         ) {
             self.send_logout(reason).await?;
@@ -1104,7 +1117,7 @@ where
             warn!("peer didn't respond to our Logout, disconnecting..");
             self.state.disconnect_writer().await;
         } else {
-            let req_id = format!("TEST_{}", self.store.next_target_seq_number());
+            let req_id = format!("TEST_{}", self.ctx.store.next_target_seq_number());
             info!("sending TestRequest due to peer timer expiring");
             let request = TestRequest::new(req_id.clone());
             if let Err(err) = self.send_message(request).await {
@@ -1122,7 +1135,7 @@ where
             self.state.notify_schedule_awaiter();
             match self
                 .schedule
-                .is_same_session_period(&self.store.creation_time(), &now)
+                .is_same_session_period(&self.ctx.store.creation_time(), &now)
             {
                 Ok(SessionPeriodComparison::SamePeriod) => {
                     // we are in the same period, nothing needs to be done
@@ -1131,7 +1144,7 @@ where
                     // the message store is for a previous session,
                     // we need to terminate this session, reset the store, and reestablish the session
                     self.logout_and_terminate("session period changed").await;
-                    if let Err(err) = self.store.reset().await {
+                    if let Err(err) = self.ctx.store.reset().await {
                         error!("error resetting session store: {err:}");
                         self.state =
                             SessionState::new_disconnected(false, "unexpected error in reset");
@@ -1143,7 +1156,7 @@ where
                     warn!("store creation time is outside session schedule, resetting store");
                     self.logout_and_terminate("creation time outside schedule")
                         .await;
-                    if let Err(err) = self.store.reset().await {
+                    if let Err(err) = self.ctx.store.reset().await {
                         error!("error resetting session store: {err:}");
                         self.state =
                             SessionState::new_disconnected(false, "unexpected error in reset");
@@ -1172,8 +1185,8 @@ where
 
     fn get_session_info(&self) -> SessionInfo {
         SessionInfo {
-            next_sender_seq_number: self.store.next_sender_seq_number(),
-            next_target_seq_number: self.store.next_target_seq_number(),
+            next_sender_seq_number: self.ctx.store.next_sender_seq_number(),
+            next_target_seq_number: self.ctx.store.next_target_seq_number(),
             status: self.state.as_status(),
         }
     }
@@ -1404,15 +1417,18 @@ mod tests {
         let message_config = MessageConfig::default();
         let dictionary = Dictionary::fix44();
         let message_builder = MessageBuilder::new(dictionary, message_config).unwrap();
+        let ctx = SessionCtx {
+            config,
+            store,
+            message_builder,
+            message_config,
+        };
 
         Session {
-            message_config,
-            config,
+            ctx,
             schedule,
-            message_builder,
             state,
             application: NoOpApp,
-            store,
             schedule_check_timer: Box::pin(sleep(Duration::from_secs(1))),
             reset_on_next_logon: false,
         }
@@ -1460,7 +1476,7 @@ mod tests {
             "State should remain logged on for same period"
         );
         assert!(
-            !session.store.was_reset_called(),
+            !session.ctx.store.was_reset_called(),
             "Store reset should not be called for same period"
         );
     }
@@ -1481,7 +1497,7 @@ mod tests {
 
         // Verify the schedule correctly identifies different periods
         let now = Utc::now();
-        let creation_time = session.store.creation_time();
+        let creation_time = session.ctx.store.creation_time();
         let same_period = session
             .schedule
             .is_same_session_period(&creation_time, &now);
@@ -1496,7 +1512,7 @@ mod tests {
         // Note: logout_and_terminate disconnects the writer but state transition to
         // Disconnected happens asynchronously via event processing, not in this call
         assert!(
-            session.store.was_reset_called(),
+            session.ctx.store.was_reset_called(),
             "Store reset should be called for different period"
         );
     }
@@ -1518,7 +1534,7 @@ mod tests {
 
         // Store reset should have been attempted
         assert!(
-            session.store.was_reset_called(),
+            session.ctx.store.was_reset_called(),
             "Store reset should be called"
         );
         // When reset fails, state is explicitly set to Disconnected(reconnect=false)
@@ -1589,7 +1605,7 @@ mod tests {
 
         // The OutsideSessionTime branch now triggers a store reset (same as DifferentPeriod)
         assert!(
-            session.store.was_reset_called(),
+            session.ctx.store.was_reset_called(),
             "Store reset should be called when creation_time is outside schedule"
         );
     }
