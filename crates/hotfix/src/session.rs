@@ -899,37 +899,11 @@ where
         &mut self,
         message: impl OutboundMessage,
     ) -> Result<u64, InternalSendError> {
-        let seq_num = self.ctx.store.next_sender_seq_number();
         let msg_type = message.message_type().to_string();
-        let msg = generate_message(
-            &self.ctx.config.begin_string,
-            &self.ctx.config.sender_comp_id,
-            &self.ctx.config.target_comp_id,
-            seq_num,
-            message,
-        )
-        .map_err(|e| {
-            InternalSendError::Persist(crate::store::StoreError::PersistMessage {
-                sequence_number: seq_num,
-                source: e.into(),
-            })
-        })?;
-
-        self.ctx
-            .store
-            .increment_sender_seq_number()
-            .await
-            .map_err(InternalSendError::SequenceNumber)?;
-
-        self.ctx
-            .store
-            .add(seq_num, &msg)
-            .await
-            .map_err(InternalSendError::Persist)?;
-
-        self.send_raw(&msg_type, msg).await;
-
-        Ok(seq_num)
+        let prepared = self.ctx.prepare_message(message).await?;
+        self.state.send_message(&msg_type, prepared.raw).await;
+        self.reset_heartbeat_timer();
+        Ok(prepared.seq_num)
     }
 
     async fn send_raw(&mut self, message_type: &str, data: Vec<u8>) {
