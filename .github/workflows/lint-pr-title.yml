@@ -22,5 +22,6 @@ jobs:
             fix
             feat
             chore
+            refactor
             deps
             docs
