@@ -2,6 +2,7 @@ pub(crate) mod admin_request;
 mod ctx;
 pub mod error;
 pub(crate) mod event;
+mod inbound;
 mod info;
 mod outbound;
 mod session_handle;
@@ -31,13 +32,13 @@ use crate::message::reject::Reject;
 use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
-use crate::message::verification::verify_message;
 use crate::message::verification_error::{CompIdType, MessageVerificationError};
 use crate::session::admin_request::AdminRequest;
 use crate::session::ctx::SessionCtx;
 use crate::session::error::SessionCreationError;
 use crate::session::error::{InternalSendError, InternalSendResultExt, SessionOperationError};
 pub use crate::session::error::{SendError, SendOutcome};
+use crate::session::inbound::verify_message_with_ctx;
 pub use crate::session::info::{SessionInfo, Status};
 pub use crate::session::session_handle::SessionHandle;
 #[cfg(not(feature = "test-utils"))]
@@ -242,7 +243,7 @@ where
         &mut self,
         message: &Message,
     ) -> Result<(), SessionOperationError> {
-        match self.verify_message(message, true, true) {
+        match verify_message_with_ctx(&self.ctx, message, true, true) {
             Ok(_) => {
                 match self.ctx.application.on_inbound_message(message).await {
                     InboundDecision::Accept => {}
@@ -315,26 +316,6 @@ where
         Ok(())
     }
 
-    fn verify_message(
-        &self,
-        message: &Message,
-        check_too_high: bool,
-        check_too_low: bool,
-    ) -> Result<(), MessageVerificationError> {
-        let expected_seq_number = if check_too_high || check_too_low {
-            Some(self.ctx.store.next_target_seq_number())
-        } else {
-            None
-        };
-        verify_message(
-            message,
-            &self.ctx.config,
-            expected_seq_number,
-            check_too_high,
-            check_too_low,
-        )
-    }
-
     async fn on_connect(&mut self, writer: WriterRef) -> Result<(), SessionOperationError> {
         self.state = SessionState::AwaitingLogon(AwaitingLogonState {
             writer,
@@ -366,7 +347,7 @@ where
 
     async fn on_logon(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         if let SessionState::AwaitingLogon(AwaitingLogonState { writer, .. }) = &self.state {
-            match self.verify_message(message, true, true) {
+            match verify_message_with_ctx(&self.ctx, message, true, true) {
                 Ok(_) => {
                     // happy logon flow, the session is now active
                     self.state = SessionState::new_active(
@@ -386,7 +367,7 @@ where
     }
 
     async fn on_logout(&mut self, message: &Message) -> Result<(), SessionOperationError> {
-        if let Err(err) = self.verify_message(message, false, false) {
+        if let Err(err) = verify_message_with_ctx(&self.ctx, message, false, false) {
             self.handle_verification_error(err).await?;
             return Ok(());
         }
@@ -422,7 +403,7 @@ where
     }
 
     async fn on_heartbeat(&mut self, message: &Message) -> Result<(), SessionOperationError> {
-        if let Err(err) = self.verify_message(message, true, true) {
+        if let Err(err) = verify_message_with_ctx(&self.ctx, message, true, true) {
             self.handle_verification_error(err).await?;
             return Ok(());
         }
@@ -441,7 +422,7 @@ where
     }
 
     async fn on_test_request(&mut self, message: &Message) -> Result<(), SessionOperationError> {
-        if let Err(err) = self.verify_message(message, true, true) {
+        if let Err(err) = verify_message_with_ctx(&self.ctx, message, true, true) {
             self.handle_verification_error(err).await?;
             return Ok(());
         }
@@ -470,7 +451,7 @@ where
         // This is the key part of the QFJ-673 deadlock fix: when both sides send ResendRequest
         // simultaneously, each side's ResendRequest will have a seq number higher than expected.
         // By not treating that as an error, we allow the ResendRequest to be processed.
-        match self.verify_message(message, false, true) {
+        match verify_message_with_ctx(&self.ctx, message, false, true) {
             Ok(_) => {}
             Err(err) => {
                 self.handle_verification_error(err).await?;
@@ -538,7 +519,7 @@ where
 
     /// Handle Reject messages.
     async fn on_reject(&mut self, message: &Message) -> Result<(), SessionOperationError> {
-        if let Err(err) = self.verify_message(message, false, true) {
+        if let Err(err) = verify_message_with_ctx(&self.ctx, message, false, true) {
             self.handle_verification_error(err).await?;
             return Ok(());
         }
@@ -550,7 +531,7 @@ where
     async fn on_sequence_reset(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         let msg_seq_num = get_msg_seq_num(message);
         let is_gap_fill: bool = message.get(GAP_FILL_FLAG).unwrap_or(false);
-        if let Err(err) = self.verify_message(message, is_gap_fill, is_gap_fill) {
+        if let Err(err) = verify_message_with_ctx(&self.ctx, message, is_gap_fill, is_gap_fill) {
             self.handle_verification_error(err).await?;
             return Ok(());
         }
