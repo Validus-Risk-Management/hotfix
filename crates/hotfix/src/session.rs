@@ -34,7 +34,7 @@ use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
 use crate::message::verification_error::{CompIdType, MessageVerificationError};
 use crate::session::admin_request::AdminRequest;
-use crate::session::ctx::SessionCtx;
+use crate::session::ctx::{SessionCtx, TransitionResult};
 use crate::session::error::SessionCreationError;
 use crate::session::error::{InternalSendError, InternalSendResultExt, SessionOperationError};
 pub use crate::session::error::{SendError, SendOutcome};
@@ -604,7 +604,12 @@ where
                     .await?;
             }
             MessageVerificationError::IncorrectBeginString(begin_string) => {
-                self.handle_incorrect_begin_string(begin_string).await;
+                if let Some(writer) = self.state.get_writer() {
+                    let result = inbound::handle_incorrect_begin_string(
+                        &mut self.ctx, writer, begin_string,
+                    ).await;
+                    self.apply_transition(result);
+                }
             }
             MessageVerificationError::IncorrectCompId {
                 comp_id,
@@ -664,14 +669,6 @@ where
         Ok(())
     }
 
-    async fn handle_incorrect_begin_string(&mut self, received_begin_string: String) {
-        self.state
-            .logout_and_terminate(
-                &mut self.ctx,
-                &format!("beginString={received_begin_string} is not supported"),
-            )
-            .await;
-    }
 
     async fn handle_incorrect_comp_id(
         &mut self,
@@ -751,6 +748,12 @@ where
         }
 
         Ok(())
+    }
+
+    fn apply_transition(&mut self, result: TransitionResult) {
+        if let TransitionResult::TransitionTo(new_state) = result {
+            self.state = new_state;
+        }
     }
 
     fn reset_heartbeat_timer(&mut self) {

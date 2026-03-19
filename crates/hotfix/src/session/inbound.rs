@@ -1,9 +1,12 @@
+use crate::message::logout::Logout;
 use crate::message::reject::Reject;
 use crate::message::verification::verify_message;
 use crate::message::verification_error::MessageVerificationError;
-use crate::session::ctx::SessionCtx;
+use crate::session::ctx::{SessionCtx, TransitionResult};
 use crate::session::outbound;
+use crate::session::state::SessionState;
 use crate::transport::writer::WriterRef;
+use tracing::warn;
 use hotfix_message::Part;
 use hotfix_message::message::Message;
 use hotfix_message::session_fields::{MSG_SEQ_NUM, SessionRejectReason};
@@ -45,6 +48,22 @@ pub(crate) async fn handle_sending_time_accuracy_problem<A, S: MessageStore>(
     if let Err(err) = ctx.store.increment_target_seq_number().await {
         error!("failed to increment target seq number: {:?}", err);
     }
+}
+
+pub(crate) async fn handle_incorrect_begin_string<A, S: MessageStore>(
+    ctx: &mut SessionCtx<A, S>,
+    writer: &WriterRef,
+    received_begin_string: String,
+) -> TransitionResult {
+    let logout = Logout::with_reason(format!(
+        "beginString={received_begin_string} is not supported"
+    ));
+    match ctx.prepare_message(logout).await {
+        Ok(prepared) => writer.send_raw_message(prepared.raw).await,
+        Err(err) => warn!("failed to send logout for incorrect begin string: {err}"),
+    }
+    writer.disconnect().await;
+    TransitionResult::TransitionTo(SessionState::new_disconnected(true, "incorrect begin string"))
 }
 
 pub(crate) async fn handle_invalid_msg_type<A, S: MessageStore>(

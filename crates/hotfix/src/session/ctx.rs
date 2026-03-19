@@ -7,7 +7,13 @@ use crate::message::OutboundMessage;
 use crate::message::generate_message;
 use crate::message::parser::RawFixMessage;
 use crate::session::error::InternalSendError;
+use crate::session::state::SessionState;
 use crate::store::StoreError;
+
+pub(crate) enum TransitionResult {
+    Stay,
+    TransitionTo(SessionState),
+}
 
 pub(crate) struct SessionCtx<A, S> {
     pub config: SessionConfig,
