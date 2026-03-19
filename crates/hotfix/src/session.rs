@@ -596,8 +596,17 @@ where
                 actual,
                 possible_duplicate,
             } => {
-                self.handle_sequence_number_too_low(expected, actual, possible_duplicate)
+                if let Some(writer) = self.state.get_writer() {
+                    let result = inbound::handle_sequence_number_too_low(
+                        &mut self.ctx,
+                        writer,
+                        expected,
+                        actual,
+                        possible_duplicate,
+                    )
                     .await;
+                    self.apply_transition(result);
+                }
             }
             MessageVerificationError::SeqNumberTooHigh { expected, actual } => {
                 self.handle_sequence_number_too_high(expected, actual)
@@ -676,28 +685,6 @@ where
         }
 
         Ok(())
-    }
-
-    async fn handle_sequence_number_too_low(
-        &mut self,
-        expected: u64,
-        actual: u64,
-        possible_duplicate: bool,
-    ) {
-        if possible_duplicate {
-            warn!(
-                "sequence number too low (expected {expected}, actual {actual}, but counterparty indicated it's poss duplicate, ignoring"
-            );
-            return;
-        }
-        error!(
-            "we expected {expected} sequence number, but target sent lower ({actual}), terminating..."
-        );
-        let reason = format!("sequence number too low (actual {actual}, expected {expected})");
-        self.state
-            .logout_and_terminate(&mut self.ctx, &reason)
-            .await;
-        self.state = SessionState::new_disconnected(false, &reason);
     }
 
     async fn handle_sequence_number_too_high(

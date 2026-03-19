@@ -92,6 +92,32 @@ pub(crate) async fn handle_incorrect_comp_id<A, S: MessageStore>(
     TransitionResult::TransitionTo(SessionState::new_disconnected(true, "incorrect comp ID"))
 }
 
+pub(crate) async fn handle_sequence_number_too_low<A, S: MessageStore>(
+    ctx: &mut SessionCtx<A, S>,
+    writer: &WriterRef,
+    expected: u64,
+    actual: u64,
+    possible_duplicate: bool,
+) -> TransitionResult {
+    if possible_duplicate {
+        warn!(
+            "sequence number too low (expected {expected}, actual {actual}, but counterparty indicated it's poss duplicate, ignoring"
+        );
+        return TransitionResult::Stay;
+    }
+    error!(
+        "we expected {expected} sequence number, but target sent lower ({actual}), terminating..."
+    );
+    let reason = format!("sequence number too low (actual {actual}, expected {expected})");
+    let logout = Logout::with_reason(reason.clone());
+    match ctx.prepare_message(logout).await {
+        Ok(prepared) => writer.send_raw_message(prepared.raw).await,
+        Err(err) => warn!("failed to send logout for sequence number too low: {err}"),
+    }
+    writer.disconnect().await;
+    TransitionResult::TransitionTo(SessionState::new_disconnected(false, &reason))
+}
+
 pub(crate) async fn handle_invalid_msg_type<A, S: MessageStore>(
     ctx: &mut SessionCtx<A, S>,
     writer: &WriterRef,
