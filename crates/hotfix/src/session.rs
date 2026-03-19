@@ -32,7 +32,7 @@ use crate::message::reject::Reject;
 use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
-use crate::message::verification_error::{CompIdType, MessageVerificationError};
+use crate::message::verification_error::MessageVerificationError;
 use crate::session::admin_request::AdminRequest;
 use crate::session::ctx::{SessionCtx, TransitionResult};
 use crate::session::error::SessionCreationError;
@@ -605,9 +605,9 @@ where
             }
             MessageVerificationError::IncorrectBeginString(begin_string) => {
                 if let Some(writer) = self.state.get_writer() {
-                    let result = inbound::handle_incorrect_begin_string(
-                        &mut self.ctx, writer, begin_string,
-                    ).await;
+                    let result =
+                        inbound::handle_incorrect_begin_string(&mut self.ctx, writer, begin_string)
+                            .await;
                     self.apply_transition(result);
                 }
             }
@@ -616,8 +616,17 @@ where
                 comp_id_type,
                 msg_seq_num,
             } => {
-                self.handle_incorrect_comp_id(comp_id, comp_id_type, msg_seq_num)
+                if let Some(writer) = self.state.get_writer() {
+                    let result = inbound::handle_incorrect_comp_id(
+                        &mut self.ctx,
+                        writer,
+                        comp_id,
+                        comp_id_type,
+                        msg_seq_num,
+                    )
                     .await;
+                    self.apply_transition(result);
+                }
             }
             MessageVerificationError::SendingTimeAccuracyIssue { msg_seq_num } => {
                 if let Some(writer) = self.state.get_writer() {
@@ -667,28 +676,6 @@ where
         }
 
         Ok(())
-    }
-
-
-    async fn handle_incorrect_comp_id(
-        &mut self,
-        received_comp_id: String,
-        comp_id_type: CompIdType,
-        msg_seq_num: u64,
-    ) {
-        error!(
-            "rejecting message with incorrect comp ID: {received_comp_id} (type: {comp_id_type:?})"
-        );
-        let reject = Reject::new(msg_seq_num)
-            .session_reject_reason(SessionRejectReason::ValueIsIncorrect)
-            .text(&format!("invalid comp ID {received_comp_id}"));
-        if let Err(err) = self.send_message(reject).await {
-            error!("failed to send reject message with invalid comp ID: {err}");
-        };
-
-        self.state
-            .logout_and_terminate(&mut self.ctx, "incorrect comp ID received")
-            .await;
     }
 
     async fn handle_sequence_number_too_low(
