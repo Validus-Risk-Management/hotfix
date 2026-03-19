@@ -607,12 +607,18 @@ where
                     .await;
             }
             MessageVerificationError::SendingTimeAccuracyIssue { msg_seq_num } => {
-                self.handle_sending_time_accuracy_problem(msg_seq_num, "unexpected sending time")
-                    .await;
+                if let Some(writer) = self.state.get_writer() {
+                    inbound::handle_sending_time_accuracy_problem(
+                        &mut self.ctx, writer, msg_seq_num, "unexpected sending time",
+                    ).await;
+                }
             }
             MessageVerificationError::SendingTimeMissing { msg_seq_num } => {
-                self.handle_sending_time_accuracy_problem(msg_seq_num, "sending time missing")
-                    .await;
+                if let Some(writer) = self.state.get_writer() {
+                    inbound::handle_sending_time_accuracy_problem(
+                        &mut self.ctx, writer, msg_seq_num, "sending time missing",
+                    ).await;
+                }
             }
             MessageVerificationError::OriginalSendingTimeMissing { msg_seq_num } => {
                 self.handle_original_sending_time_missing(msg_seq_num).await;
@@ -620,11 +626,12 @@ where
             MessageVerificationError::OriginalSendingTimeAfterSendingTime {
                 msg_seq_num, ..
             } => {
-                self.handle_sending_time_accuracy_problem(
-                    msg_seq_num,
-                    "original sending time is after sending time",
-                )
-                .await;
+                if let Some(writer) = self.state.get_writer() {
+                    inbound::handle_sending_time_accuracy_problem(
+                        &mut self.ctx, writer, msg_seq_num,
+                        "original sending time is after sending time",
+                    ).await;
+                }
             }
         }
 
@@ -745,17 +752,6 @@ where
         }
     }
 
-    async fn handle_sending_time_accuracy_problem(&mut self, msg_seq_num: u64, text: &str) {
-        let reject = Reject::new(msg_seq_num)
-            .session_reject_reason(SessionRejectReason::SendingtimeAccuracyProblem)
-            .text(text);
-        if let Err(err) = self.send_message(reject).await {
-            error!("failed to send reject for time accuracy problem: {err}");
-        };
-        if let Err(err) = self.ctx.store.increment_target_seq_number().await {
-            error!("failed to increment target seq number: {:?}", err);
-        };
-    }
 
     async fn handle_original_sending_time_missing(&mut self, msg_seq_num: u64) {
         let reject = Reject::new(msg_seq_num)

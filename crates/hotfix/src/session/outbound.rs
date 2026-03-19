@@ -5,12 +5,22 @@ use tracing::{debug, enabled, error, info};
 use crate::message::generate_message;
 use crate::message::parser::RawFixMessage;
 use crate::message::sequence_reset::SequenceReset;
-use crate::message::{is_admin, prepare_message_for_resend};
+use crate::message::{OutboundMessage, is_admin, prepare_message_for_resend};
 use crate::session::ctx::SessionCtx;
-use crate::session::error::SessionOperationError;
+use crate::session::error::{InternalSendError, SessionOperationError};
 use crate::session::get_msg_seq_num;
 use crate::transport::writer::WriterRef;
 use hotfix_message::session_fields::MSG_TYPE;
+
+pub async fn send_message<A, S: MessageStore>(
+    ctx: &mut SessionCtx<A, S>,
+    writer: &WriterRef,
+    message: impl OutboundMessage,
+) -> Result<u64, InternalSendError> {
+    let prepared = ctx.prepare_message(message).await?;
+    writer.send_raw_message(prepared.raw).await;
+    Ok(prepared.seq_num)
+}
 
 pub async fn send_sequence_reset<A, S: MessageStore>(
     ctx: &mut SessionCtx<A, S>,
