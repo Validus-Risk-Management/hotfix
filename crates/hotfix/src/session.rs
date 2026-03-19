@@ -621,7 +621,11 @@ where
                 }
             }
             MessageVerificationError::OriginalSendingTimeMissing { msg_seq_num } => {
-                self.handle_original_sending_time_missing(msg_seq_num).await;
+                if let Some(writer) = self.state.get_writer() {
+                    inbound::handle_original_sending_time_missing(
+                        &mut self.ctx, writer, msg_seq_num,
+                    ).await;
+                }
             }
             MessageVerificationError::OriginalSendingTimeAfterSendingTime {
                 msg_seq_num, ..
@@ -753,17 +757,6 @@ where
     }
 
 
-    async fn handle_original_sending_time_missing(&mut self, msg_seq_num: u64) {
-        let reject = Reject::new(msg_seq_num)
-            .session_reject_reason(SessionRejectReason::RequiredTagMissing)
-            .text("original sending time is required");
-        if let Err(err) = self.send_message(reject).await {
-            error!("failed to send reject for time missing tag: {err}");
-        };
-        if let Err(err) = self.ctx.store.increment_target_seq_number().await {
-            error!("failed to increment target seq number: {:?}", err);
-        };
-    }
 
     fn reset_heartbeat_timer(&mut self) {
         self.state

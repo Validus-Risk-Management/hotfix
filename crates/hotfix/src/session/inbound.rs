@@ -45,3 +45,19 @@ pub(crate) async fn handle_sending_time_accuracy_problem<A, S: MessageStore>(
         error!("failed to increment target seq number: {:?}", err);
     }
 }
+
+pub(crate) async fn handle_original_sending_time_missing<A, S: MessageStore>(
+    ctx: &mut SessionCtx<A, S>,
+    writer: &WriterRef,
+    msg_seq_num: u64,
+) {
+    let reject = Reject::new(msg_seq_num)
+        .session_reject_reason(SessionRejectReason::RequiredTagMissing)
+        .text("original sending time is required");
+    if let Err(err) = outbound::send_message(ctx, writer, reject).await {
+        error!("failed to send reject for time missing tag: {err}");
+    }
+    if let Err(err) = ctx.store.increment_target_seq_number().await {
+        error!("failed to increment target seq number: {:?}", err);
+    }
+}
