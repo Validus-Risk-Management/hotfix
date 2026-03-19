@@ -163,3 +163,229 @@ pub(crate) async fn handle_original_sending_time_missing<A, S: MessageStore>(
         error!("failed to increment target seq number: {:?}", err);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session::test_utils::{
+        FakeMessageStore, create_test_ctx, create_writer, extract_field, extract_msg_type,
+    };
+    use crate::transport::writer::WriterMessage;
+
+    #[tokio::test]
+    async fn handle_incorrect_begin_string_returns_transition_to_disconnected() {
+        let mut ctx = create_test_ctx(FakeMessageStore::new());
+        let (writer, mut rx) = create_writer();
+
+        let result = handle_incorrect_begin_string(&mut ctx, &writer, "FIX.4.0".to_string()).await;
+
+        assert!(matches!(
+            result,
+            TransitionResult::TransitionTo(SessionState::Disconnected(_))
+        ));
+
+        // Should send a Logout containing the bad begin string, then disconnect
+        let msg = rx.recv().await.unwrap();
+        match &msg {
+            WriterMessage::SendMessage(raw) => {
+                assert_eq!(extract_msg_type(raw.as_bytes()).as_deref(), Some("5"));
+                let text = extract_field(raw.as_bytes(), 58).expect("expected Text(58) field");
+                assert!(
+                    text.contains("FIX.4.0"),
+                    "logout text should mention the bad begin string, got: {text}"
+                );
+            }
+            _ => panic!("expected SendMessage, got {msg:?}"),
+        }
+        assert!(matches!(
+            rx.recv().await.unwrap(),
+            WriterMessage::Disconnect
+        ));
+
+        // Sender seq number should have been incremented for the logout
+        assert_eq!(ctx.store.next_sender_seq, 2);
+    }
+
+    #[tokio::test]
+    async fn handle_incorrect_comp_id_returns_transition_to_disconnected() {
+        let mut ctx = create_test_ctx(FakeMessageStore::new());
+        let (writer, mut rx) = create_writer();
+
+        let result = handle_incorrect_comp_id(
+            &mut ctx,
+            &writer,
+            "BAD_COMP".to_string(),
+            CompIdType::Sender,
+            1,
+        )
+        .await;
+
+        assert!(matches!(
+            result,
+            TransitionResult::TransitionTo(SessionState::Disconnected(_))
+        ));
+
+        // First message: Reject (35=3) mentioning the bad comp ID
+        let msg = rx.recv().await.unwrap();
+        match &msg {
+            WriterMessage::SendMessage(raw) => {
+                assert_eq!(extract_msg_type(raw.as_bytes()).as_deref(), Some("3"));
+                let text = extract_field(raw.as_bytes(), 58).expect("expected Text(58) field");
+                assert!(
+                    text.contains("BAD_COMP"),
+                    "reject text should mention the bad comp ID, got: {text}"
+                );
+            }
+            _ => panic!("expected SendMessage(Reject), got {msg:?}"),
+        }
+
+        // Second message: Logout (35=5)
+        let msg = rx.recv().await.unwrap();
+        match &msg {
+            WriterMessage::SendMessage(raw) => {
+                assert_eq!(extract_msg_type(raw.as_bytes()).as_deref(), Some("5"));
+            }
+            _ => panic!("expected SendMessage(Logout), got {msg:?}"),
+        }
+
+        // Third: Disconnect
+        assert!(matches!(
+            rx.recv().await.unwrap(),
+            WriterMessage::Disconnect
+        ));
+
+        // Sender seq incremented twice (reject + logout)
+        assert_eq!(ctx.store.next_sender_seq, 3);
+    }
+
+    #[tokio::test]
+    async fn handle_sequence_number_too_low_possible_duplicate_returns_stay() {
+        let mut ctx = create_test_ctx(FakeMessageStore::new());
+        let (writer, mut rx) = create_writer();
+
+        let result = handle_sequence_number_too_low(&mut ctx, &writer, 5, 1, true).await;
+
+        assert!(matches!(result, TransitionResult::Stay));
+
+        // No messages should have been sent
+        assert!(rx.try_recv().is_err());
+
+        // Store should be untouched
+        assert_eq!(ctx.store.next_sender_seq, 1);
+        assert_eq!(ctx.store.next_target_seq, 1);
+    }
+
+    #[tokio::test]
+    async fn handle_sequence_number_too_low_returns_transition_to_disconnected_without_reconnect() {
+        let mut ctx = create_test_ctx(FakeMessageStore::new());
+        let (writer, mut rx) = create_writer();
+
+        let result = handle_sequence_number_too_low(&mut ctx, &writer, 5, 1, false).await;
+
+        match result {
+            TransitionResult::TransitionTo(state) => {
+                assert!(!state.should_reconnect());
+            }
+            TransitionResult::Stay => panic!("expected TransitionTo(Disconnected)"),
+        }
+
+        // Should send a Logout mentioning the sequence mismatch, then disconnect
+        let msg = rx.recv().await.unwrap();
+        match &msg {
+            WriterMessage::SendMessage(raw) => {
+                assert_eq!(extract_msg_type(raw.as_bytes()).as_deref(), Some("5"));
+                let text = extract_field(raw.as_bytes(), 58).expect("expected Text(58) field");
+                assert!(
+                    text.contains("5") && text.contains("1"),
+                    "logout text should mention expected/actual seq nums, got: {text}"
+                );
+            }
+            _ => panic!("expected SendMessage(Logout), got {msg:?}"),
+        }
+        assert!(matches!(
+            rx.recv().await.unwrap(),
+            WriterMessage::Disconnect
+        ));
+
+        assert_eq!(ctx.store.next_sender_seq, 2);
+    }
+
+    #[tokio::test]
+    async fn handle_sending_time_accuracy_problem_sends_reject() {
+        let mut ctx = create_test_ctx(FakeMessageStore::new());
+        let (writer, mut rx) = create_writer();
+
+        handle_sending_time_accuracy_problem(&mut ctx, &writer, 42, "bad time").await;
+
+        let msg = rx.recv().await.unwrap();
+        match &msg {
+            WriterMessage::SendMessage(raw) => {
+                assert_eq!(extract_msg_type(raw.as_bytes()).as_deref(), Some("3"));
+                let text = extract_field(raw.as_bytes(), 58).expect("expected Text(58) field");
+                assert!(
+                    text.contains("bad time"),
+                    "reject text should contain the provided text, got: {text}"
+                );
+            }
+            _ => panic!("expected SendMessage(Reject), got {msg:?}"),
+        }
+
+        // Target seq number should have been incremented
+        assert_eq!(ctx.store.next_target_seq, 2);
+        // Sender seq number should have been incremented for the outbound reject
+        assert_eq!(ctx.store.next_sender_seq, 2);
+    }
+
+    #[tokio::test]
+    async fn handle_original_sending_time_missing_sends_reject() {
+        let mut ctx = create_test_ctx(FakeMessageStore::new());
+        let (writer, mut rx) = create_writer();
+
+        handle_original_sending_time_missing(&mut ctx, &writer, 7).await;
+
+        let msg = rx.recv().await.unwrap();
+        match &msg {
+            WriterMessage::SendMessage(raw) => {
+                assert_eq!(extract_msg_type(raw.as_bytes()).as_deref(), Some("3"));
+                let text = extract_field(raw.as_bytes(), 58).expect("expected Text(58) field");
+                assert!(
+                    text.contains("original sending time"),
+                    "reject text should mention original sending time, got: {text}"
+                );
+            }
+            _ => panic!("expected SendMessage(Reject), got {msg:?}"),
+        }
+
+        // Both sender and target seq numbers should have been incremented
+        assert_eq!(ctx.store.next_sender_seq, 2);
+        assert_eq!(ctx.store.next_target_seq, 2);
+    }
+
+    #[tokio::test]
+    async fn handle_invalid_msg_type_sends_reject_for_message_with_seq_num() {
+        let mut ctx = create_test_ctx(FakeMessageStore::new());
+        let (writer, mut rx) = create_writer();
+
+        let mut message = Message::new("FIX.4.4", "ZZ");
+        message.header_mut().set(MSG_SEQ_NUM, 1u64);
+
+        handle_invalid_msg_type(&mut ctx, &writer, &message, "ZZ").await;
+
+        let msg = rx.recv().await.unwrap();
+        match &msg {
+            WriterMessage::SendMessage(raw) => {
+                assert_eq!(extract_msg_type(raw.as_bytes()).as_deref(), Some("3"));
+                let text = extract_field(raw.as_bytes(), 58).expect("expected Text(58) field");
+                assert!(
+                    text.contains("ZZ"),
+                    "reject text should mention the invalid msg type, got: {text}"
+                );
+            }
+            _ => panic!("expected SendMessage(Reject), got {msg:?}"),
+        }
+
+        // Sender seq incremented for the reject, target seq incremented because msg seq matched
+        assert_eq!(ctx.store.next_sender_seq, 2);
+        assert_eq!(ctx.store.next_target_seq, 2);
+    }
+}

@@ -136,9 +136,8 @@ mod tests {
 
     #[tokio::test]
     async fn resend_messages_returns_error_for_garbled_stored_message() {
-        let store = GarbledMessageStore {
-            messages: vec![b"not a valid FIX message".to_vec()],
-        };
+        let mut store = FakeMessageStore::new();
+        store.messages = vec![b"not a valid FIX message".to_vec()];
         let mut ctx = create_test_ctx(store);
         let (sender, _receiver) = mpsc::channel(10);
         let writer = WriterRef::new(sender);
