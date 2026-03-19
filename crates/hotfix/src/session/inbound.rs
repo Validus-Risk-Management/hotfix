@@ -4,8 +4,9 @@ use crate::message::verification_error::MessageVerificationError;
 use crate::session::ctx::SessionCtx;
 use crate::session::outbound;
 use crate::transport::writer::WriterRef;
+use hotfix_message::Part;
 use hotfix_message::message::Message;
-use hotfix_message::session_fields::SessionRejectReason;
+use hotfix_message::session_fields::{MSG_SEQ_NUM, SessionRejectReason};
 use hotfix_store::MessageStore;
 use tracing::error;
 
@@ -43,6 +44,36 @@ pub(crate) async fn handle_sending_time_accuracy_problem<A, S: MessageStore>(
     }
     if let Err(err) = ctx.store.increment_target_seq_number().await {
         error!("failed to increment target seq number: {:?}", err);
+    }
+}
+
+pub(crate) async fn handle_invalid_msg_type<A, S: MessageStore>(
+    ctx: &mut SessionCtx<A, S>,
+    writer: &WriterRef,
+    message: &Message,
+    msg_type: &str,
+) {
+    match message.header().get(MSG_SEQ_NUM) {
+        Ok(msg_seq_num) => {
+            let reject = Reject::new(msg_seq_num)
+                .session_reject_reason(SessionRejectReason::InvalidMsgtype)
+                .text(&format!("invalid message type {msg_type}"));
+            if let Err(err) = outbound::send_message(ctx, writer, reject).await {
+                error!("failed to send reject message for invalid msgtype: {err}");
+            }
+
+            #[allow(clippy::collapsible_if)]
+            if let Ok(seq_num) = message.header().get::<u64>(MSG_SEQ_NUM)
+                && ctx.store.next_target_seq_number() == seq_num
+            {
+                if let Err(err) = ctx.store.increment_target_seq_number().await {
+                    error!("failed to increment target seq number: {:?}", err);
+                }
+            }
+        }
+        Err(err) => {
+            error!("failed to get message seq num: {:?}", err);
+        }
     }
 }
 

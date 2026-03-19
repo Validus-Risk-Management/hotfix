@@ -161,7 +161,15 @@ where
                     warn!("received invalid component");
                 }
                 InvalidReason::InvalidMsgType(msg_type) => {
-                    self.handle_invalid_msg_type(message, &msg_type).await;
+                    if let Some(writer) = self.state.get_writer() {
+                        inbound::handle_invalid_msg_type(
+                            &mut self.ctx,
+                            writer,
+                            &message,
+                            &msg_type,
+                        )
+                        .await;
+                    }
                 }
                 InvalidReason::InvalidOrderInGroup { tag, .. } => {
                     match message.header().get(MSG_SEQ_NUM) {
@@ -609,22 +617,33 @@ where
             MessageVerificationError::SendingTimeAccuracyIssue { msg_seq_num } => {
                 if let Some(writer) = self.state.get_writer() {
                     inbound::handle_sending_time_accuracy_problem(
-                        &mut self.ctx, writer, msg_seq_num, "unexpected sending time",
-                    ).await;
+                        &mut self.ctx,
+                        writer,
+                        msg_seq_num,
+                        "unexpected sending time",
+                    )
+                    .await;
                 }
             }
             MessageVerificationError::SendingTimeMissing { msg_seq_num } => {
                 if let Some(writer) = self.state.get_writer() {
                     inbound::handle_sending_time_accuracy_problem(
-                        &mut self.ctx, writer, msg_seq_num, "sending time missing",
-                    ).await;
+                        &mut self.ctx,
+                        writer,
+                        msg_seq_num,
+                        "sending time missing",
+                    )
+                    .await;
                 }
             }
             MessageVerificationError::OriginalSendingTimeMissing { msg_seq_num } => {
                 if let Some(writer) = self.state.get_writer() {
                     inbound::handle_original_sending_time_missing(
-                        &mut self.ctx, writer, msg_seq_num,
-                    ).await;
+                        &mut self.ctx,
+                        writer,
+                        msg_seq_num,
+                    )
+                    .await;
                 }
             }
             MessageVerificationError::OriginalSendingTimeAfterSendingTime {
@@ -632,9 +651,12 @@ where
             } => {
                 if let Some(writer) = self.state.get_writer() {
                     inbound::handle_sending_time_accuracy_problem(
-                        &mut self.ctx, writer, msg_seq_num,
+                        &mut self.ctx,
+                        writer,
+                        msg_seq_num,
                         "original sending time is after sending time",
-                    ).await;
+                    )
+                    .await;
                 }
             }
         }
@@ -730,33 +752,6 @@ where
 
         Ok(())
     }
-
-    async fn handle_invalid_msg_type(&mut self, message: Message, msg_type: &str) {
-        match message.header().get(MSG_SEQ_NUM) {
-            Ok(msg_seq_num) => {
-                let reject = Reject::new(msg_seq_num)
-                    .session_reject_reason(SessionRejectReason::InvalidMsgtype)
-                    .text(&format!("invalid message type {msg_type}"));
-                if let Err(err) = self.send_message(reject).await {
-                    error!("failed to send reject message for invalid msgtype: {err}");
-                };
-
-                #[allow(clippy::collapsible_if)]
-                if let Ok(seq_num) = message.header().get::<u64>(MSG_SEQ_NUM)
-                    && self.ctx.store.next_target_seq_number() == seq_num
-                {
-                    if let Err(err) = self.ctx.store.increment_target_seq_number().await {
-                        error!("failed to increment target seq number: {:?}", err);
-                    };
-                }
-            }
-            Err(err) => {
-                error!("failed to get message seq num: {:?}", err);
-            }
-        }
-    }
-
-
 
     fn reset_heartbeat_timer(&mut self) {
         self.state
