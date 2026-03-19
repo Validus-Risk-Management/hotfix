@@ -10,16 +10,20 @@ pub(crate) use awaiting_logout::AwaitingLogoutState;
 pub(crate) use awaiting_resend::{AwaitingResendState, AwaitingResendTransitionOutcome};
 pub(crate) use disconnected::DisconnectedState;
 
+use crate::Application;
+use crate::message::OutboundMessage;
 use crate::message::logon::Logon;
 use crate::message::logout::Logout;
-use crate::message::parser::RawFixMessage;
+use crate::session::ctx::SessionCtx;
+use crate::session::error::{InternalSendError, InternalSendResultExt, SessionOperationError};
 use crate::session::event::ScheduleResponse;
 use crate::session::info::Status as SessionInfoStatus;
 use crate::transport::writer::WriterRef;
+use hotfix_store::MessageStore;
 use std::time::Duration;
 use tokio::sync::oneshot;
 use tokio::time::Instant;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 
 const TEST_REQUEST_THRESHOLD: f64 = 1.2;
 
@@ -64,29 +68,41 @@ impl SessionState {
         }
     }
 
-    pub async fn send_message(&mut self, message_type: &str, message: RawFixMessage) {
+    pub async fn send_message<A, S>(
+        &mut self,
+        ctx: &mut SessionCtx<A, S>,
+        message: impl OutboundMessage,
+    ) -> Result<u64, InternalSendError>
+    where
+        A: Application,
+        S: MessageStore,
+    {
+        let message_type = message.message_type().to_string();
+        let prepared = ctx.prepare_message(message).await?;
+        let raw = prepared.raw;
+
         match self {
             Self::Active(ActiveState { writer, .. })
             | Self::AwaitingResend(AwaitingResendState { writer, .. }) => {
                 if message_type == Logon::MSG_TYPE {
                     error!("logon message is invalid for active sessions")
                 } else {
-                    writer.send_raw_message(message).await
+                    writer.send_raw_message(raw).await
                 }
             }
             Self::AwaitingLogon(AwaitingLogonState {
                 writer, logon_sent, ..
-            }) => match message_type {
+            }) => match message_type.as_str() {
                 Logon::MSG_TYPE => {
                     if *logon_sent {
                         error!("trying to send logon twice");
                     } else {
-                        writer.send_raw_message(message).await;
+                        writer.send_raw_message(raw).await;
                         *logon_sent = true;
                     }
                 }
                 Logout::MSG_TYPE => {
-                    writer.send_raw_message(message).await;
+                    writer.send_raw_message(raw).await;
                 }
                 _ => error!("invalid outgoing message for AwaitingLogon state"),
             },
@@ -94,11 +110,15 @@ impl SessionState {
                 // Logout messages are allowed because we first transition into AwaitingLogout
                 // and only then send the logout message
                 if message_type == Logout::MSG_TYPE {
-                    writer.send_raw_message(message).await
+                    writer.send_raw_message(raw).await
                 }
             }
             _ => error!("trying to write without an established connection"),
         }
+
+        self.reset_heartbeat_timer(ctx.config.heartbeat_interval);
+
+        Ok(prepared.seq_num)
     }
 
     pub async fn disconnect_writer(&self) {
@@ -165,6 +185,65 @@ impl SessionState {
                     .to_string(),
             ),
         }
+    }
+
+    /// Sends a logout message and puts the session state into an [`AwaitingLogout`] state.
+    ///
+    /// The session waits for a configurable timeout period for the counterparty to
+    /// respond with a `Logout` message. If no response is received within the timeout
+    /// period, it disconnects the counterparty.
+    pub async fn initiate_graceful_logout<A, S>(
+        &mut self,
+        ctx: &mut SessionCtx<A, S>,
+        reason: &str,
+        reconnect: bool,
+    ) -> Result<(), SessionOperationError>
+    where
+        A: Application,
+        S: MessageStore,
+    {
+        if self.try_transition_to_awaiting_logout(
+            Duration::from_secs(ctx.config.logout_timeout),
+            reconnect,
+        ) {
+            self.send_logout(ctx, reason).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Sends a logout message and immediately disconnects the counterparty.
+    ///
+    /// This should be used sparingly in scenarios where there is a major issue
+    /// requiring operational intervention, such as the sequence number being lower
+    /// than expected, or some other key header field containing an invalid value.
+    ///
+    /// In other scenarios, [`initiate_graceful_logout`] should be preferred.
+    pub async fn logout_and_terminate<A, S>(&mut self, ctx: &mut SessionCtx<A, S>, reason: &str)
+    where
+        A: Application,
+        S: MessageStore,
+    {
+        if let Err(err) = self.send_logout(ctx, reason).await {
+            warn!("failed to send logout during session termination: {}", err);
+        }
+        self.disconnect_writer().await;
+    }
+
+    pub async fn send_logout<A, S>(
+        &mut self,
+        ctx: &mut SessionCtx<A, S>,
+        reason: &str,
+    ) -> Result<(), SessionOperationError>
+    where
+        A: Application,
+        S: MessageStore,
+    {
+        let logout = Logout::with_reason(reason.to_string());
+        self.send_message(ctx, logout)
+            .await
+            .with_send_context("logout")?;
+        Ok(())
     }
 
     pub fn register_schedule_awaiter(&mut self, responder: oneshot::Sender<ScheduleResponse>) {

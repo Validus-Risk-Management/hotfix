@@ -392,7 +392,9 @@ where
         }
 
         if self.state.is_logged_on() {
-            self.send_logout("Logout acknowledged").await?;
+            self.state
+                .send_logout(&mut self.ctx, "Logout acknowledged")
+                .await?;
         }
 
         self.ctx
@@ -649,10 +651,12 @@ where
     }
 
     async fn handle_incorrect_begin_string(&mut self, received_begin_string: String) {
-        self.logout_and_terminate(&format!(
-            "beginString={received_begin_string} is not supported"
-        ))
-        .await;
+        self.state
+            .logout_and_terminate(
+                &mut self.ctx,
+                &format!("beginString={received_begin_string} is not supported"),
+            )
+            .await;
     }
 
     async fn handle_incorrect_comp_id(
@@ -671,7 +675,8 @@ where
             error!("failed to send reject message with invalid comp ID: {err}");
         };
 
-        self.logout_and_terminate("incorrect comp ID received")
+        self.state
+            .logout_and_terminate(&mut self.ctx, "incorrect comp ID received")
             .await;
     }
 
@@ -691,7 +696,9 @@ where
             "we expected {expected} sequence number, but target sent lower ({actual}), terminating..."
         );
         let reason = format!("sequence number too low (actual {actual}, expected {expected})");
-        self.logout_and_terminate(&reason).await;
+        self.state
+            .logout_and_terminate(&mut self.ctx, &reason)
+            .await;
         self.state = SessionState::new_disconnected(false, &reason);
     }
 
@@ -817,11 +824,7 @@ where
         &mut self,
         message: impl OutboundMessage,
     ) -> Result<u64, InternalSendError> {
-        let msg_type = message.message_type().to_string();
-        let prepared = self.ctx.prepare_message(message).await?;
-        self.state.send_message(&msg_type, prepared.raw).await;
-        self.reset_heartbeat_timer();
-        Ok(prepared.seq_num)
+        self.state.send_message(&mut self.ctx, message).await
     }
 
     async fn send_resend_request(
@@ -850,48 +853,6 @@ where
         Ok(())
     }
 
-    async fn send_logout(&mut self, reason: &str) -> Result<(), SessionOperationError> {
-        let logout = Logout::with_reason(reason.to_string());
-        self.send_message(logout)
-            .await
-            .with_send_context("logout")?;
-        Ok(())
-    }
-
-    /// Sends a logout message and immediately disconnects the counterparty.
-    ///
-    /// This should be used sparingly in scenarios where there is a major issue
-    /// requiring operational intervention, such as the sequence number being lower
-    /// than expected, or some other key header field containing an invalid value.
-    ///
-    /// In other scenarios, [`initiate_graceful_logout`] should be preferred.
-    async fn logout_and_terminate(&mut self, reason: &str) {
-        if let Err(err) = self.send_logout(reason).await {
-            warn!("failed to send logout during session termination: {}", err);
-        }
-        self.state.disconnect_writer().await;
-    }
-
-    /// Sends a logout message and puts the session state into an [`AwaitingLogout`] state.
-    ///
-    /// The session waits for a configurable timeout period for the counterparty to
-    /// respond with a `Logout` message. If no response is received within the timeout
-    /// period, it disconnects the counterparty.
-    async fn initiate_graceful_logout(
-        &mut self,
-        reason: &str,
-        reconnect: bool,
-    ) -> Result<(), SessionOperationError> {
-        if self.state.try_transition_to_awaiting_logout(
-            Duration::from_secs(self.ctx.config.logout_timeout),
-            reconnect,
-        ) {
-            self.send_logout(reason).await?;
-        }
-
-        Ok(())
-    }
-
     async fn handle_session_event(&mut self, event: SessionEvent) {
         self.handle_schedule_check().await;
 
@@ -900,7 +861,9 @@ where
                 if let Err(err) = self.on_incoming(fix_message).await {
                     let reason = err.to_string();
                     error!(reason, "fatal error in message processing");
-                    self.logout_and_terminate("internal error").await;
+                    self.state
+                        .logout_and_terminate(&mut self.ctx, "internal error")
+                        .await;
                     self.state = SessionState::new_disconnected(true, &reason);
                 }
             }
@@ -945,7 +908,8 @@ where
             AdminRequest::InitiateGracefulShutdown { reconnect } => {
                 warn!("initiating shutdown on request from admin..");
                 if let Err(err) = self
-                    .initiate_graceful_logout("explicitly requested", reconnect)
+                    .state
+                    .initiate_graceful_logout(&mut self.ctx, "explicitly requested", reconnect)
                     .await
                 {
                     error!(err = ?err, "initiating graceful shutdown");
@@ -973,7 +937,9 @@ where
     async fn handle_peer_timeout(&mut self) {
         if self.state.is_expecting_test_response() {
             warn!("peer didn't respond, terminating..");
-            self.logout_and_terminate("peer timeout").await;
+            self.state
+                .logout_and_terminate(&mut self.ctx, "peer timeout")
+                .await;
         } else if self.state.is_awaiting_logon() {
             warn!("peer didn't respond to our Logon, disconnecting..");
             self.state.disconnect_writer().await;
@@ -1007,7 +973,9 @@ where
                 Ok(SessionPeriodComparison::DifferentPeriod) => {
                     // the message store is for a previous session,
                     // we need to terminate this session, reset the store, and reestablish the session
-                    self.logout_and_terminate("session period changed").await;
+                    self.state
+                        .logout_and_terminate(&mut self.ctx, "session period changed")
+                        .await;
                     if let Err(err) = self.ctx.store.reset().await {
                         error!("error resetting session store: {err:}");
                         self.state =
@@ -1018,7 +986,8 @@ where
                     // the creation_time was recorded outside the session schedule,
                     // treat this similarly to a different period - reset the store
                     warn!("store creation time is outside session schedule, resetting store");
-                    self.logout_and_terminate("creation time outside schedule")
+                    self.state
+                        .logout_and_terminate(&mut self.ctx, "creation time outside schedule")
                         .await;
                     if let Err(err) = self.ctx.store.reset().await {
                         error!("error resetting session store: {err:}");
@@ -1029,13 +998,16 @@ where
                 Err(err) => {
                     // actual schedule calculation error (e.g., DST transition, date overflow)
                     error!("error checking session period: {err:?}");
-                    self.logout_and_terminate("internal error").await;
+                    self.state
+                        .logout_and_terminate(&mut self.ctx, "internal error")
+                        .await;
                 }
             }
         } else if self.state.is_connected() {
             // we are currently outside scheduled session time
             if let Err(err) = self
-                .initiate_graceful_logout("End of session time", true)
+                .state
+                .initiate_graceful_logout(&mut self.ctx, "End of session time", true)
                 .await
             {
                 error!(err = ?err, "failed to initiate graceful logout");
