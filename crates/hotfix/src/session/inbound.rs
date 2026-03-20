@@ -1,7 +1,7 @@
 use crate::message::logout::Logout;
 use crate::message::reject::Reject;
 use crate::message::verification::verify_message;
-use crate::message::verification_error::{CompIdType, MessageVerificationError};
+use crate::message::verification_error::{CompIdType, MessageVerificationError, VerificationIssue};
 use crate::session::ctx::{SessionCtx, TransitionResult};
 use crate::session::outbound;
 use crate::session::state::SessionState;
@@ -18,7 +18,7 @@ pub(crate) fn verify_message_with_ctx<A, S: MessageStore>(
     message: &Message,
     check_too_high: bool,
     check_too_low: bool,
-) -> Result<(), MessageVerificationError> {
+) -> Result<(), VerificationIssue> {
     let expected_seq_number = if check_too_high || check_too_low {
         Some(ctx.store.next_target_seq_number())
     } else {
@@ -161,6 +161,59 @@ pub(crate) async fn handle_original_sending_time_missing<A, S: MessageStore>(
     }
     if let Err(err) = ctx.store.increment_target_seq_number().await {
         error!("failed to increment target seq number: {:?}", err);
+    }
+}
+
+pub(crate) async fn handle_verification_error<A, S: MessageStore>(
+    ctx: &mut SessionCtx<A, S>,
+    writer: &WriterRef,
+    error: MessageVerificationError,
+) -> TransitionResult {
+    match error {
+        MessageVerificationError::SeqNumberTooLow {
+            expected,
+            actual,
+            possible_duplicate,
+        } => {
+            handle_sequence_number_too_low(ctx, writer, expected, actual, possible_duplicate).await
+        }
+        MessageVerificationError::IncorrectBeginString(begin_string) => {
+            handle_incorrect_begin_string(ctx, writer, begin_string).await
+        }
+        MessageVerificationError::IncorrectCompId {
+            comp_id,
+            comp_id_type,
+            msg_seq_num,
+        } => handle_incorrect_comp_id(ctx, writer, comp_id, comp_id_type, msg_seq_num).await,
+        MessageVerificationError::SendingTimeAccuracyIssue { msg_seq_num } => {
+            handle_sending_time_accuracy_problem(
+                ctx,
+                writer,
+                msg_seq_num,
+                "unexpected sending time",
+            )
+            .await;
+            TransitionResult::Stay
+        }
+        MessageVerificationError::SendingTimeMissing { msg_seq_num } => {
+            handle_sending_time_accuracy_problem(ctx, writer, msg_seq_num, "sending time missing")
+                .await;
+            TransitionResult::Stay
+        }
+        MessageVerificationError::OriginalSendingTimeMissing { msg_seq_num } => {
+            handle_original_sending_time_missing(ctx, writer, msg_seq_num).await;
+            TransitionResult::Stay
+        }
+        MessageVerificationError::OriginalSendingTimeAfterSendingTime { msg_seq_num, .. } => {
+            handle_sending_time_accuracy_problem(
+                ctx,
+                writer,
+                msg_seq_num,
+                "original sending time is after sending time",
+            )
+            .await;
+            TransitionResult::Stay
+        }
     }
 }
 

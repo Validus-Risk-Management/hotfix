@@ -1,5 +1,5 @@
 use crate::config::SessionConfig;
-use crate::message::verification_error::{CompIdType, MessageVerificationError};
+use crate::message::verification_error::{CompIdType, MessageVerificationError, VerificationIssue};
 use hotfix_message::Part;
 use hotfix_message::field_types::Timestamp;
 use hotfix_message::message::Message;
@@ -19,7 +19,7 @@ pub(crate) fn verify_message(
     expected_seq_number: Option<u64>,
     check_too_high: bool,
     check_too_low: bool,
-) -> Result<(), MessageVerificationError> {
+) -> Result<(), VerificationIssue> {
     check_begin_string(message, config.begin_string.as_str())?;
     let actual_seq_number: u64 = message.header().get(MSG_SEQ_NUM).unwrap_or_default();
 
@@ -151,10 +151,10 @@ fn check_sequence_number(
     possible_duplicate: bool,
     check_too_high: bool,
     check_too_low: bool,
-) -> Result<(), MessageVerificationError> {
+) -> Result<(), VerificationIssue> {
     match actual_seq_number.cmp(&expected_seq_number) {
         Ordering::Greater if check_too_high => {
-            return Err(MessageVerificationError::SeqNumberTooHigh {
+            return Err(VerificationIssue::SequenceGap {
                 expected: expected_seq_number,
                 actual: actual_seq_number,
             });
@@ -164,7 +164,8 @@ fn check_sequence_number(
                 expected: expected_seq_number,
                 actual: actual_seq_number,
                 possible_duplicate,
-            });
+            }
+            .into());
         }
         _ => {}
     }
@@ -191,8 +192,9 @@ fn check_target_comp_id(
 #[cfg(test)]
 mod tests {
     use super::{Message, SessionConfig, verify_message};
-    use crate::message::verification_error::CompIdType;
-    use crate::message::verification_error::MessageVerificationError;
+    use crate::message::verification_error::{
+        CompIdType, MessageVerificationError, VerificationIssue,
+    };
     use hotfix_message::field_types::Timestamp;
     use hotfix_message::{Part, fix44};
 
@@ -247,9 +249,14 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::IncorrectBeginString(_))
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::IncorrectBeginString(_)
+            ))
         ));
-        if let Err(MessageVerificationError::IncorrectBeginString(begin_string)) = result {
+        if let Err(VerificationIssue::InvalidMessage(
+            MessageVerificationError::IncorrectBeginString(begin_string),
+        )) = result
+        {
             assert_eq!(begin_string, "FIX.4.2");
         }
     }
@@ -263,16 +270,18 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::IncorrectCompId {
-                comp_id_type: CompIdType::Sender,
-                ..
-            })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::IncorrectCompId {
+                    comp_id_type: CompIdType::Sender,
+                    ..
+                }
+            ))
         ));
-        if let Err(MessageVerificationError::IncorrectCompId {
+        if let Err(VerificationIssue::InvalidMessage(MessageVerificationError::IncorrectCompId {
             comp_id,
             comp_id_type,
             msg_seq_num,
-        }) = result
+        })) = result
         {
             assert_eq!(comp_id, "WRONG_SENDER");
             assert!(matches!(comp_id_type, CompIdType::Sender));
@@ -289,16 +298,18 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::IncorrectCompId {
-                comp_id_type: CompIdType::Target,
-                ..
-            })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::IncorrectCompId {
+                    comp_id_type: CompIdType::Target,
+                    ..
+                }
+            ))
         ));
-        if let Err(MessageVerificationError::IncorrectCompId {
+        if let Err(VerificationIssue::InvalidMessage(MessageVerificationError::IncorrectCompId {
             comp_id,
             comp_id_type,
             msg_seq_num,
-        }) = result
+        })) = result
         {
             assert_eq!(comp_id, "WRONG_TARGET");
             assert!(matches!(comp_id_type, CompIdType::Target));
@@ -315,13 +326,15 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::SeqNumberTooLow { .. })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::SeqNumberTooLow { .. }
+            ))
         ));
-        if let Err(MessageVerificationError::SeqNumberTooLow {
+        if let Err(VerificationIssue::InvalidMessage(MessageVerificationError::SeqNumberTooLow {
             expected,
             actual,
             possible_duplicate,
-        }) = result
+        })) = result
         {
             assert_eq!(expected, 42);
             assert_eq!(actual, 40);
@@ -341,13 +354,15 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::SeqNumberTooLow { .. })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::SeqNumberTooLow { .. }
+            ))
         ));
-        if let Err(MessageVerificationError::SeqNumberTooLow {
+        if let Err(VerificationIssue::InvalidMessage(MessageVerificationError::SeqNumberTooLow {
             expected,
             actual,
             possible_duplicate,
-        }) = result
+        })) = result
         {
             assert_eq!(expected, 42);
             assert_eq!(actual, 40);
@@ -362,11 +377,8 @@ mod tests {
 
         let result = verify_message(&msg, &config, Some(42), true, true);
 
-        assert!(matches!(
-            result,
-            Err(MessageVerificationError::SeqNumberTooHigh { .. })
-        ));
-        if let Err(MessageVerificationError::SeqNumberTooHigh { expected, actual }) = result {
+        assert!(matches!(result, Err(VerificationIssue::SequenceGap { .. })));
+        if let Err(VerificationIssue::SequenceGap { expected, actual }) = result {
             assert_eq!(expected, 42);
             assert_eq!(actual, 50);
         }
@@ -383,9 +395,14 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::OriginalSendingTimeMissing { .. })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::OriginalSendingTimeMissing { .. }
+            ))
         ));
-        if let Err(MessageVerificationError::OriginalSendingTimeMissing { msg_seq_num }) = result {
+        if let Err(VerificationIssue::InvalidMessage(
+            MessageVerificationError::OriginalSendingTimeMissing { msg_seq_num },
+        )) = result
+        {
             assert_eq!(msg_seq_num, 42);
         }
     }
@@ -427,13 +444,17 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::OriginalSendingTimeAfterSendingTime { .. })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::OriginalSendingTimeAfterSendingTime { .. }
+            ))
         ));
-        if let Err(MessageVerificationError::OriginalSendingTimeAfterSendingTime {
-            msg_seq_num,
-            original_sending_time,
-            sending_time: st,
-        }) = result
+        if let Err(VerificationIssue::InvalidMessage(
+            MessageVerificationError::OriginalSendingTimeAfterSendingTime {
+                msg_seq_num,
+                original_sending_time,
+                sending_time: st,
+            },
+        )) = result
         {
             assert_eq!(msg_seq_num, 42);
             assert!(original_sending_time > st);
@@ -475,7 +496,9 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::IncorrectBeginString(_))
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::IncorrectBeginString(_)
+            ))
         ));
     }
 
@@ -491,10 +514,12 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::IncorrectCompId {
-                comp_id_type: CompIdType::Sender,
-                ..
-            })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::IncorrectCompId {
+                    comp_id_type: CompIdType::Sender,
+                    ..
+                }
+            ))
         ));
     }
 
@@ -510,10 +535,12 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::IncorrectCompId {
-                comp_id_type: CompIdType::Target,
-                ..
-            })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::IncorrectCompId {
+                    comp_id_type: CompIdType::Target,
+                    ..
+                }
+            ))
         ));
     }
 
@@ -530,7 +557,9 @@ mod tests {
         // missing seq num defaults to 0, which will be too low
         assert!(matches!(
             result,
-            Err(MessageVerificationError::SeqNumberTooLow { .. })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::SeqNumberTooLow { .. }
+            ))
         ));
     }
 
@@ -543,7 +572,9 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::SeqNumberTooLow { .. })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::SeqNumberTooLow { .. }
+            ))
         ));
     }
 
@@ -567,7 +598,9 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::IncorrectBeginString(_))
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::IncorrectBeginString(_)
+            ))
         ));
     }
 
@@ -581,10 +614,12 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::IncorrectCompId {
-                comp_id_type: CompIdType::Sender,
-                ..
-            })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::IncorrectCompId {
+                    comp_id_type: CompIdType::Sender,
+                    ..
+                }
+            ))
         ));
     }
 
@@ -600,9 +635,14 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::SendingTimeMissing { .. })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::SendingTimeMissing { .. }
+            ))
         ));
-        if let Err(MessageVerificationError::SendingTimeMissing { msg_seq_num }) = result {
+        if let Err(VerificationIssue::InvalidMessage(
+            MessageVerificationError::SendingTimeMissing { msg_seq_num },
+        )) = result
+        {
             assert_eq!(msg_seq_num, 42);
         }
     }
@@ -628,9 +668,14 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::SendingTimeAccuracyIssue { .. })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::SendingTimeAccuracyIssue { .. }
+            ))
         ));
-        if let Err(MessageVerificationError::SendingTimeAccuracyIssue { msg_seq_num }) = result {
+        if let Err(VerificationIssue::InvalidMessage(
+            MessageVerificationError::SendingTimeAccuracyIssue { msg_seq_num },
+        )) = result
+        {
             assert_eq!(msg_seq_num, 42);
         }
     }
@@ -656,9 +701,14 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::SendingTimeAccuracyIssue { .. })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::SendingTimeAccuracyIssue { .. }
+            ))
         ));
-        if let Err(MessageVerificationError::SendingTimeAccuracyIssue { msg_seq_num }) = result {
+        if let Err(VerificationIssue::InvalidMessage(
+            MessageVerificationError::SendingTimeAccuracyIssue { msg_seq_num },
+        )) = result
+        {
             assert_eq!(msg_seq_num, 42);
         }
     }
@@ -750,10 +800,7 @@ mod tests {
 
         let result = verify_message(&msg, &config, Some(42), true, false);
 
-        assert!(matches!(
-            result,
-            Err(MessageVerificationError::SeqNumberTooHigh { .. })
-        ));
+        assert!(matches!(result, Err(VerificationIssue::SequenceGap { .. })));
     }
 
     #[test]
@@ -765,7 +812,9 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(MessageVerificationError::SeqNumberTooLow { .. })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::SeqNumberTooLow { .. }
+            ))
         ));
     }
 
@@ -778,7 +827,9 @@ mod tests {
         let result = verify_message(&msg, &config, Some(42), false, false);
         assert!(matches!(
             result,
-            Err(MessageVerificationError::IncorrectCompId { .. })
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::IncorrectCompId { .. }
+            ))
         ));
 
         // Wrong begin string should still be caught
@@ -786,7 +837,9 @@ mod tests {
         let result = verify_message(&msg, &config, Some(42), false, false);
         assert!(matches!(
             result,
-            Err(MessageVerificationError::IncorrectBeginString(_))
+            Err(VerificationIssue::InvalidMessage(
+                MessageVerificationError::IncorrectBeginString(_)
+            ))
         ));
     }
 }

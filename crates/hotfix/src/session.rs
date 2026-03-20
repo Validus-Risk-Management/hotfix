@@ -34,7 +34,7 @@ use crate::message::reject::Reject;
 use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
-use crate::message::verification_error::MessageVerificationError;
+use crate::message::verification_error::VerificationIssue;
 use crate::session::admin_request::AdminRequest;
 use crate::session::ctx::{SessionCtx, TransitionResult};
 use crate::session::error::SessionCreationError;
@@ -278,7 +278,7 @@ where
                 }
                 self.ctx.store.increment_target_seq_number().await?;
             }
-            Err(err) => self.handle_verification_error(err).await?,
+            Err(err) => self.handle_verification_failure(err).await?,
         }
 
         Ok(())
@@ -367,7 +367,7 @@ where
                     self.ctx.application.on_logon().await;
                     self.ctx.store.increment_target_seq_number().await?;
                 }
-                Err(err) => self.handle_verification_error(err).await?,
+                Err(err) => self.handle_verification_failure(err).await?,
             }
         } else {
             error!("received unexpected logon message");
@@ -378,7 +378,7 @@ where
 
     async fn on_logout(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         if let Err(err) = verify_message_with_ctx(&self.ctx, message, false, false) {
-            self.handle_verification_error(err).await?;
+            self.handle_verification_failure(err).await?;
             return Ok(());
         }
 
@@ -414,7 +414,7 @@ where
 
     async fn on_heartbeat(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         if let Err(err) = verify_message_with_ctx(&self.ctx, message, true, true) {
-            self.handle_verification_error(err).await?;
+            self.handle_verification_failure(err).await?;
             return Ok(());
         }
 
@@ -433,7 +433,7 @@ where
 
     async fn on_test_request(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         if let Err(err) = verify_message_with_ctx(&self.ctx, message, true, true) {
-            self.handle_verification_error(err).await?;
+            self.handle_verification_failure(err).await?;
             return Ok(());
         }
 
@@ -464,7 +464,7 @@ where
         match verify_message_with_ctx(&self.ctx, message, false, true) {
             Ok(_) => {}
             Err(err) => {
-                self.handle_verification_error(err).await?;
+                self.handle_verification_failure(err).await?;
                 return Ok(());
             }
         }
@@ -530,7 +530,7 @@ where
     /// Handle Reject messages.
     async fn on_reject(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         if let Err(err) = verify_message_with_ctx(&self.ctx, message, false, true) {
-            self.handle_verification_error(err).await?;
+            self.handle_verification_failure(err).await?;
             return Ok(());
         }
 
@@ -542,7 +542,7 @@ where
         let msg_seq_num = get_msg_seq_num(message);
         let is_gap_fill: bool = message.get(GAP_FILL_FLAG).unwrap_or(false);
         if let Err(err) = verify_message_with_ctx(&self.ctx, message, is_gap_fill, is_gap_fill) {
-            self.handle_verification_error(err).await?;
+            self.handle_verification_failure(err).await?;
             return Ok(());
         }
 
@@ -588,100 +588,20 @@ where
         Ok(())
     }
 
-    async fn handle_verification_error(
+    async fn handle_verification_failure(
         &mut self,
-        error: MessageVerificationError,
+        failure: VerificationIssue,
     ) -> Result<(), SessionOperationError> {
-        match error {
-            MessageVerificationError::SeqNumberTooLow {
-                expected,
-                actual,
-                possible_duplicate,
-            } => {
-                if let Some(writer) = self.state.get_writer() {
-                    let result = inbound::handle_sequence_number_too_low(
-                        &mut self.ctx,
-                        writer,
-                        expected,
-                        actual,
-                        possible_duplicate,
-                    )
-                    .await;
-                    self.apply_transition(result);
-                }
-            }
-            MessageVerificationError::SeqNumberTooHigh { expected, actual } => {
+        match failure {
+            VerificationIssue::SequenceGap { expected, actual } => {
                 self.handle_sequence_number_too_high(expected, actual)
                     .await?;
             }
-            MessageVerificationError::IncorrectBeginString(begin_string) => {
+            VerificationIssue::InvalidMessage(err) => {
                 if let Some(writer) = self.state.get_writer() {
                     let result =
-                        inbound::handle_incorrect_begin_string(&mut self.ctx, writer, begin_string)
-                            .await;
+                        inbound::handle_verification_error(&mut self.ctx, writer, err).await;
                     self.apply_transition(result);
-                }
-            }
-            MessageVerificationError::IncorrectCompId {
-                comp_id,
-                comp_id_type,
-                msg_seq_num,
-            } => {
-                if let Some(writer) = self.state.get_writer() {
-                    let result = inbound::handle_incorrect_comp_id(
-                        &mut self.ctx,
-                        writer,
-                        comp_id,
-                        comp_id_type,
-                        msg_seq_num,
-                    )
-                    .await;
-                    self.apply_transition(result);
-                }
-            }
-            MessageVerificationError::SendingTimeAccuracyIssue { msg_seq_num } => {
-                if let Some(writer) = self.state.get_writer() {
-                    inbound::handle_sending_time_accuracy_problem(
-                        &mut self.ctx,
-                        writer,
-                        msg_seq_num,
-                        "unexpected sending time",
-                    )
-                    .await;
-                }
-            }
-            MessageVerificationError::SendingTimeMissing { msg_seq_num } => {
-                if let Some(writer) = self.state.get_writer() {
-                    inbound::handle_sending_time_accuracy_problem(
-                        &mut self.ctx,
-                        writer,
-                        msg_seq_num,
-                        "sending time missing",
-                    )
-                    .await;
-                }
-            }
-            MessageVerificationError::OriginalSendingTimeMissing { msg_seq_num } => {
-                if let Some(writer) = self.state.get_writer() {
-                    inbound::handle_original_sending_time_missing(
-                        &mut self.ctx,
-                        writer,
-                        msg_seq_num,
-                    )
-                    .await;
-                }
-            }
-            MessageVerificationError::OriginalSendingTimeAfterSendingTime {
-                msg_seq_num, ..
-            } => {
-                if let Some(writer) = self.state.get_writer() {
-                    inbound::handle_sending_time_accuracy_problem(
-                        &mut self.ctx,
-                        writer,
-                        msg_seq_num,
-                        "original sending time is after sending time",
-                    )
-                    .await;
                 }
             }
         }

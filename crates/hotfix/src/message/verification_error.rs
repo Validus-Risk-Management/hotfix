@@ -1,6 +1,24 @@
 use hotfix_message::field_types::Timestamp;
 use thiserror::Error;
 
+/// The result of verifying a message that is not `Ok`.
+///
+/// This separates sequence gaps (a normal protocol condition requiring a
+/// state-specific response) from actual message errors (which have a fixed
+/// response regardless of state).
+#[derive(Debug, Error)]
+pub enum VerificationIssue {
+    /// The counterparty is ahead of us — we need to request a resend.
+    /// This is not an error but a normal protocol condition that each
+    /// session state handles differently.
+    #[error("sequence gap detected (expected {expected}, actual {actual})")]
+    SequenceGap { expected: u64, actual: u64 },
+
+    /// The message has an actual problem that needs to be handled.
+    #[error(transparent)]
+    InvalidMessage(#[from] MessageVerificationError),
+}
+
 #[derive(Debug, Error)]
 pub enum MessageVerificationError {
     /// The message's sequence number is lower than we expected.
@@ -12,10 +30,6 @@ pub enum MessageVerificationError {
         actual: u64,
         possible_duplicate: bool,
     },
-
-    /// The message's sequence number is higher than we expected.
-    #[error("sequence number too high (expected {expected:?}, actual {actual:?})")]
-    SeqNumberTooHigh { expected: u64, actual: u64 },
 
     /// The begin string is different from our expectations.
     #[error("incorrect begin string {0}")]
