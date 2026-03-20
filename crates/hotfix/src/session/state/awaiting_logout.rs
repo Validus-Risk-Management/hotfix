@@ -1,5 +1,12 @@
+use crate::Application;
+use crate::session::ctx::{SessionCtx, TransitionResult};
+use crate::session::error::SessionOperationError;
+use crate::session::inbound::{self, VerificationOutcome};
 use crate::transport::writer::WriterRef;
+use hotfix_message::message::Message;
+use hotfix_store::MessageStore;
 use tokio::time::Instant;
+use tracing::warn;
 
 pub(crate) struct AwaitingLogoutState {
     /// The writer's reference to send messages to the counterparty
@@ -8,4 +15,33 @@ pub(crate) struct AwaitingLogoutState {
     pub(crate) logout_timeout: Instant,
     /// Indicates whether we should attempt to reconnect after we've fully logged out
     pub(crate) reconnect: bool,
+}
+
+impl AwaitingLogoutState {
+    pub(crate) async fn handle_verification_issue<A: Application, S: MessageStore>(
+        &self,
+        ctx: &mut SessionCtx<A, S>,
+        message: &Message,
+        check_too_high: bool,
+        check_too_low: bool,
+    ) -> Result<TransitionResult, SessionOperationError> {
+        match inbound::verify_and_handle_errors(
+            ctx,
+            &self.writer,
+            message,
+            check_too_high,
+            check_too_low,
+        )
+        .await
+        {
+            VerificationOutcome::Ok => Ok(TransitionResult::Stay),
+            VerificationOutcome::Handled(result) => Ok(result),
+            VerificationOutcome::SequenceGap { expected, actual } => {
+                warn!(
+                    "sequence gap detected while awaiting logout (expected {expected}, actual {actual}), ignoring"
+                );
+                Ok(TransitionResult::Stay)
+            }
+        }
+    }
 }
