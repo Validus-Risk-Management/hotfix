@@ -34,7 +34,7 @@ use crate::message::reject::Reject;
 use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
-use crate::message::verification_error::VerificationIssue;
+use crate::message::verification_issue::VerificationIssue;
 use crate::session::admin_request::AdminRequest;
 use crate::session::ctx::{SessionCtx, TransitionResult};
 use crate::session::error::SessionCreationError;

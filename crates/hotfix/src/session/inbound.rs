@@ -1,7 +1,7 @@
 use crate::message::logout::Logout;
 use crate::message::reject::Reject;
 use crate::message::verification::verify_message;
-use crate::message::verification_error::{CompIdType, MessageVerificationError, VerificationIssue};
+use crate::message::verification_issue::{CompIdType, MessageError, VerificationIssue};
 use crate::session::ctx::{SessionCtx, TransitionResult};
 use crate::session::outbound;
 use crate::session::state::SessionState;
@@ -167,25 +167,25 @@ pub(crate) async fn handle_original_sending_time_missing<A, S: MessageStore>(
 pub(crate) async fn handle_verification_error<A, S: MessageStore>(
     ctx: &mut SessionCtx<A, S>,
     writer: &WriterRef,
-    error: MessageVerificationError,
+    error: MessageError,
 ) -> TransitionResult {
     match error {
-        MessageVerificationError::SeqNumberTooLow {
+        MessageError::SeqNumberTooLow {
             expected,
             actual,
             possible_duplicate,
         } => {
             handle_sequence_number_too_low(ctx, writer, expected, actual, possible_duplicate).await
         }
-        MessageVerificationError::IncorrectBeginString(begin_string) => {
+        MessageError::IncorrectBeginString(begin_string) => {
             handle_incorrect_begin_string(ctx, writer, begin_string).await
         }
-        MessageVerificationError::IncorrectCompId {
+        MessageError::IncorrectCompId {
             comp_id,
             comp_id_type,
             msg_seq_num,
         } => handle_incorrect_comp_id(ctx, writer, comp_id, comp_id_type, msg_seq_num).await,
-        MessageVerificationError::SendingTimeAccuracyIssue { msg_seq_num } => {
+        MessageError::SendingTimeAccuracyIssue { msg_seq_num } => {
             handle_sending_time_accuracy_problem(
                 ctx,
                 writer,
@@ -195,16 +195,16 @@ pub(crate) async fn handle_verification_error<A, S: MessageStore>(
             .await;
             TransitionResult::Stay
         }
-        MessageVerificationError::SendingTimeMissing { msg_seq_num } => {
+        MessageError::SendingTimeMissing { msg_seq_num } => {
             handle_sending_time_accuracy_problem(ctx, writer, msg_seq_num, "sending time missing")
                 .await;
             TransitionResult::Stay
         }
-        MessageVerificationError::OriginalSendingTimeMissing { msg_seq_num } => {
+        MessageError::OriginalSendingTimeMissing { msg_seq_num } => {
             handle_original_sending_time_missing(ctx, writer, msg_seq_num).await;
             TransitionResult::Stay
         }
-        MessageVerificationError::OriginalSendingTimeAfterSendingTime { msg_seq_num, .. } => {
+        MessageError::OriginalSendingTimeAfterSendingTime { msg_seq_num, .. } => {
             handle_sending_time_accuracy_problem(
                 ctx,
                 writer,

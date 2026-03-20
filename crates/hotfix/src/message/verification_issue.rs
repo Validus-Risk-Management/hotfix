@@ -16,11 +16,11 @@ pub enum VerificationIssue {
 
     /// The message has an actual problem that needs to be handled.
     #[error(transparent)]
-    InvalidMessage(#[from] MessageVerificationError),
+    InvalidMessage(#[from] MessageError),
 }
 
 #[derive(Debug, Error)]
-pub enum MessageVerificationError {
+pub enum MessageError {
     /// The message's sequence number is lower than we expected.
     #[error(
         "sequence number too low (expected {expected:?}, actual {actual:?}, possible duplicate: {possible_duplicate})"

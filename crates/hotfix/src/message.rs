@@ -17,7 +17,7 @@ pub mod resend_request;
 pub mod sequence_reset;
 pub mod test_request;
 pub mod verification;
-pub mod verification_error;
+pub mod verification_issue;
 
 pub use parser::RawFixMessage;
 pub use resend_request::ResendRequest;
