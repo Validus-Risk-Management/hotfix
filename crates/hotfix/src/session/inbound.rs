@@ -33,6 +33,45 @@ pub(crate) fn verify_message_with_ctx<A, S: MessageStore>(
     )
 }
 
+/// The result of verifying an inbound message after handling message errors.
+///
+/// This is the return type of [`verify_and_handle_errors`] which handles the
+/// common verification pattern: verify the message, handle any [`MessageError`]
+/// internally, and only surface sequence gaps back to the caller for
+/// state-specific handling.
+pub(crate) enum VerificationOutcome {
+    /// The message passed verification.
+    Ok,
+    /// The counterparty is ahead — the caller must handle this per-state.
+    SequenceGap { expected: u64, actual: u64 },
+    /// A message error was handled (reject/logout sent). The caller should
+    /// apply the returned transition.
+    Handled(TransitionResult),
+}
+
+/// Verifies an inbound message and handles any [`MessageError`] by sending
+/// the appropriate reject/logout. Only [`VerificationIssue::SequenceGap`] is
+/// surfaced back as [`VerificationOutcome::SequenceGap`] for the caller to
+/// handle per-state.
+pub(crate) async fn verify_and_handle_errors<A, S: MessageStore>(
+    ctx: &mut SessionCtx<A, S>,
+    writer: &WriterRef,
+    message: &Message,
+    check_too_high: bool,
+    check_too_low: bool,
+) -> VerificationOutcome {
+    match verify_message_with_ctx(ctx, message, check_too_high, check_too_low) {
+        Result::Ok(()) => VerificationOutcome::Ok,
+        Err(VerificationIssue::SequenceGap { expected, actual }) => {
+            VerificationOutcome::SequenceGap { expected, actual }
+        }
+        Err(VerificationIssue::InvalidMessage(err)) => {
+            let result = handle_verification_error(ctx, writer, err).await;
+            VerificationOutcome::Handled(result)
+        }
+    }
+}
+
 pub(crate) async fn handle_sending_time_accuracy_problem<A, S: MessageStore>(
     ctx: &mut SessionCtx<A, S>,
     writer: &WriterRef,
