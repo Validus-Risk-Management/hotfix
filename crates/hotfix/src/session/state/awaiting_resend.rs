@@ -38,6 +38,62 @@ impl AwaitingResendState {
         }
     }
 
+    pub(crate) async fn handle_verification_issue<A: Application, S: MessageStore>(
+        &mut self,
+        ctx: &mut SessionCtx<A, S>,
+        message: &Message,
+        check_too_high: bool,
+        check_too_low: bool,
+    ) -> Result<TransitionResult, SessionOperationError> {
+        match inbound::verify_and_handle_errors(
+            ctx,
+            &self.writer,
+            message,
+            check_too_high,
+            check_too_low,
+        )
+        .await
+        {
+            VerificationOutcome::Ok => Ok(TransitionResult::Stay),
+            VerificationOutcome::Handled(result) => Ok(result),
+            VerificationOutcome::SequenceGap { expected, actual } => {
+                match self.update(expected, actual) {
+                    AwaitingResendTransitionOutcome::Success => {
+                        debug!(
+                            "we are behind target (ours: {expected}, theirs: {actual}), requesting resend."
+                        );
+                        let request = ResendRequest::new(expected, actual);
+                        outbound::send_message(ctx, &self.writer, request)
+                            .await
+                            .with_send_context("resend request")?;
+                        Ok(TransitionResult::Stay)
+                    }
+                    AwaitingResendTransitionOutcome::BeginSeqNumberTooLow => {
+                        self.writer.disconnect().await;
+                        Ok(TransitionResult::TransitionTo(
+                            SessionState::new_disconnected(
+                                false,
+                                "awaiting resend begin seq number unexpectedly lower than the previous resend request's",
+                            ),
+                        ))
+                    }
+                    AwaitingResendTransitionOutcome::AttemptsExceeded => {
+                        self.writer.disconnect().await;
+                        Ok(TransitionResult::TransitionTo(
+                            SessionState::new_disconnected(
+                                false,
+                                "resend request attempts exceeded, manual intervention required",
+                            ),
+                        ))
+                    }
+                    AwaitingResendTransitionOutcome::InvalidState(_) => {
+                        unreachable!("update() never returns InvalidState")
+                    }
+                }
+            }
+        }
+    }
+
     pub(crate) fn update(
         &mut self,
         begin_seq_number: u64,
