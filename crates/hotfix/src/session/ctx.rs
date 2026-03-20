@@ -15,6 +15,16 @@ pub(crate) enum TransitionResult {
     TransitionTo(SessionState),
 }
 
+/// The result of verifying an inbound message via a state variant's
+/// `handle_verification_issue` method.
+pub(crate) enum VerificationResult {
+    /// Verification passed — the caller should proceed with handler logic.
+    Passed,
+    /// A verification issue was detected and handled. The caller should apply
+    /// the transition and skip further processing of this message.
+    Issue(TransitionResult),
+}
+
 pub(crate) struct SessionCtx<A, S> {
     pub config: SessionConfig,
     pub store: S,

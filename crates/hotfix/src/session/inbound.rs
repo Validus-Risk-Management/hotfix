@@ -13,7 +13,7 @@ use hotfix_store::MessageStore;
 use tracing::error;
 use tracing::warn;
 
-pub(crate) fn verify_message_with_ctx<A, S: MessageStore>(
+fn verify_message_with_ctx<A, S: MessageStore>(
     ctx: &SessionCtx<A, S>,
     message: &Message,
     check_too_high: bool,
@@ -72,7 +72,7 @@ pub(crate) async fn verify_and_handle_errors<A, S: MessageStore>(
     }
 }
 
-pub(crate) async fn handle_sending_time_accuracy_problem<A, S: MessageStore>(
+async fn handle_sending_time_accuracy_problem<A, S: MessageStore>(
     ctx: &mut SessionCtx<A, S>,
     writer: &WriterRef,
     msg_seq_num: u64,
@@ -89,7 +89,7 @@ pub(crate) async fn handle_sending_time_accuracy_problem<A, S: MessageStore>(
     }
 }
 
-pub(crate) async fn handle_incorrect_begin_string<A, S: MessageStore>(
+async fn handle_incorrect_begin_string<A, S: MessageStore>(
     ctx: &mut SessionCtx<A, S>,
     writer: &WriterRef,
     received_begin_string: String,
@@ -108,7 +108,7 @@ pub(crate) async fn handle_incorrect_begin_string<A, S: MessageStore>(
     ))
 }
 
-pub(crate) async fn handle_incorrect_comp_id<A, S: MessageStore>(
+async fn handle_incorrect_comp_id<A, S: MessageStore>(
     ctx: &mut SessionCtx<A, S>,
     writer: &WriterRef,
     received_comp_id: String,
@@ -131,7 +131,7 @@ pub(crate) async fn handle_incorrect_comp_id<A, S: MessageStore>(
     TransitionResult::TransitionTo(SessionState::new_disconnected(true, "incorrect comp ID"))
 }
 
-pub(crate) async fn handle_sequence_number_too_low<A, S: MessageStore>(
+async fn handle_sequence_number_too_low<A, S: MessageStore>(
     ctx: &mut SessionCtx<A, S>,
     writer: &WriterRef,
     expected: u64,
@@ -187,7 +187,7 @@ pub(crate) async fn handle_invalid_msg_type<A, S: MessageStore>(
     }
 }
 
-pub(crate) async fn handle_original_sending_time_missing<A, S: MessageStore>(
+async fn handle_original_sending_time_missing<A, S: MessageStore>(
     ctx: &mut SessionCtx<A, S>,
     writer: &WriterRef,
     msg_seq_num: u64,
@@ -203,7 +203,7 @@ pub(crate) async fn handle_original_sending_time_missing<A, S: MessageStore>(
     }
 }
 
-pub(crate) async fn handle_verification_error<A, S: MessageStore>(
+async fn handle_verification_error<A, S: MessageStore>(
     ctx: &mut SessionCtx<A, S>,
     writer: &WriterRef,
     error: MessageError,

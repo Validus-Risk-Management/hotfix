@@ -7,18 +7,19 @@ mod disconnected;
 pub(crate) use active::{ActiveState, calculate_peer_interval};
 pub(crate) use awaiting_logon::AwaitingLogonState;
 pub(crate) use awaiting_logout::AwaitingLogoutState;
-pub(crate) use awaiting_resend::{AwaitingResendState, AwaitingResendTransitionOutcome};
+pub(crate) use awaiting_resend::AwaitingResendState;
 pub(crate) use disconnected::DisconnectedState;
 
 use crate::Application;
 use crate::message::OutboundMessage;
 use crate::message::logon::Logon;
 use crate::message::logout::Logout;
-use crate::session::ctx::SessionCtx;
+use crate::session::ctx::{SessionCtx, VerificationResult};
 use crate::session::error::{InternalSendError, InternalSendResultExt, SessionOperationError};
 use crate::session::event::ScheduleResponse;
 use crate::session::info::Status as SessionInfoStatus;
 use crate::transport::writer::WriterRef;
+use hotfix_message::message::Message;
 use hotfix_store::MessageStore;
 use std::time::Duration;
 use tokio::sync::oneshot;
@@ -164,26 +165,38 @@ impl SessionState {
         }
     }
 
-    pub fn try_transition_to_awaiting_resend(
+    pub(crate) async fn handle_verification_issue<A: Application, S: MessageStore>(
         &mut self,
-        begin: u64,
-        end: u64,
-    ) -> AwaitingResendTransitionOutcome {
+        ctx: &mut SessionCtx<A, S>,
+        message: &Message,
+        check_too_high: bool,
+        check_too_low: bool,
+    ) -> Result<VerificationResult, SessionOperationError> {
         match self {
-            SessionState::AwaitingLogon(AwaitingLogonState { writer, .. })
-            | SessionState::Active(ActiveState { writer, .. }) => {
-                let awaiting_resend = AwaitingResendState::new(writer.to_owned(), begin, end);
-                *self = SessionState::AwaitingResend(awaiting_resend);
-                AwaitingResendTransitionOutcome::Success
+            SessionState::Active(state) => {
+                state
+                    .handle_verification_issue(ctx, message, check_too_high, check_too_low)
+                    .await
             }
-            SessionState::AwaitingResend(state) => state.update(begin, end),
-            SessionState::AwaitingLogout(_) => AwaitingResendTransitionOutcome::InvalidState(
-                "trying to request a resend while we are already logging out".to_string(),
-            ),
-            SessionState::Disconnected(_) => AwaitingResendTransitionOutcome::InvalidState(
-                "trying to transition to awaiting resend without an established connection"
-                    .to_string(),
-            ),
+            SessionState::AwaitingResend(state) => {
+                state
+                    .handle_verification_issue(ctx, message, check_too_high, check_too_low)
+                    .await
+            }
+            SessionState::AwaitingLogon(state) => {
+                state
+                    .handle_verification_issue(ctx, message, check_too_high, check_too_low)
+                    .await
+            }
+            SessionState::AwaitingLogout(state) => {
+                state
+                    .handle_verification_issue(ctx, message, check_too_high, check_too_low)
+                    .await
+            }
+            SessionState::Disconnected(_) => {
+                error!("handle_verification_issue called while disconnected");
+                Ok(VerificationResult::Passed)
+            }
         }
     }
 

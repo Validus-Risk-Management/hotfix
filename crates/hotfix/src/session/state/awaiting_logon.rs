@@ -1,6 +1,6 @@
 use crate::Application;
 use crate::message::resend_request::ResendRequest;
-use crate::session::ctx::{SessionCtx, TransitionResult};
+use crate::session::ctx::{SessionCtx, TransitionResult, VerificationResult};
 use crate::session::error::{InternalSendResultExt, SessionOperationError};
 use crate::session::inbound::{self, VerificationOutcome};
 use crate::session::outbound;
@@ -27,7 +27,7 @@ impl AwaitingLogonState {
         message: &Message,
         check_too_high: bool,
         check_too_low: bool,
-    ) -> Result<TransitionResult, SessionOperationError> {
+    ) -> Result<VerificationResult, SessionOperationError> {
         match inbound::verify_and_handle_errors(
             ctx,
             &self.writer,
@@ -37,8 +37,8 @@ impl AwaitingLogonState {
         )
         .await
         {
-            VerificationOutcome::Ok => Ok(TransitionResult::Stay),
-            VerificationOutcome::Handled(result) => Ok(result),
+            VerificationOutcome::Ok => Ok(VerificationResult::Passed),
+            VerificationOutcome::Handled(result) => Ok(VerificationResult::Issue(result)),
             VerificationOutcome::SequenceGap { expected, actual } => {
                 debug!(
                     "we are behind target (ours: {expected}, theirs: {actual}), requesting resend."
@@ -49,9 +49,9 @@ impl AwaitingLogonState {
                 outbound::send_message(ctx, &self.writer, request)
                     .await
                     .with_send_context("resend request")?;
-                Ok(TransitionResult::TransitionTo(
+                Ok(VerificationResult::Issue(TransitionResult::TransitionTo(
                     SessionState::AwaitingResend(awaiting_resend),
-                ))
+                )))
             }
         }
     }

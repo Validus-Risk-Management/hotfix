@@ -34,13 +34,11 @@ use crate::message::reject::Reject;
 use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
-use crate::message::verification_issue::VerificationIssue;
 use crate::session::admin_request::AdminRequest;
-use crate::session::ctx::{SessionCtx, TransitionResult};
+use crate::session::ctx::{SessionCtx, TransitionResult, VerificationResult};
 use crate::session::error::SessionCreationError;
 use crate::session::error::{InternalSendError, InternalSendResultExt, SessionOperationError};
 pub use crate::session::error::{SendError, SendOutcome};
-use crate::session::inbound::verify_message_with_ctx;
 pub use crate::session::info::{SessionInfo, Status};
 pub use crate::session::session_handle::SessionHandle;
 #[cfg(not(feature = "test-utils"))]
@@ -49,9 +47,7 @@ pub(crate) use crate::session::session_ref::InternalSessionRef;
 pub use crate::session::session_ref::InternalSessionRef;
 use crate::session::session_ref::OutboundRequest;
 use crate::session::state::SessionState;
-use crate::session::state::{
-    AwaitingLogonState, AwaitingLogoutState, AwaitingResendTransitionOutcome, TestRequestId,
-};
+use crate::session::state::{AwaitingLogonState, AwaitingLogoutState, TestRequestId};
 use crate::session_schedule::{SessionPeriodComparison, SessionSchedule};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
@@ -253,8 +249,15 @@ where
         &mut self,
         message: &Message,
     ) -> Result<(), SessionOperationError> {
-        match verify_message_with_ctx(&self.ctx, message, true, true) {
-            Ok(_) => {
+        match self
+            .state
+            .handle_verification_issue(&mut self.ctx, message, true, true)
+            .await?
+        {
+            VerificationResult::Issue(result) => {
+                self.apply_transition(result);
+            }
+            VerificationResult::Passed => {
                 match self.ctx.application.on_inbound_message(message).await {
                     InboundDecision::Accept => {}
                     InboundDecision::Reject { reason, text } => {
@@ -278,7 +281,6 @@ where
                 }
                 self.ctx.store.increment_target_seq_number().await?;
             }
-            Err(err) => self.handle_verification_failure(err).await?,
         }
 
         Ok(())
@@ -357,17 +359,22 @@ where
 
     async fn on_logon(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         if let SessionState::AwaitingLogon(AwaitingLogonState { writer, .. }) = &self.state {
-            match verify_message_with_ctx(&self.ctx, message, true, true) {
-                Ok(_) => {
+            let writer = writer.clone();
+            match self
+                .state
+                .handle_verification_issue(&mut self.ctx, message, true, true)
+                .await?
+            {
+                VerificationResult::Issue(result) => {
+                    self.apply_transition(result);
+                }
+                VerificationResult::Passed => {
                     // happy logon flow, the session is now active
-                    self.state = SessionState::new_active(
-                        writer.clone(),
-                        self.ctx.config.heartbeat_interval,
-                    );
+                    self.state =
+                        SessionState::new_active(writer, self.ctx.config.heartbeat_interval);
                     self.ctx.application.on_logon().await;
                     self.ctx.store.increment_target_seq_number().await?;
                 }
-                Err(err) => self.handle_verification_failure(err).await?,
             }
         } else {
             error!("received unexpected logon message");
@@ -377,8 +384,12 @@ where
     }
 
     async fn on_logout(&mut self, message: &Message) -> Result<(), SessionOperationError> {
-        if let Err(err) = verify_message_with_ctx(&self.ctx, message, false, false) {
-            self.handle_verification_failure(err).await?;
+        if let VerificationResult::Issue(result) = self
+            .state
+            .handle_verification_issue(&mut self.ctx, message, false, false)
+            .await?
+        {
+            self.apply_transition(result);
             return Ok(());
         }
 
@@ -413,8 +424,12 @@ where
     }
 
     async fn on_heartbeat(&mut self, message: &Message) -> Result<(), SessionOperationError> {
-        if let Err(err) = verify_message_with_ctx(&self.ctx, message, true, true) {
-            self.handle_verification_failure(err).await?;
+        if let VerificationResult::Issue(result) = self
+            .state
+            .handle_verification_issue(&mut self.ctx, message, true, true)
+            .await?
+        {
+            self.apply_transition(result);
             return Ok(());
         }
 
@@ -432,8 +447,12 @@ where
     }
 
     async fn on_test_request(&mut self, message: &Message) -> Result<(), SessionOperationError> {
-        if let Err(err) = verify_message_with_ctx(&self.ctx, message, true, true) {
-            self.handle_verification_failure(err).await?;
+        if let VerificationResult::Issue(result) = self
+            .state
+            .handle_verification_issue(&mut self.ctx, message, true, true)
+            .await?
+        {
+            self.apply_transition(result);
             return Ok(());
         }
 
@@ -461,12 +480,13 @@ where
         // This is the key part of the QFJ-673 deadlock fix: when both sides send ResendRequest
         // simultaneously, each side's ResendRequest will have a seq number higher than expected.
         // By not treating that as an error, we allow the ResendRequest to be processed.
-        match verify_message_with_ctx(&self.ctx, message, false, true) {
-            Ok(_) => {}
-            Err(err) => {
-                self.handle_verification_failure(err).await?;
-                return Ok(());
-            }
+        if let VerificationResult::Issue(result) = self
+            .state
+            .handle_verification_issue(&mut self.ctx, message, false, true)
+            .await?
+        {
+            self.apply_transition(result);
+            return Ok(());
         }
 
         let msg_seq_num = get_msg_seq_num(message);
@@ -529,8 +549,12 @@ where
 
     /// Handle Reject messages.
     async fn on_reject(&mut self, message: &Message) -> Result<(), SessionOperationError> {
-        if let Err(err) = verify_message_with_ctx(&self.ctx, message, false, true) {
-            self.handle_verification_failure(err).await?;
+        if let VerificationResult::Issue(result) = self
+            .state
+            .handle_verification_issue(&mut self.ctx, message, false, true)
+            .await?
+        {
+            self.apply_transition(result);
             return Ok(());
         }
 
@@ -541,8 +565,12 @@ where
     async fn on_sequence_reset(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         let msg_seq_num = get_msg_seq_num(message);
         let is_gap_fill: bool = message.get(GAP_FILL_FLAG).unwrap_or(false);
-        if let Err(err) = verify_message_with_ctx(&self.ctx, message, is_gap_fill, is_gap_fill) {
-            self.handle_verification_failure(err).await?;
+        if let VerificationResult::Issue(result) = self
+            .state
+            .handle_verification_issue(&mut self.ctx, message, is_gap_fill, is_gap_fill)
+            .await?
+        {
+            self.apply_transition(result);
             return Ok(());
         }
 
@@ -585,64 +613,6 @@ where
         }
 
         self.ctx.store.set_target_seq_number(end - 1).await?;
-        Ok(())
-    }
-
-    async fn handle_verification_failure(
-        &mut self,
-        failure: VerificationIssue,
-    ) -> Result<(), SessionOperationError> {
-        match failure {
-            VerificationIssue::SequenceGap { expected, actual } => {
-                self.handle_sequence_number_too_high(expected, actual)
-                    .await?;
-            }
-            VerificationIssue::InvalidMessage(err) => {
-                if let Some(writer) = self.state.get_writer() {
-                    let result =
-                        inbound::handle_verification_error(&mut self.ctx, writer, err).await;
-                    self.apply_transition(result);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn handle_sequence_number_too_high(
-        &mut self,
-        expected: u64,
-        actual: u64,
-    ) -> Result<(), SessionOperationError> {
-        match self
-            .state
-            .try_transition_to_awaiting_resend(expected, actual)
-        {
-            AwaitingResendTransitionOutcome::Success => {
-                debug!(
-                    "we are behind target (ours: {expected}, theirs: {actual}), requesting resend."
-                );
-                self.send_resend_request(expected, actual).await?;
-            }
-            AwaitingResendTransitionOutcome::InvalidState(reason) => {
-                error!("failed to request resend: {reason}");
-            }
-            AwaitingResendTransitionOutcome::BeginSeqNumberTooLow => {
-                self.state.disconnect_writer().await;
-                self.state = SessionState::new_disconnected(
-                    false,
-                    "awaiting resend begin seq number unexpectedly lower than the previous resend request's",
-                );
-            }
-            AwaitingResendTransitionOutcome::AttemptsExceeded => {
-                self.state.disconnect_writer().await;
-                self.state = SessionState::new_disconnected(
-                    false,
-                    "resend request attempts exceeded, manual intervention required",
-                );
-            }
-        }
-
         Ok(())
     }
 
@@ -689,18 +659,6 @@ where
         message: impl OutboundMessage,
     ) -> Result<u64, InternalSendError> {
         self.state.send_message(&mut self.ctx, message).await
-    }
-
-    async fn send_resend_request(
-        &mut self,
-        begin: u64,
-        end: u64,
-    ) -> Result<(), SessionOperationError> {
-        let request = ResendRequest::new(begin, end);
-        self.send_message(request)
-            .await
-            .with_send_context("resend request")?;
-        Ok(())
     }
 
     async fn send_logon(&mut self) -> Result<(), SessionOperationError> {

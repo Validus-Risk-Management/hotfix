@@ -1,5 +1,5 @@
 use crate::Application;
-use crate::session::ctx::{SessionCtx, TransitionResult};
+use crate::session::ctx::{SessionCtx, TransitionResult, VerificationResult};
 use crate::session::error::SessionOperationError;
 use crate::session::inbound::{self, VerificationOutcome};
 use crate::transport::writer::WriterRef;
@@ -24,7 +24,7 @@ impl AwaitingLogoutState {
         message: &Message,
         check_too_high: bool,
         check_too_low: bool,
-    ) -> Result<TransitionResult, SessionOperationError> {
+    ) -> Result<VerificationResult, SessionOperationError> {
         match inbound::verify_and_handle_errors(
             ctx,
             &self.writer,
@@ -34,13 +34,13 @@ impl AwaitingLogoutState {
         )
         .await
         {
-            VerificationOutcome::Ok => Ok(TransitionResult::Stay),
-            VerificationOutcome::Handled(result) => Ok(result),
+            VerificationOutcome::Ok => Ok(VerificationResult::Passed),
+            VerificationOutcome::Handled(result) => Ok(VerificationResult::Issue(result)),
             VerificationOutcome::SequenceGap { expected, actual } => {
                 warn!(
                     "sequence gap detected while awaiting logout (expected {expected}, actual {actual}), ignoring"
                 );
-                Ok(TransitionResult::Stay)
+                Ok(VerificationResult::Issue(TransitionResult::Stay))
             }
         }
     }
