@@ -1,14 +1,19 @@
+use crate::message::heartbeat::Heartbeat;
 use crate::message::logout::Logout;
 use crate::message::reject::Reject;
 use crate::message::verification::verify_message;
 use crate::message::verification_issue::{CompIdType, MessageError, VerificationIssue};
 use crate::session::ctx::{SessionCtx, TransitionResult};
+use crate::session::error::{InternalSendResultExt, SessionOperationError};
+use crate::session::get_msg_seq_num;
 use crate::session::outbound;
 use crate::session::state::SessionState;
 use crate::transport::writer::WriterRef;
 use hotfix_message::Part;
 use hotfix_message::message::Message;
-use hotfix_message::session_fields::{MSG_SEQ_NUM, SessionRejectReason};
+use hotfix_message::session_fields::{
+    BEGIN_SEQ_NO, END_SEQ_NO, MSG_SEQ_NUM, NEW_SEQ_NO, SessionRejectReason, TEST_REQ_ID,
+};
 use hotfix_store::MessageStore;
 use tracing::error;
 use tracing::warn;
@@ -254,6 +259,124 @@ async fn handle_verification_error<A, S: MessageStore>(
             TransitionResult::Stay
         }
     }
+}
+
+pub(crate) async fn on_test_request<A, S: MessageStore>(
+    ctx: &mut SessionCtx<A, S>,
+    writer: &WriterRef,
+    message: &Message,
+) -> Result<(), SessionOperationError> {
+    let req_id: &str = message.get(TEST_REQ_ID).unwrap_or_else(|_| {
+        // TODO: send reject?
+        todo!()
+    });
+
+    ctx.store.increment_target_seq_number().await?;
+
+    outbound::send_message(ctx, writer, Heartbeat::for_request(req_id.to_string()))
+        .await
+        .with_send_context("heartbeat response")?;
+
+    Ok(())
+}
+
+pub(crate) async fn on_sequence_reset<A, S: MessageStore>(
+    ctx: &mut SessionCtx<A, S>,
+    writer: &WriterRef,
+    message: &Message,
+) -> Result<(), SessionOperationError> {
+    let msg_seq_num = get_msg_seq_num(message);
+
+    let end: u64 = match message.get(NEW_SEQ_NO) {
+        Ok(new_seq_no) => new_seq_no,
+        Err(err) => {
+            error!(
+                "received sequence reset message without new sequence number: {:?}",
+                err
+            );
+            let reject = Reject::new(msg_seq_num)
+                .session_reject_reason(SessionRejectReason::RequiredTagMissing)
+                .text("missing NewSeqNo tag in sequence reset message");
+            outbound::send_message(ctx, writer, reject)
+                .await
+                .with_send_context("reject for missing NEW_SEQ_NO")?;
+
+            // note: we don't increment the target seq number here
+            // this is an ambiguous case in the specification, but leaving the
+            // sequence number as is feels the safest
+            return Ok(());
+        }
+    };
+
+    // sequence resets cannot move the target seq number backwards
+    // regardless of whether the message is a gap fill or not
+    if end <= ctx.store.next_target_seq_number() {
+        error!(
+            "received sequence reset message which would move target seq number backwards: {end}",
+        );
+        let text = format!("attempt to lower sequence number, invalid value NewSeqNo(36)={end}");
+        let reject = Reject::new(msg_seq_num)
+            .session_reject_reason(SessionRejectReason::ValueIsIncorrect)
+            .text(&text);
+        outbound::send_message(ctx, writer, reject)
+            .await
+            .with_send_context("reject for invalid sequence reset")?;
+        return Ok(());
+    }
+
+    ctx.store.set_target_seq_number(end - 1).await?;
+    Ok(())
+}
+
+pub(crate) async fn on_resend_request<A, S: MessageStore>(
+    ctx: &mut SessionCtx<A, S>,
+    writer: &WriterRef,
+    message: &Message,
+) -> Result<(), SessionOperationError> {
+    let msg_seq_num = get_msg_seq_num(message);
+    let expected = ctx.store.next_target_seq_number();
+
+    let begin_seq_number: u64 = match message.get(BEGIN_SEQ_NO) {
+        Ok(seq_number) => seq_number,
+        Err(_) => {
+            let reject = Reject::new(msg_seq_num)
+                .session_reject_reason(SessionRejectReason::RequiredTagMissing)
+                .text("missing begin sequence number for resend request");
+            outbound::send_message(ctx, writer, reject)
+                .await
+                .with_send_context("reject for missing BEGIN_SEQ_NO")?;
+            return Ok(());
+        }
+    };
+
+    let end_seq_number: u64 = match message.get(END_SEQ_NO) {
+        Ok(seq_number) => {
+            let last_seq_number = ctx.store.next_sender_seq_number() - 1;
+            if seq_number == 0 {
+                last_seq_number
+            } else {
+                std::cmp::min(seq_number, last_seq_number)
+            }
+        }
+        Err(_) => {
+            let reject = Reject::new(msg_seq_num)
+                .session_reject_reason(SessionRejectReason::RequiredTagMissing)
+                .text("missing end sequence number for resend request");
+            outbound::send_message(ctx, writer, reject)
+                .await
+                .with_send_context("reject for missing END_SEQ_NO")?;
+            return Ok(());
+        }
+    };
+
+    // Only increment target seq if seq matches expected
+    if msg_seq_num == expected {
+        ctx.store.increment_target_seq_number().await?;
+    }
+
+    outbound::resend_messages(ctx, writer, begin_seq_number, end_seq_number).await?;
+
+    Ok(())
 }
 
 #[cfg(test)]

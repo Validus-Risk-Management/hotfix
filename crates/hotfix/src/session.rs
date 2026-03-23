@@ -54,8 +54,7 @@ use crate::transport::writer::WriterRef;
 use event::SessionEvent;
 use hotfix_message::parsed_message::{InvalidReason, ParsedMessage};
 use hotfix_message::session_fields::{
-    BEGIN_SEQ_NO, END_SEQ_NO, GAP_FILL_FLAG, MSG_SEQ_NUM, MSG_TYPE, NEW_SEQ_NO,
-    SessionRejectReason, TEST_REQ_ID,
+    GAP_FILL_FLAG, MSG_SEQ_NUM, MSG_TYPE, SessionRejectReason, TEST_REQ_ID,
 };
 
 const SCHEDULE_CHECK_INTERVAL: u64 = 1;
@@ -444,17 +443,10 @@ where
     }
 
     async fn on_test_request(&mut self, message: &Message) -> Result<(), SessionOperationError> {
-        let req_id: &str = message.get(TEST_REQ_ID).unwrap_or_else(|_| {
-            // TODO: send reject?
-            todo!()
-        });
-
-        self.ctx.store.increment_target_seq_number().await?;
-
-        self.send_message(Heartbeat::for_request(req_id.to_string()))
-            .await
-            .with_send_context("heartbeat response")?;
-
+        if let Some(writer) = self.state.get_writer() {
+            inbound::on_test_request(&mut self.ctx, writer, message).await?;
+            self.reset_heartbeat_timer();
+        }
         Ok(())
     }
 
@@ -475,47 +467,8 @@ where
             state.inbound_queue.push_back(message.clone());
         }
 
-        let begin_seq_number: u64 = match message.get(BEGIN_SEQ_NO) {
-            Ok(seq_number) => seq_number,
-            Err(_) => {
-                let reject = Reject::new(msg_seq_num)
-                    .session_reject_reason(SessionRejectReason::RequiredTagMissing)
-                    .text("missing begin sequence number for resend request");
-                self.send_message(reject)
-                    .await
-                    .with_send_context("reject for missing BEGIN_SEQ_NO")?;
-                return Ok(());
-            }
-        };
-
-        let end_seq_number: u64 = match message.get(END_SEQ_NO) {
-            Ok(seq_number) => {
-                let last_seq_number = self.ctx.store.next_sender_seq_number() - 1;
-                if seq_number == 0 {
-                    last_seq_number
-                } else {
-                    std::cmp::min(seq_number, last_seq_number)
-                }
-            }
-            Err(_) => {
-                let reject = Reject::new(msg_seq_num)
-                    .session_reject_reason(SessionRejectReason::RequiredTagMissing)
-                    .text("missing end sequence number for resend request");
-                self.send_message(reject)
-                    .await
-                    .with_send_context("reject for missing END_SEQ_NO")?;
-                return Ok(());
-            }
-        };
-
-        // Only increment target seq if seq matches expected
-        if msg_seq_num == expected {
-            self.ctx.store.increment_target_seq_number().await?;
-        }
-
         if let Some(writer) = self.state.get_writer() {
-            outbound::resend_messages(&mut self.ctx, writer, begin_seq_number, end_seq_number)
-                .await?;
+            inbound::on_resend_request(&mut self.ctx, writer, message).await?;
             self.reset_heartbeat_timer();
         }
 
@@ -529,47 +482,10 @@ where
     }
 
     async fn on_sequence_reset(&mut self, message: &Message) -> Result<(), SessionOperationError> {
-        let msg_seq_num = get_msg_seq_num(message);
-
-        let end: u64 = match message.get(NEW_SEQ_NO) {
-            Ok(new_seq_no) => new_seq_no,
-            Err(err) => {
-                error!(
-                    "received sequence reset message without new sequence number: {:?}",
-                    err
-                );
-                let reject = Reject::new(msg_seq_num)
-                    .session_reject_reason(SessionRejectReason::RequiredTagMissing)
-                    .text("missing NewSeqNo tag in sequence reset message");
-                self.send_message(reject)
-                    .await
-                    .with_send_context("reject for missing NEW_SEQ_NO")?;
-
-                // note: we don't increment the target seq number here
-                // this is an ambiguous case in the specification, but leaving the
-                // sequence number as is feels the safest
-                return Ok(());
-            }
-        };
-
-        // sequence resets cannot move the target seq number backwards
-        // regardless of whether the message is a gap fill or not
-        if end <= self.ctx.store.next_target_seq_number() {
-            error!(
-                "received sequence reset message which would move target seq number backwards: {end}",
-            );
-            let text =
-                format!("attempt to lower sequence number, invalid value NewSeqNo(36)={end}");
-            let reject = Reject::new(msg_seq_num)
-                .session_reject_reason(SessionRejectReason::ValueIsIncorrect)
-                .text(&text);
-            self.send_message(reject)
-                .await
-                .with_send_context("reject for invalid sequence reset")?;
-            return Ok(());
+        if let Some(writer) = self.state.get_writer() {
+            inbound::on_sequence_reset(&mut self.ctx, writer, message).await?;
+            self.reset_heartbeat_timer();
         }
-
-        self.ctx.store.set_target_seq_number(end - 1).await?;
         Ok(())
     }
 
