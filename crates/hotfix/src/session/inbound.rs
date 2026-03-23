@@ -1,7 +1,7 @@
 use crate::message::heartbeat::Heartbeat;
 use crate::message::logout::Logout;
 use crate::message::reject::Reject;
-use crate::message::verification::verify_message;
+use crate::message::verification::{VerificationFlags, verify_message};
 use crate::message::verification_issue::{CompIdType, MessageError, VerificationIssue};
 use crate::session::ctx::{SessionCtx, TransitionResult};
 use crate::session::error::{InternalSendResultExt, SessionOperationError};
@@ -21,21 +21,14 @@ use tracing::warn;
 fn verify_message_with_ctx<A, S: MessageStore>(
     ctx: &SessionCtx<A, S>,
     message: &Message,
-    check_too_high: bool,
-    check_too_low: bool,
+    flags: VerificationFlags,
 ) -> Result<(), VerificationIssue> {
-    let expected_seq_number = if check_too_high || check_too_low {
+    let expected_seq_number = if flags.requires_sequence_number() {
         Some(ctx.store.next_target_seq_number())
     } else {
         None
     };
-    verify_message(
-        message,
-        &ctx.config,
-        expected_seq_number,
-        check_too_high,
-        check_too_low,
-    )
+    verify_message(message, &ctx.config, expected_seq_number, flags)
 }
 
 /// The result of verifying an inbound message after handling message errors.
@@ -62,11 +55,10 @@ pub(crate) async fn verify_and_handle_errors<A, S: MessageStore>(
     ctx: &mut SessionCtx<A, S>,
     writer: &WriterRef,
     message: &Message,
-    check_too_high: bool,
-    check_too_low: bool,
+    flags: VerificationFlags,
 ) -> VerificationOutcome {
-    match verify_message_with_ctx(ctx, message, check_too_high, check_too_low) {
-        Result::Ok(()) => VerificationOutcome::Ok,
+    match verify_message_with_ctx(ctx, message, flags) {
+        Ok(()) => VerificationOutcome::Ok,
         Err(VerificationIssue::SequenceGap { expected, actual }) => {
             VerificationOutcome::SequenceGap { expected, actual }
         }

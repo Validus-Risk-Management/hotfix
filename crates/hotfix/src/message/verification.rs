@@ -1,11 +1,16 @@
 use crate::config::SessionConfig;
+use crate::message::ResendRequest;
+use crate::message::logout::Logout;
+use crate::message::reject::Reject;
+use crate::message::sequence_reset::SequenceReset;
 use crate::message::verification_issue::{CompIdType, MessageError, VerificationIssue};
+use crate::session::error::SessionOperationError;
 use hotfix_message::Part;
 use hotfix_message::field_types::Timestamp;
 use hotfix_message::message::Message;
 use hotfix_message::session_fields::{
-    BEGIN_STRING, MSG_SEQ_NUM, ORIG_SENDING_TIME, POSS_DUP_FLAG, SENDER_COMP_ID, SENDING_TIME,
-    TARGET_COMP_ID,
+    BEGIN_STRING, GAP_FILL_FLAG, MSG_SEQ_NUM, MSG_TYPE, ORIG_SENDING_TIME, POSS_DUP_FLAG,
+    SENDER_COMP_ID, SENDING_TIME, TARGET_COMP_ID,
 };
 use std::cmp::Ordering;
 use tracing::error;
@@ -13,12 +18,53 @@ use tracing::error;
 /// Maximum allowed difference in seconds between SendingTime and current time
 const SENDING_TIME_THRESHOLD: u64 = 120;
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct VerificationFlags {
+    pub(crate) check_too_high: bool,
+    pub(crate) check_too_low: bool,
+}
+
+impl VerificationFlags {
+    pub(crate) fn new(check_too_high: bool, check_too_low: bool) -> Self {
+        Self {
+            check_too_high,
+            check_too_low,
+        }
+    }
+
+    pub(crate) fn requires_sequence_number(&self) -> bool {
+        self.check_too_high || self.check_too_low
+    }
+
+    pub(crate) fn for_message(message: &Message) -> Result<Self, SessionOperationError> {
+        let message_type: &str = message
+            .header()
+            .get(MSG_TYPE)
+            .map_err(|_| SessionOperationError::MissingField("MSG_TYPE"))?;
+
+        let flags = match message_type {
+            // check_too_high=false: QFJ-673 deadlock fix. When both sides send
+            // ResendRequest simultaneously, each side's ResendRequest will have a seq
+            // number higher than expected. By not treating that as an error, we allow
+            // the ResendRequest to be processed.
+            ResendRequest::MSG_TYPE | Reject::MSG_TYPE => Self::new(false, true),
+            Logout::MSG_TYPE => Self::new(false, false),
+            SequenceReset::MSG_TYPE => {
+                let is_gap_fill: bool = message.get(GAP_FILL_FLAG).unwrap_or(false);
+                Self::new(is_gap_fill, is_gap_fill)
+            }
+            _ => Self::new(true, true),
+        };
+
+        Ok(flags)
+    }
+}
+
 pub(crate) fn verify_message(
     message: &Message,
     config: &SessionConfig,
     expected_seq_number: Option<u64>,
-    check_too_high: bool,
-    check_too_low: bool,
+    flags: VerificationFlags,
 ) -> Result<(), VerificationIssue> {
     check_begin_string(message, config.begin_string.as_str())?;
     let actual_seq_number: u64 = message.header().get(MSG_SEQ_NUM).unwrap_or_default();
@@ -43,8 +89,8 @@ pub(crate) fn verify_message(
             actual_seq_number,
             expected_seq_number,
             possible_duplicate,
-            check_too_high,
-            check_too_low,
+            flags.check_too_high,
+            flags.check_too_low,
         )?;
     }
 
@@ -181,7 +227,7 @@ fn check_target_comp_id(
 
 #[cfg(test)]
 mod tests {
-    use super::{Message, SessionConfig, verify_message};
+    use super::{Message, SessionConfig, VerificationFlags, verify_message};
     use crate::message::verification_issue::{CompIdType, MessageError, VerificationIssue};
     use hotfix_message::field_types::Timestamp;
     use hotfix_message::{Part, fix44};
@@ -223,7 +269,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 42);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(result.is_ok());
     }
@@ -233,7 +279,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.2", "TARGET", "SENDER", 42);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -254,7 +300,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "WRONG_SENDER", "SENDER", 42);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -282,7 +328,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "TARGET", "WRONG_TARGET", 42);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -310,7 +356,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 40);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -338,7 +384,7 @@ mod tests {
         msg.header_mut().set(fix44::POSS_DUP_FLAG, true);
         msg.header_mut().set(fix44::ORIG_SENDING_TIME, sending_time);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -363,7 +409,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 50);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(result, Err(VerificationIssue::SequenceGap { .. })));
         if let Err(VerificationIssue::SequenceGap { expected, actual }) = result {
@@ -379,7 +425,7 @@ mod tests {
         msg.header_mut().set(fix44::POSS_DUP_FLAG, true);
         // Don't set OrigSendingTime
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -409,7 +455,7 @@ mod tests {
         msg.header_mut().pop(fix44::SENDING_TIME);
         msg.header_mut().set(fix44::SENDING_TIME, sending_time);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(result.is_ok());
     }
@@ -428,7 +474,7 @@ mod tests {
         msg.header_mut().pop(fix44::SENDING_TIME);
         msg.header_mut().set(fix44::SENDING_TIME, sending_time);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -462,7 +508,7 @@ mod tests {
         msg.header_mut().pop(fix44::SENDING_TIME);
         msg.header_mut().set(fix44::SENDING_TIME, timestamp);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         // equal timestamps should be valid (orig <= sending)
         assert!(result.is_ok());
@@ -480,7 +526,7 @@ mod tests {
         // remove begin string, which is automatically added by `Message::new`
         msg.header_mut().pop(fix44::BEGIN_STRING);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -498,7 +544,7 @@ mod tests {
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
         msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -519,7 +565,7 @@ mod tests {
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
         msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -540,7 +586,7 @@ mod tests {
         msg.set(fix44::TARGET_COMP_ID, "SENDER");
         msg.set(fix44::SENDING_TIME, Timestamp::utc_now());
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         // missing seq num defaults to 0, which will be too low
         assert!(matches!(
@@ -556,7 +602,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 0);
 
-        let result = verify_message(&msg, &config, Some(1), true, true);
+        let result = verify_message(&msg, &config, Some(1), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -571,7 +617,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 1);
 
-        let result = verify_message(&msg, &config, Some(1), true, true);
+        let result = verify_message(&msg, &config, Some(1), VerificationFlags::new(true, true));
 
         assert!(result.is_ok());
     }
@@ -582,7 +628,7 @@ mod tests {
         // wrong begin string AND wrong seq num - begin string error should come first
         let msg = build_test_message("FIX.4.2", "TARGET", "SENDER", 100);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -598,7 +644,7 @@ mod tests {
         // wrong sender and wrong target - sender error should come first
         let msg = build_test_message("FIX.4.4", "WRONG_SENDER", "WRONG_TARGET", 42);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -619,7 +665,7 @@ mod tests {
         msg.set(fix44::TARGET_COMP_ID, "SENDER");
         msg.set(fix44::MSG_SEQ_NUM, 42u64);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -652,7 +698,7 @@ mod tests {
         let past_timestamp: Timestamp = past_time.naive_utc().into();
         msg.set(fix44::SENDING_TIME, past_timestamp);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -685,7 +731,7 @@ mod tests {
         let future_timestamp: Timestamp = future_time.naive_utc().into();
         msg.set(fix44::SENDING_TIME, future_timestamp);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(matches!(
             result,
@@ -717,7 +763,7 @@ mod tests {
         let boundary_timestamp: Timestamp = boundary_time.naive_utc().into();
         msg.set(fix44::SENDING_TIME, boundary_timestamp);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(result.is_ok());
     }
@@ -738,7 +784,7 @@ mod tests {
         let valid_timestamp: Timestamp = valid_time.naive_utc().into();
         msg.set(fix44::SENDING_TIME, valid_timestamp);
 
-        let result = verify_message(&msg, &config, Some(42), true, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, true));
 
         assert!(result.is_ok());
     }
@@ -749,7 +795,7 @@ mod tests {
         let msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 50);
 
         // With check_too_high=false, seq 50 > expected 42 should be OK
-        let result = verify_message(&msg, &config, Some(42), false, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(false, true));
 
         assert!(result.is_ok());
     }
@@ -760,7 +806,7 @@ mod tests {
         let msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 40);
 
         // With check_too_low=false, seq 40 < expected 42 should be OK
-        let result = verify_message(&msg, &config, Some(42), true, false);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, false));
 
         assert!(result.is_ok());
     }
@@ -770,15 +816,39 @@ mod tests {
         let config = build_test_config();
         // Seq number too high
         let msg_high = build_test_message("FIX.4.4", "TARGET", "SENDER", 50);
-        assert!(verify_message(&msg_high, &config, Some(42), false, false).is_ok());
+        assert!(
+            verify_message(
+                &msg_high,
+                &config,
+                Some(42),
+                VerificationFlags::new(false, false)
+            )
+            .is_ok()
+        );
 
         // Seq number too low
         let msg_low = build_test_message("FIX.4.4", "TARGET", "SENDER", 40);
-        assert!(verify_message(&msg_low, &config, Some(42), false, false).is_ok());
+        assert!(
+            verify_message(
+                &msg_low,
+                &config,
+                Some(42),
+                VerificationFlags::new(false, false)
+            )
+            .is_ok()
+        );
 
         // Seq number matches
         let msg_match = build_test_message("FIX.4.4", "TARGET", "SENDER", 42);
-        assert!(verify_message(&msg_match, &config, Some(42), false, false).is_ok());
+        assert!(
+            verify_message(
+                &msg_match,
+                &config,
+                Some(42),
+                VerificationFlags::new(false, false)
+            )
+            .is_ok()
+        );
     }
 
     #[test]
@@ -786,7 +856,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 50);
 
-        let result = verify_message(&msg, &config, Some(42), true, false);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(true, false));
 
         assert!(matches!(result, Err(VerificationIssue::SequenceGap { .. })));
     }
@@ -796,7 +866,7 @@ mod tests {
         let config = build_test_config();
         let msg = build_test_message("FIX.4.4", "TARGET", "SENDER", 40);
 
-        let result = verify_message(&msg, &config, Some(42), false, true);
+        let result = verify_message(&msg, &config, Some(42), VerificationFlags::new(false, true));
 
         assert!(matches!(
             result,
@@ -812,7 +882,12 @@ mod tests {
 
         // Wrong sender comp ID should still be caught even with both seq checks disabled
         let msg = build_test_message("FIX.4.4", "WRONG_SENDER", "SENDER", 42);
-        let result = verify_message(&msg, &config, Some(42), false, false);
+        let result = verify_message(
+            &msg,
+            &config,
+            Some(42),
+            VerificationFlags::new(false, false),
+        );
         assert!(matches!(
             result,
             Err(VerificationIssue::InvalidMessage(
@@ -822,7 +897,12 @@ mod tests {
 
         // Wrong begin string should still be caught
         let msg = build_test_message("FIX.4.2", "TARGET", "SENDER", 42);
-        let result = verify_message(&msg, &config, Some(42), false, false);
+        let result = verify_message(
+            &msg,
+            &config,
+            Some(42),
+            VerificationFlags::new(false, false),
+        );
         assert!(matches!(
             result,
             Err(VerificationIssue::InvalidMessage(

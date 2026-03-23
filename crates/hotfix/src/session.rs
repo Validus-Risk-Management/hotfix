@@ -34,6 +34,7 @@ use crate::message::reject::Reject;
 use crate::message::resend_request::ResendRequest;
 use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
+use crate::message::verification::VerificationFlags;
 use crate::session::admin_request::AdminRequest;
 use crate::session::ctx::{SessionCtx, TransitionResult, VerificationResult};
 use crate::session::error::SessionCreationError;
@@ -53,9 +54,7 @@ use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
 use event::SessionEvent;
 use hotfix_message::parsed_message::{InvalidReason, ParsedMessage};
-use hotfix_message::session_fields::{
-    GAP_FILL_FLAG, MSG_SEQ_NUM, MSG_TYPE, SessionRejectReason, TEST_REQ_ID,
-};
+use hotfix_message::session_fields::{MSG_SEQ_NUM, MSG_TYPE, SessionRejectReason, TEST_REQ_ID};
 
 const SCHEDULE_CHECK_INTERVAL: u64 = 1;
 
@@ -208,38 +207,24 @@ where
             }
         }
 
-        if let SessionState::AwaitingLogon(_) = &mut self.state {
-            if message_type != Logon::MSG_TYPE {
-                self.state.disconnect_writer().await;
-                return Ok(());
-            }
+        // TODO: add state-level pre-process check that validates whether the message type
+        // is acceptable in the current state (e.g. AwaitingLogon rejects non-Logon,
+        // unexpected Logon in Active should be rejected per FIX spec).
+        if let SessionState::AwaitingLogon(_) = &mut self.state
+            && message_type != Logon::MSG_TYPE
+        {
+            self.state.disconnect_writer().await;
+            return Ok(());
         }
 
-        // Logon has its own verification inside the AwaitingLogon guard
-        if message_type != Logon::MSG_TYPE {
-            let (check_too_high, check_too_low) = match message_type {
-                // check_too_high=false: QFJ-673 deadlock fix. When both sides send
-                // ResendRequest simultaneously, each side's ResendRequest will have a seq
-                // number higher than expected. By not treating that as an error, we allow
-                // the ResendRequest to be processed.
-                ResendRequest::MSG_TYPE => (false, true),
-                Reject::MSG_TYPE => (false, true),
-                Logout::MSG_TYPE => (false, false),
-                SequenceReset::MSG_TYPE => {
-                    let is_gap_fill: bool = message.get(GAP_FILL_FLAG).unwrap_or(false);
-                    (is_gap_fill, is_gap_fill)
-                }
-                _ => (true, true),
-            };
-
-            if let VerificationResult::Issue(result) = self
-                .state
-                .handle_verification_issue(&mut self.ctx, &message, check_too_high, check_too_low)
-                .await?
-            {
-                self.apply_transition(result);
-                return Ok(());
-            }
+        let flags = VerificationFlags::for_message(&message)?;
+        if let VerificationResult::Issue(result) = self
+            .state
+            .handle_verification_issue(&mut self.ctx, &message, flags)
+            .await?
+        {
+            self.apply_transition(result);
+            return Ok(());
         }
 
         match message_type {
@@ -262,7 +247,7 @@ where
                 self.on_logout().await?;
             }
             Logon::MSG_TYPE => {
-                self.on_logon(&message).await?;
+                self.on_logon().await?;
             }
             _ => self.process_app_message(&message).await?,
         }
@@ -371,25 +356,13 @@ where
         }
     }
 
-    async fn on_logon(&mut self, message: &Message) -> Result<(), SessionOperationError> {
+    async fn on_logon(&mut self) -> Result<(), SessionOperationError> {
         if let SessionState::AwaitingLogon(AwaitingLogonState { writer, .. }) = &self.state {
             let writer = writer.clone();
-            match self
-                .state
-                .handle_verification_issue(&mut self.ctx, message, true, true)
-                .await?
-            {
-                VerificationResult::Issue(result) => {
-                    self.apply_transition(result);
-                }
-                VerificationResult::Passed => {
-                    // happy logon flow, the session is now active
-                    self.state =
-                        SessionState::new_active(writer, self.ctx.config.heartbeat_interval);
-                    self.ctx.application.on_logon().await;
-                    self.ctx.store.increment_target_seq_number().await?;
-                }
-            }
+            // happy logon flow, the session is now active
+            self.state = SessionState::new_active(writer, self.ctx.config.heartbeat_interval);
+            self.ctx.application.on_logon().await;
+            self.ctx.store.increment_target_seq_number().await?;
         } else {
             error!("received unexpected logon message");
         }

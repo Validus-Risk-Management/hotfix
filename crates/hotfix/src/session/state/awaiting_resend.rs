@@ -1,5 +1,6 @@
 use crate::Application;
 use crate::message::resend_request::ResendRequest;
+use crate::message::verification::VerificationFlags;
 use crate::session::ctx::{SessionCtx, TransitionResult, VerificationResult};
 use crate::session::error::{InternalSendResultExt, SessionOperationError};
 use crate::session::inbound::{self, VerificationOutcome};
@@ -42,18 +43,9 @@ impl AwaitingResendState {
         &mut self,
         ctx: &mut SessionCtx<A, S>,
         message: &Message,
-        check_too_high: bool,
-        check_too_low: bool,
+        flags: VerificationFlags,
     ) -> Result<VerificationResult, SessionOperationError> {
-        match inbound::verify_and_handle_errors(
-            ctx,
-            &self.writer,
-            message,
-            check_too_high,
-            check_too_low,
-        )
-        .await
-        {
+        match inbound::verify_and_handle_errors(ctx, &self.writer, message, flags).await {
             VerificationOutcome::Ok => Ok(VerificationResult::Passed),
             VerificationOutcome::Handled(result) => Ok(VerificationResult::Issue(result)),
             VerificationOutcome::SequenceGap { expected, actual } => {

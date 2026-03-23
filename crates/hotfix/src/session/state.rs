@@ -14,6 +14,7 @@ use crate::Application;
 use crate::message::OutboundMessage;
 use crate::message::logon::Logon;
 use crate::message::logout::Logout;
+use crate::message::verification::VerificationFlags;
 use crate::session::ctx::{SessionCtx, VerificationResult};
 use crate::session::error::{InternalSendError, InternalSendResultExt, SessionOperationError};
 use crate::session::event::ScheduleResponse;
@@ -169,29 +170,20 @@ impl SessionState {
         &mut self,
         ctx: &mut SessionCtx<A, S>,
         message: &Message,
-        check_too_high: bool,
-        check_too_low: bool,
+        flags: VerificationFlags,
     ) -> Result<VerificationResult, SessionOperationError> {
         match self {
             SessionState::Active(state) => {
-                state
-                    .handle_verification_issue(ctx, message, check_too_high, check_too_low)
-                    .await
+                state.handle_verification_issue(ctx, message, flags).await
             }
             SessionState::AwaitingResend(state) => {
-                state
-                    .handle_verification_issue(ctx, message, check_too_high, check_too_low)
-                    .await
+                state.handle_verification_issue(ctx, message, flags).await
             }
             SessionState::AwaitingLogon(state) => {
-                state
-                    .handle_verification_issue(ctx, message, check_too_high, check_too_low)
-                    .await
+                state.handle_verification_issue(ctx, message, flags).await
             }
             SessionState::AwaitingLogout(state) => {
-                state
-                    .handle_verification_issue(ctx, message, check_too_high, check_too_low)
-                    .await
+                state.handle_verification_issue(ctx, message, flags).await
             }
             SessionState::Disconnected(_) => {
                 error!("handle_verification_issue called while disconnected");
