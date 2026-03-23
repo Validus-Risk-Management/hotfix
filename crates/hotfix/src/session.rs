@@ -210,9 +210,35 @@ where
         }
 
         if let SessionState::AwaitingLogon(_) = &mut self.state {
-            // TODO: should this (and all inbound message processing) logic be pushed into the state?
             if message_type != Logon::MSG_TYPE {
                 self.state.disconnect_writer().await;
+                return Ok(());
+            }
+        }
+
+        // Logon has its own verification inside the AwaitingLogon guard
+        if message_type != Logon::MSG_TYPE {
+            let (check_too_high, check_too_low) = match message_type {
+                // check_too_high=false: QFJ-673 deadlock fix. When both sides send
+                // ResendRequest simultaneously, each side's ResendRequest will have a seq
+                // number higher than expected. By not treating that as an error, we allow
+                // the ResendRequest to be processed.
+                ResendRequest::MSG_TYPE => (false, true),
+                Reject::MSG_TYPE => (false, true),
+                Logout::MSG_TYPE => (false, false),
+                SequenceReset::MSG_TYPE => {
+                    let is_gap_fill: bool = message.get(GAP_FILL_FLAG).unwrap_or(false);
+                    (is_gap_fill, is_gap_fill)
+                }
+                _ => (true, true),
+            };
+
+            if let VerificationResult::Issue(result) = self
+                .state
+                .handle_verification_issue(&mut self.ctx, &message, check_too_high, check_too_low)
+                .await?
+            {
+                self.apply_transition(result);
                 return Ok(());
             }
         }
@@ -228,13 +254,13 @@ where
                 self.on_resend_request(&message).await?;
             }
             Reject::MSG_TYPE => {
-                self.on_reject(&message).await?;
+                self.on_reject().await?;
             }
             SequenceReset::MSG_TYPE => {
                 self.on_sequence_reset(&message).await?;
             }
             Logout::MSG_TYPE => {
-                self.on_logout(&message).await?;
+                self.on_logout().await?;
             }
             Logon::MSG_TYPE => {
                 self.on_logon(&message).await?;
@@ -249,39 +275,28 @@ where
         &mut self,
         message: &Message,
     ) -> Result<(), SessionOperationError> {
-        match self
-            .state
-            .handle_verification_issue(&mut self.ctx, message, true, true)
-            .await?
-        {
-            VerificationResult::Issue(result) => {
-                self.apply_transition(result);
-            }
-            VerificationResult::Passed => {
-                match self.ctx.application.on_inbound_message(message).await {
-                    InboundDecision::Accept => {}
-                    InboundDecision::Reject { reason, text } => {
-                        let msg_type: &str = message
-                            .header()
-                            .get(MSG_TYPE)
-                            .map_err(|_| SessionOperationError::MissingField("MSG_TYPE"))?;
-                        let mut reject = BusinessReject::new(msg_type, reason)
-                            .ref_seq_num(get_msg_seq_num(message));
-                        if let Some(text) = text {
-                            reject = reject.text(&text);
-                        }
-                        self.send_message(reject)
-                            .await
-                            .with_send_context("business message reject")?;
-                    }
-                    InboundDecision::TerminateSession => {
-                        error!("failed to send inbound message to application");
-                        self.state.disconnect_writer().await;
-                    }
+        match self.ctx.application.on_inbound_message(message).await {
+            InboundDecision::Accept => {}
+            InboundDecision::Reject { reason, text } => {
+                let msg_type: &str = message
+                    .header()
+                    .get(MSG_TYPE)
+                    .map_err(|_| SessionOperationError::MissingField("MSG_TYPE"))?;
+                let mut reject =
+                    BusinessReject::new(msg_type, reason).ref_seq_num(get_msg_seq_num(message));
+                if let Some(text) = text {
+                    reject = reject.text(&text);
                 }
-                self.ctx.store.increment_target_seq_number().await?;
+                self.send_message(reject)
+                    .await
+                    .with_send_context("business message reject")?;
+            }
+            InboundDecision::TerminateSession => {
+                error!("failed to send inbound message to application");
+                self.state.disconnect_writer().await;
             }
         }
+        self.ctx.store.increment_target_seq_number().await?;
 
         Ok(())
     }
@@ -383,16 +398,7 @@ where
         Ok(())
     }
 
-    async fn on_logout(&mut self, message: &Message) -> Result<(), SessionOperationError> {
-        if let VerificationResult::Issue(result) = self
-            .state
-            .handle_verification_issue(&mut self.ctx, message, false, false)
-            .await?
-        {
-            self.apply_transition(result);
-            return Ok(());
-        }
-
+    async fn on_logout(&mut self) -> Result<(), SessionOperationError> {
         if self.state.is_logged_on() {
             self.state
                 .send_logout(&mut self.ctx, "Logout acknowledged")
@@ -424,15 +430,6 @@ where
     }
 
     async fn on_heartbeat(&mut self, message: &Message) -> Result<(), SessionOperationError> {
-        if let VerificationResult::Issue(result) = self
-            .state
-            .handle_verification_issue(&mut self.ctx, message, true, true)
-            .await?
-        {
-            self.apply_transition(result);
-            return Ok(());
-        }
-
         if let (Some(expected_req_id), Ok(message_req_id)) = (
             &self.state.expected_test_response_id(),
             message.get::<&str>(TEST_REQ_ID),
@@ -447,15 +444,6 @@ where
     }
 
     async fn on_test_request(&mut self, message: &Message) -> Result<(), SessionOperationError> {
-        if let VerificationResult::Issue(result) = self
-            .state
-            .handle_verification_issue(&mut self.ctx, message, true, true)
-            .await?
-        {
-            self.apply_transition(result);
-            return Ok(());
-        }
-
         let req_id: &str = message.get(TEST_REQ_ID).unwrap_or_else(|_| {
             // TODO: send reject?
             todo!()
@@ -473,19 +461,6 @@ where
     async fn on_resend_request(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         if !self.state.is_connected() {
             warn!("received resend request while disconnected, ignoring");
-            return Ok(());
-        }
-
-        // Verify with check_too_high=false so ResendRequest is never blocked by seq-too-high.
-        // This is the key part of the QFJ-673 deadlock fix: when both sides send ResendRequest
-        // simultaneously, each side's ResendRequest will have a seq number higher than expected.
-        // By not treating that as an error, we allow the ResendRequest to be processed.
-        if let VerificationResult::Issue(result) = self
-            .state
-            .handle_verification_issue(&mut self.ctx, message, false, true)
-            .await?
-        {
-            self.apply_transition(result);
             return Ok(());
         }
 
@@ -548,31 +523,13 @@ where
     }
 
     /// Handle Reject messages.
-    async fn on_reject(&mut self, message: &Message) -> Result<(), SessionOperationError> {
-        if let VerificationResult::Issue(result) = self
-            .state
-            .handle_verification_issue(&mut self.ctx, message, false, true)
-            .await?
-        {
-            self.apply_transition(result);
-            return Ok(());
-        }
-
+    async fn on_reject(&mut self) -> Result<(), SessionOperationError> {
         self.ctx.store.increment_target_seq_number().await?;
         Ok(())
     }
 
     async fn on_sequence_reset(&mut self, message: &Message) -> Result<(), SessionOperationError> {
         let msg_seq_num = get_msg_seq_num(message);
-        let is_gap_fill: bool = message.get(GAP_FILL_FLAG).unwrap_or(false);
-        if let VerificationResult::Issue(result) = self
-            .state
-            .handle_verification_issue(&mut self.ctx, message, is_gap_fill, is_gap_fill)
-            .await?
-        {
-            self.apply_transition(result);
-            return Ok(());
-        }
 
         let end: u64 = match message.get(NEW_SEQ_NO) {
             Ok(new_seq_no) => new_seq_no,
