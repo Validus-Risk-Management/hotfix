@@ -596,12 +596,13 @@ where
         match request {
             AdminRequest::InitiateGracefulShutdown { reconnect } => {
                 warn!("initiating shutdown on request from admin..");
-                if let Err(err) = self
+                match self
                     .state
                     .initiate_graceful_logout(&mut self.ctx, "explicitly requested", reconnect)
                     .await
                 {
-                    error!(err = ?err, "initiating graceful shutdown");
+                    Ok(result) => self.apply_transition(result).await,
+                    Err(err) => error!(err = ?err, "initiating graceful shutdown"),
                 }
             }
             AdminRequest::RequestSessionInfo(responder) => {
@@ -698,12 +699,13 @@ where
             }
         } else if self.state.is_connected() {
             // we are currently outside scheduled session time
-            if let Err(err) = self
+            match self
                 .state
                 .initiate_graceful_logout(&mut self.ctx, "End of session time", true)
                 .await
             {
-                error!(err = ?err, "failed to initiate graceful logout");
+                Ok(result) => self.apply_transition(result).await,
+                Err(err) => error!(err = ?err, "failed to initiate graceful logout"),
             }
         }
 

@@ -15,7 +15,7 @@ use crate::message::OutboundMessage;
 use crate::message::logon::Logon;
 use crate::message::logout::Logout;
 use crate::message::verification::VerificationFlags;
-use crate::session::ctx::{SessionCtx, VerificationResult};
+use crate::session::ctx::{SessionCtx, TransitionResult, VerificationResult};
 use crate::session::error::{InternalSendError, InternalSendResultExt, SessionOperationError};
 use crate::session::event::ScheduleResponse;
 use crate::session::info::Status as SessionInfoStatus;
@@ -144,25 +144,24 @@ impl SessionState {
     }
 
     pub fn try_transition_to_awaiting_logout(
-        &mut self,
+        &self,
         logout_timeout: Duration,
         reconnect: bool,
-    ) -> bool {
+    ) -> TransitionResult {
         if matches!(self, SessionState::AwaitingLogout(_)) {
             debug!("already in awaiting logout state");
-            return false;
+            return TransitionResult::Stay;
         }
 
         if let Some(writer) = self.get_writer() {
-            *self = SessionState::AwaitingLogout(AwaitingLogoutState {
+            TransitionResult::TransitionTo(SessionState::AwaitingLogout(AwaitingLogoutState {
                 writer: writer.clone(),
                 logout_timeout: Instant::now() + logout_timeout,
                 reconnect,
-            });
-            true
+            }))
         } else {
             error!("trying to transition to awaiting logout without an established connection");
-            false
+            TransitionResult::Stay
         }
     }
 
@@ -202,19 +201,20 @@ impl SessionState {
         ctx: &mut SessionCtx<A, S>,
         reason: &str,
         reconnect: bool,
-    ) -> Result<(), SessionOperationError>
+    ) -> Result<TransitionResult, SessionOperationError>
     where
         A: Application,
         S: MessageStore,
     {
-        if self.try_transition_to_awaiting_logout(
+        let result = self.try_transition_to_awaiting_logout(
             Duration::from_secs(ctx.config.logout_timeout),
             reconnect,
-        ) {
+        );
+        if matches!(result, TransitionResult::TransitionTo(_)) {
             self.send_logout(ctx, reason).await?;
         }
 
-        Ok(())
+        Ok(result)
     }
 
     /// Sends a logout message and immediately disconnects the counterparty.
