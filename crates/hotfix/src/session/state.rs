@@ -108,12 +108,8 @@ impl SessionState {
                 }
                 _ => error!("invalid outgoing message for AwaitingLogon state"),
             },
-            Self::AwaitingLogout(AwaitingLogoutState { writer, .. }) => {
-                // Logout messages are allowed because we first transition into AwaitingLogout
-                // and only then send the logout message
-                if message_type == Logout::MSG_TYPE {
-                    writer.send_raw_message(raw).await
-                }
+            Self::AwaitingLogout(_) => {
+                error!("trying to send message while awaiting logout");
             }
             _ => error!("trying to write without an established connection"),
         }
