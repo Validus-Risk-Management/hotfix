@@ -161,6 +161,7 @@ mod tests {
     use crate::message::logon::{Logon, ResetSeqNumConfig};
     use crate::message::logout::Logout;
     use crate::message::parser::Parser;
+    use crate::session::Status;
     use crate::store::in_memory::InMemoryMessageStore;
     use hotfix_message::Part;
     use hotfix_message::message::Message;
@@ -195,6 +196,8 @@ mod tests {
         }
         async fn on_logout(&mut self, _reason: &str) {}
         async fn on_logon(&mut self) {}
+
+        async fn on_state_change(&self, _from: &Status, _to: &Status) {}
     }
 
     /// A minimal FIX counterparty for testing the Initiator over TCP.

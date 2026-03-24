@@ -922,6 +922,8 @@ mod tests {
         }
         async fn on_logout(&mut self, _: &str) {}
         async fn on_logon(&mut self) {}
+
+        async fn on_state_change(&self, _from: &Status, _to: &Status) {}
     }
 
     fn create_writer_ref() -> WriterRef {

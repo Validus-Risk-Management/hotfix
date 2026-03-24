@@ -1,6 +1,7 @@
 use crate::common::test_messages::TestMessage;
 use hotfix::Application;
 use hotfix::application::{InboundDecision, OutboundDecision};
+use hotfix::session::Status;
 use hotfix_message::message::Message;
 use std::sync::Mutex;
 
@@ -75,4 +76,6 @@ impl Application for FakeApplication {
     async fn on_logout(&mut self, _reason: &str) {}
 
     async fn on_logon(&mut self) {}
+
+    async fn on_state_change(&self, _from: &Status, _to: &Status) {}
 }

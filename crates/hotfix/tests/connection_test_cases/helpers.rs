@@ -10,6 +10,7 @@ use std::sync::{Arc, Once};
 use hotfix::Application;
 use hotfix::application::{InboundDecision, OutboundDecision};
 use hotfix::message::OutboundMessage;
+use hotfix::session::Status;
 use hotfix_message::message::Message;
 use rcgen::{CertificateParams, DnType, IsCa, KeyPair, KeyUsagePurpose, SanType};
 use rustls::ServerConfig;
@@ -355,4 +356,6 @@ impl Application for MinimalApplication {
     async fn on_logout(&mut self, _reason: &str) {}
 
     async fn on_logon(&mut self) {}
+
+    async fn on_state_change(&self, _from: &Status, _to: &Status) {}
 }
