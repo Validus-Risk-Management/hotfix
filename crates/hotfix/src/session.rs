@@ -286,13 +286,16 @@ where
     }
 
     async fn check_end_of_resend(&mut self) -> Result<(), SessionOperationError> {
-        let ended_state = if let SessionState::AwaitingResend(state) = &mut self.state {
+        let backlog = if let SessionState::AwaitingResend(state) = &mut self.state {
             if self.ctx.store.next_target_seq_number() > state.end_seq_number {
+                let inbound_queue = std::mem::take(&mut state.inbound_queue);
                 let new_state = SessionState::new_active(
                     state.writer.clone(),
                     self.ctx.config.heartbeat_interval,
                 );
-                Some(std::mem::replace(&mut self.state, new_state))
+                self.apply_transition(TransitionResult::TransitionTo(new_state))
+                    .await;
+                Some(inbound_queue)
             } else {
                 None
             }
@@ -300,11 +303,11 @@ where
             None
         };
 
-        if let Some(SessionState::AwaitingResend(mut state)) = ended_state {
+        if let Some(mut inbound_queue) = backlog {
             // we have reached the end of the resend,
             // process queued messages and resume normal operation
             debug!("resend is done, processing backlog");
-            while let Some(msg) = state.inbound_queue.pop_front() {
+            while let Some(msg) = inbound_queue.pop_front() {
                 let seq_number: u64 = msg.get(MSG_SEQ_NUM).unwrap_or_else(|e| {
                     error!("failed to get seq number: {:?}", e);
                     0
