@@ -2,6 +2,7 @@ use crate::messages::{ExecutionReport, InboundMsg, OutboundMsg};
 use hotfix::Application;
 use hotfix::Message;
 use hotfix::application::{InboundDecision, OutboundDecision};
+use hotfix::session::Status;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::info;
 
@@ -50,5 +51,9 @@ impl Application for LoadTestingApplication {
 
     async fn on_logon(&mut self) {
         info!("we've been logged in");
+    }
+
+    async fn on_state_change(&self, from: &Status, to: &Status) {
+        info!("we've changed from {:?} to {:?}", from, to);
     }
 }

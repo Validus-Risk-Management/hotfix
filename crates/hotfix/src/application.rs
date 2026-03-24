@@ -1,4 +1,5 @@
 use crate::message::OutboundMessage;
+use crate::session::Status;
 use hotfix_message::message::Message;
 
 #[async_trait::async_trait]
@@ -18,6 +19,11 @@ pub trait Application: Send + Sync + 'static {
     async fn on_logout(&mut self, reason: &str);
     /// Called when the session is logged on.
     async fn on_logon(&mut self);
+    /// Called when the session state changes.
+    ///
+    /// This is invoked after every state transition, providing the previous
+    /// and new status. The default implementation does nothing.
+    async fn on_state_change(&self, from: &Status, to: &Status);
 }
 
 /// Standard FIX Business Reject Reason values (tag 380).

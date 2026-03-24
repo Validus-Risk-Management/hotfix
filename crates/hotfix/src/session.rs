@@ -482,7 +482,15 @@ where
 
     async fn apply_transition(&mut self, result: TransitionResult) {
         if let TransitionResult::TransitionTo(new_state) = result {
+            let old_status = self.state.as_status();
             self.state = new_state;
+            let new_status = self.state.as_status();
+            if old_status != new_status {
+                self.ctx
+                    .application
+                    .on_state_change(&old_status, &new_status)
+                    .await;
+            }
         }
     }
 

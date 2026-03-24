@@ -1,14 +1,14 @@
 use std::sync::{Arc, Mutex};
 
+use crate::messages::OutboundMsg;
 use hotfix::Application;
 use hotfix::Message;
 use hotfix::application::{InboundDecision, OutboundDecision};
 use hotfix::message::OutboundMessage;
+use hotfix::session::Status;
 use hotfix_message::message::Config as EncodeConfig;
 use serde::Serialize;
 use tracing::info;
-
-use crate::messages::OutboundMsg;
 
 #[derive(Clone, Serialize)]
 pub struct MessageLogEntry {
@@ -90,5 +90,9 @@ impl Application for TestApplication {
 
     async fn on_logon(&mut self) {
         info!("we've been logged in");
+    }
+
+    async fn on_state_change(&self, from: &Status, to: &Status) {
+        info!("we've changed from {:?} to {:?}", from, to);
     }
 }
