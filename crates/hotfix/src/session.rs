@@ -223,7 +223,7 @@ where
             .handle_verification_issue(&mut self.ctx, &message, flags)
             .await?
         {
-            self.apply_transition(result);
+            self.apply_transition(result).await;
             return Ok(());
         }
 
@@ -328,11 +328,14 @@ where
     }
 
     async fn on_connect(&mut self, writer: WriterRef) -> Result<(), SessionOperationError> {
-        self.state = SessionState::AwaitingLogon(AwaitingLogonState {
-            writer,
-            logon_sent: false,
-            logon_timeout: Instant::now() + Duration::from_secs(self.ctx.config.logon_timeout),
-        });
+        self.apply_transition(TransitionResult::TransitionTo(SessionState::AwaitingLogon(
+            AwaitingLogonState {
+                writer,
+                logon_sent: false,
+                logon_timeout: Instant::now() + Duration::from_secs(self.ctx.config.logon_timeout),
+            },
+        )))
+        .await;
         self.reset_peer_timer(None);
         self.send_logon().await?;
 
@@ -340,27 +343,33 @@ where
     }
 
     async fn on_disconnect(&mut self, reason: String) {
-        match self.state {
+        let transition = match self.state {
             SessionState::Active(_)
             | SessionState::AwaitingLogon(_)
             | SessionState::AwaitingResend(_) => {
                 self.state.disconnect_writer().await;
-                self.state = SessionState::new_disconnected(true, &reason);
+                TransitionResult::TransitionTo(SessionState::new_disconnected(true, &reason))
             }
             SessionState::Disconnected(_) => {
-                warn!("disconnect message was received, but the session is already disconnected")
+                warn!("disconnect message was received, but the session is already disconnected");
+                TransitionResult::Stay
             }
             SessionState::AwaitingLogout(AwaitingLogoutState { reconnect, .. }) => {
-                self.state = SessionState::new_disconnected(reconnect, &reason);
+                TransitionResult::TransitionTo(SessionState::new_disconnected(reconnect, &reason))
             }
-        }
+        };
+        self.apply_transition(transition).await;
     }
 
     async fn on_logon(&mut self) -> Result<(), SessionOperationError> {
         if let SessionState::AwaitingLogon(AwaitingLogonState { writer, .. }) = &self.state {
             let writer = writer.clone();
             // happy logon flow, the session is now active
-            self.state = SessionState::new_active(writer, self.ctx.config.heartbeat_interval);
+            self.apply_transition(TransitionResult::TransitionTo(SessionState::new_active(
+                writer,
+                self.ctx.config.heartbeat_interval,
+            )))
+            .await;
             self.ctx.application.on_logon().await;
             self.ctx.store.increment_target_seq_number().await?;
         } else {
@@ -388,12 +397,18 @@ where
             // if we initiated the logout, preserve the reconnect flag
             SessionState::AwaitingLogout(AwaitingLogoutState { reconnect, .. }) => {
                 self.state.disconnect_writer().await;
-                self.state = SessionState::new_disconnected(reconnect, "logout completed");
+                self.apply_transition(TransitionResult::TransitionTo(
+                    SessionState::new_disconnected(reconnect, "logout completed"),
+                ))
+                .await;
             }
             // otherwise assume it makes sense to try to reconnect
             _ => {
                 self.state.disconnect_writer().await;
-                self.state = SessionState::new_disconnected(true, "peer has logged us out")
+                self.apply_transition(TransitionResult::TransitionTo(
+                    SessionState::new_disconnected(true, "peer has logged us out"),
+                ))
+                .await;
             }
         }
 
@@ -462,7 +477,7 @@ where
         Ok(())
     }
 
-    fn apply_transition(&mut self, result: TransitionResult) {
+    async fn apply_transition(&mut self, result: TransitionResult) {
         if let TransitionResult::TransitionTo(new_state) = result {
             self.state = new_state;
         }
@@ -532,7 +547,10 @@ where
                     self.state
                         .logout_and_terminate(&mut self.ctx, "internal error")
                         .await;
-                    self.state = SessionState::new_disconnected(true, &reason);
+                    self.apply_transition(TransitionResult::TransitionTo(
+                        SessionState::new_disconnected(true, &reason),
+                    ))
+                    .await;
                 }
             }
             SessionEvent::Disconnected(reason) => {
@@ -646,8 +664,10 @@ where
                         .await;
                     if let Err(err) = self.ctx.store.reset().await {
                         error!("error resetting session store: {err:}");
-                        self.state =
-                            SessionState::new_disconnected(false, "unexpected error in reset");
+                        self.apply_transition(TransitionResult::TransitionTo(
+                            SessionState::new_disconnected(false, "unexpected error in reset"),
+                        ))
+                        .await;
                     }
                 }
                 Ok(SessionPeriodComparison::OutsideSessionTime { .. }) => {
@@ -659,8 +679,10 @@ where
                         .await;
                     if let Err(err) = self.ctx.store.reset().await {
                         error!("error resetting session store: {err:}");
-                        self.state =
-                            SessionState::new_disconnected(false, "unexpected error in reset");
+                        self.apply_transition(TransitionResult::TransitionTo(
+                            SessionState::new_disconnected(false, "unexpected error in reset"),
+                        ))
+                        .await;
                     }
                 }
                 Err(err) => {
