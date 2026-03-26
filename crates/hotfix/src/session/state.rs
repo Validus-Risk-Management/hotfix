@@ -63,6 +63,23 @@ impl SessionState {
         })
     }
 
+    /// Returns the transition to apply when the transport layer reports a disconnect.
+    /// Each state determines its own reconnect policy.
+    pub(crate) fn on_disconnect(&self, reason: &str) -> TransitionResult {
+        match self {
+            Self::Active(_) | Self::AwaitingLogon(_) | Self::AwaitingResend(_) => {
+                TransitionResult::TransitionTo(Self::new_disconnected(true, reason))
+            }
+            Self::AwaitingLogout(AwaitingLogoutState { reconnect, .. }) => {
+                TransitionResult::TransitionTo(Self::new_disconnected(*reconnect, reason))
+            }
+            Self::Disconnected(_) => {
+                warn!("disconnect message was received, but the session is already disconnected");
+                TransitionResult::Stay
+            }
+        }
+    }
+
     /// Let the current state decide whether an inbound message should be processed,
     /// queued for later, or rejected before verification and dispatch.
     pub(crate) fn pre_process_inbound(&mut self, message: Message) -> PreProcessDecision {

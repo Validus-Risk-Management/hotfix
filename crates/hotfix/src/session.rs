@@ -333,21 +333,8 @@ where
     }
 
     async fn on_disconnect(&mut self, reason: String) {
-        let transition = match self.state {
-            SessionState::Active(_)
-            | SessionState::AwaitingLogon(_)
-            | SessionState::AwaitingResend(_) => {
-                self.state.disconnect_writer().await;
-                TransitionResult::TransitionTo(SessionState::new_disconnected(true, &reason))
-            }
-            SessionState::Disconnected(_) => {
-                warn!("disconnect message was received, but the session is already disconnected");
-                TransitionResult::Stay
-            }
-            SessionState::AwaitingLogout(AwaitingLogoutState { reconnect, .. }) => {
-                TransitionResult::TransitionTo(SessionState::new_disconnected(reconnect, &reason))
-            }
-        };
+        self.state.disconnect_writer().await;
+        let transition = self.state.on_disconnect(&reason);
         self.apply_transition(transition).await;
     }
 
