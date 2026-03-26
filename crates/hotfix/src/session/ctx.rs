@@ -9,10 +9,24 @@ use crate::message::parser::RawFixMessage;
 use crate::session::error::InternalSendError;
 use crate::session::state::SessionState;
 use crate::store::StoreError;
+use hotfix_message::message::Message;
 
 pub(crate) enum TransitionResult {
     Stay,
     TransitionTo(SessionState),
+}
+
+/// The result of the pre-processing step for an inbound message.
+///
+/// Before verification and dispatch, the current state gets a chance to
+/// decide whether a message should be processed, queued, or rejected.
+pub(crate) enum PreProcessDecision {
+    /// Continue processing this message through verification and dispatch.
+    Accept(Message),
+    /// The message has been queued for later processing (e.g. AwaitingResend backlog).
+    Queued,
+    /// The message is not acceptable in this state — disconnect the writer.
+    Disconnect,
 }
 
 /// The result of verifying an inbound message via a state variant's

@@ -1,13 +1,16 @@
 use crate::Application;
+use crate::message::logon::Logon;
 use crate::message::resend_request::ResendRequest;
 use crate::message::verification::VerificationFlags;
-use crate::session::ctx::{SessionCtx, TransitionResult, VerificationResult};
+use crate::session::ctx::{PreProcessDecision, SessionCtx, TransitionResult, VerificationResult};
 use crate::session::error::{InternalSendResultExt, SessionOperationError};
 use crate::session::inbound::{self, VerificationOutcome};
 use crate::session::outbound;
 use crate::session::state::{AwaitingResendState, SessionState};
 use crate::transport::writer::WriterRef;
+use hotfix_message::Part;
 use hotfix_message::message::Message;
+use hotfix_message::session_fields::MSG_TYPE;
 use hotfix_store::MessageStore;
 use tokio::time::Instant;
 use tracing::debug;
@@ -22,6 +25,19 @@ pub(crate) struct AwaitingLogonState {
 }
 
 impl AwaitingLogonState {
+    pub(crate) fn pre_process_inbound(&self, message: Message) -> PreProcessDecision {
+        let is_logon = message
+            .header()
+            .get::<&str>(MSG_TYPE)
+            .is_ok_and(|t| t == Logon::MSG_TYPE);
+
+        if is_logon {
+            PreProcessDecision::Accept(message)
+        } else {
+            PreProcessDecision::Disconnect
+        }
+    }
+
     pub(crate) async fn handle_verification_issue<A: Application, S: MessageStore>(
         &self,
         ctx: &mut SessionCtx<A, S>,

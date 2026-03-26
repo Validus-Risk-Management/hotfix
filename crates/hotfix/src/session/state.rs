@@ -15,7 +15,7 @@ use crate::message::OutboundMessage;
 use crate::message::logon::Logon;
 use crate::message::logout::Logout;
 use crate::message::verification::VerificationFlags;
-use crate::session::ctx::{SessionCtx, TransitionResult, VerificationResult};
+use crate::session::ctx::{PreProcessDecision, SessionCtx, TransitionResult, VerificationResult};
 use crate::session::error::{InternalSendError, InternalSendResultExt, SessionOperationError};
 use crate::session::event::ScheduleResponse;
 use crate::session::info::Status as SessionInfoStatus;
@@ -61,6 +61,16 @@ impl SessionState {
             peer_deadline: Instant::now() + Duration::from_secs(peer_interval),
             sent_test_request_id: None,
         })
+    }
+
+    /// Let the current state decide whether an inbound message should be processed,
+    /// queued for later, or rejected before verification and dispatch.
+    pub(crate) fn pre_process_inbound(&mut self, message: Message) -> PreProcessDecision {
+        match self {
+            Self::AwaitingResend(state) => state.pre_process_inbound(message),
+            Self::AwaitingLogon(state) => state.pre_process_inbound(message),
+            _ => PreProcessDecision::Accept(message),
+        }
     }
 
     pub fn should_reconnect(&self) -> bool {

@@ -1,13 +1,16 @@
 use crate::Application;
 use crate::message::resend_request::ResendRequest;
 use crate::message::verification::VerificationFlags;
-use crate::session::ctx::{SessionCtx, TransitionResult, VerificationResult};
+use crate::session::ctx::{PreProcessDecision, SessionCtx, TransitionResult, VerificationResult};
 use crate::session::error::{InternalSendResultExt, SessionOperationError};
+use crate::session::get_msg_seq_num;
 use crate::session::inbound::{self, VerificationOutcome};
 use crate::session::outbound;
 use crate::session::state::SessionState;
 use crate::transport::writer::WriterRef;
+use hotfix_message::Part;
 use hotfix_message::message::Message;
+use hotfix_message::session_fields::MSG_TYPE;
 use hotfix_store::MessageStore;
 use std::collections::VecDeque;
 use tracing::debug;
@@ -36,6 +39,20 @@ impl AwaitingResendState {
             end_seq_number,
             inbound_queue: Default::default(),
             resend_attempts: 1,
+        }
+    }
+
+    pub(crate) fn pre_process_inbound(&mut self, message: Message) -> PreProcessDecision {
+        let dominated_by_resend = message
+            .header()
+            .get::<&str>(MSG_TYPE)
+            .is_ok_and(|t| t != ResendRequest::MSG_TYPE);
+
+        if get_msg_seq_num(&message) > self.end_seq_number && dominated_by_resend {
+            self.inbound_queue.push_back(message);
+            PreProcessDecision::Queued
+        } else {
+            PreProcessDecision::Accept(message)
         }
     }
 

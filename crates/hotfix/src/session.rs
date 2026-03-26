@@ -36,7 +36,7 @@ use crate::message::sequence_reset::SequenceReset;
 use crate::message::test_request::TestRequest;
 use crate::message::verification::VerificationFlags;
 use crate::session::admin_request::AdminRequest;
-use crate::session::ctx::{SessionCtx, TransitionResult, VerificationResult};
+use crate::session::ctx::{PreProcessDecision, SessionCtx, TransitionResult, VerificationResult};
 use crate::session::error::SessionCreationError;
 use crate::session::error::{InternalSendError, InternalSendResultExt, SessionOperationError};
 pub use crate::session::error::{SendError, SendOutcome};
@@ -194,28 +194,19 @@ where
     }
 
     async fn process_message(&mut self, message: Message) -> Result<(), SessionOperationError> {
+        let message = match self.state.pre_process_inbound(message) {
+            PreProcessDecision::Accept(msg) => msg,
+            PreProcessDecision::Queued => return Ok(()),
+            PreProcessDecision::Disconnect => {
+                self.state.disconnect_writer().await;
+                return Ok(());
+            }
+        };
+
         let message_type: &str = message
             .header()
             .get(MSG_TYPE)
             .map_err(|_| SessionOperationError::MissingField("MSG_TYPE"))?;
-
-        if let SessionState::AwaitingResend(state) = &mut self.state {
-            let seq_number = get_msg_seq_num(&message);
-            if seq_number > state.end_seq_number && message_type != ResendRequest::MSG_TYPE {
-                state.inbound_queue.push_back(message);
-                return Ok(());
-            }
-        }
-
-        // TODO: add state-level pre-process check that validates whether the message type
-        // is acceptable in the current state (e.g. AwaitingLogon rejects non-Logon,
-        // unexpected Logon in Active should be rejected per FIX spec).
-        if let SessionState::AwaitingLogon(_) = &mut self.state
-            && message_type != Logon::MSG_TYPE
-        {
-            self.state.disconnect_writer().await;
-            return Ok(());
-        }
 
         let flags = VerificationFlags::for_message(&message)?;
         if let VerificationResult::Issue(result) = self
