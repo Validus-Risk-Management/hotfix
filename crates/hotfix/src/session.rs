@@ -339,20 +339,8 @@ where
     }
 
     async fn on_logon(&mut self) -> Result<(), SessionOperationError> {
-        if let SessionState::AwaitingLogon(AwaitingLogonState { writer, .. }) = &self.state {
-            let writer = writer.clone();
-            // happy logon flow, the session is now active
-            self.apply_transition(TransitionResult::TransitionTo(SessionState::new_active(
-                writer,
-                self.ctx.config.heartbeat_interval,
-            )))
-            .await;
-            self.ctx.application.on_logon().await;
-            self.ctx.store.increment_target_seq_number().await?;
-        } else {
-            error!("received unexpected logon message");
-        }
-
+        let transition = self.state.on_peer_logon(&mut self.ctx).await?;
+        self.apply_transition(transition).await;
         Ok(())
     }
 

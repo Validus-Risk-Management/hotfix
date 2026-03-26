@@ -38,6 +38,18 @@ impl AwaitingLogonState {
         }
     }
 
+    pub(crate) async fn on_peer_logon<A: Application, S: MessageStore>(
+        &self,
+        ctx: &mut SessionCtx<A, S>,
+    ) -> Result<TransitionResult, SessionOperationError> {
+        ctx.application.on_logon().await;
+        ctx.store.increment_target_seq_number().await?;
+        Ok(TransitionResult::TransitionTo(SessionState::new_active(
+            self.writer.clone(),
+            ctx.config.heartbeat_interval,
+        )))
+    }
+
     pub(crate) async fn handle_verification_issue<A: Application, S: MessageStore>(
         &self,
         ctx: &mut SessionCtx<A, S>,

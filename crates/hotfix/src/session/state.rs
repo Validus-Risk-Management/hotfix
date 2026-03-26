@@ -63,6 +63,21 @@ impl SessionState {
         })
     }
 
+    /// Handles a Logon message from the peer. Only AwaitingLogon produces a
+    /// transition — all other states log an error and stay.
+    pub(crate) async fn on_peer_logon<A: Application, S: MessageStore>(
+        &self,
+        ctx: &mut SessionCtx<A, S>,
+    ) -> Result<TransitionResult, SessionOperationError> {
+        match self {
+            Self::AwaitingLogon(state) => state.on_peer_logon(ctx).await,
+            _ => {
+                error!("received unexpected logon message");
+                Ok(TransitionResult::Stay)
+            }
+        }
+    }
+
     /// Returns the transition to apply when a Logout message is received from the peer.
     /// Each state determines its own reconnect policy and disconnect reason.
     pub(crate) fn on_peer_logout(&self) -> TransitionResult {
