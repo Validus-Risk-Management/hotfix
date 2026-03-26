@@ -42,6 +42,23 @@ impl AwaitingResendState {
         }
     }
 
+    /// Check whether the resend is complete. If the next expected target sequence number
+    /// exceeds the end of the gap, return the queued backlog for replay and transition
+    /// to Active. Otherwise return `None`.
+    pub(crate) fn try_complete(
+        &mut self,
+        next_target_seq: u64,
+        heartbeat_interval: u64,
+    ) -> Option<(SessionState, VecDeque<Message>)> {
+        if next_target_seq > self.end_seq_number {
+            let backlog = std::mem::take(&mut self.inbound_queue);
+            let new_state = SessionState::new_active(self.writer.clone(), heartbeat_interval);
+            Some((new_state, backlog))
+        } else {
+            None
+        }
+    }
+
     pub(crate) fn pre_process_inbound(&mut self, message: Message) -> PreProcessDecision {
         let dominated_by_resend = message
             .header()

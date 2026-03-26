@@ -277,46 +277,42 @@ where
     }
 
     async fn check_end_of_resend(&mut self) -> Result<(), SessionOperationError> {
-        let backlog = if let SessionState::AwaitingResend(state) = &mut self.state {
-            if self.ctx.store.next_target_seq_number() > state.end_seq_number {
-                let inbound_queue = std::mem::take(&mut state.inbound_queue);
-                let new_state = SessionState::new_active(
-                    state.writer.clone(),
-                    self.ctx.config.heartbeat_interval,
-                );
-                self.apply_transition(TransitionResult::TransitionTo(new_state))
-                    .await;
-                Some(inbound_queue)
-            } else {
-                None
-            }
+        let completed = if let SessionState::AwaitingResend(state) = &mut self.state {
+            state.try_complete(
+                self.ctx.store.next_target_seq_number(),
+                self.ctx.config.heartbeat_interval,
+            )
         } else {
             None
         };
 
-        if let Some(mut inbound_queue) = backlog {
-            // we have reached the end of the resend,
-            // process queued messages and resume normal operation
-            debug!("resend is done, processing backlog");
-            while let Some(msg) = inbound_queue.pop_front() {
-                let seq_number: u64 = msg.get(MSG_SEQ_NUM).unwrap_or_else(|e| {
-                    error!("failed to get seq number: {:?}", e);
-                    0
-                });
-                let msg_type: &str = msg.header().get(MSG_TYPE).unwrap_or("");
-                debug!(seq_number, msg_type, "processing queued message");
+        let Some((new_state, mut backlog)) = completed else {
+            return Ok(());
+        };
 
-                if msg_type == ResendRequest::MSG_TYPE {
-                    // ResendRequest was already processed when it arrived (it bypasses
-                    // the queue in process_message). Just increment the target seq number
-                    // for sequence accounting purposes.
-                    self.ctx.store.increment_target_seq_number().await?;
-                } else {
-                    self.process_message(msg).await?;
-                }
+        self.apply_transition(TransitionResult::TransitionTo(new_state))
+            .await;
+
+        // Process queued messages and resume normal operation
+        debug!("resend is done, processing backlog");
+        while let Some(msg) = backlog.pop_front() {
+            let seq_number: u64 = msg.get(MSG_SEQ_NUM).unwrap_or_else(|e| {
+                error!("failed to get seq number: {:?}", e);
+                0
+            });
+            let msg_type: &str = msg.header().get(MSG_TYPE).unwrap_or("");
+            debug!(seq_number, msg_type, "processing queued message");
+
+            if msg_type == ResendRequest::MSG_TYPE {
+                // ResendRequest was already processed when it arrived (it bypasses
+                // the queue in process_message). Just increment the target seq number
+                // for sequence accounting purposes.
+                self.ctx.store.increment_target_seq_number().await?;
+            } else {
+                self.process_message(msg).await?;
             }
-            debug!("resend backlog is cleared, resuming normal operation");
         }
+        debug!("resend backlog is cleared, resuming normal operation");
 
         Ok(())
     }

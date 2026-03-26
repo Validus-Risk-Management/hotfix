@@ -20,6 +20,7 @@ pub(crate) enum TransitionResult {
 ///
 /// Before verification and dispatch, the current state gets a chance to
 /// decide whether a message should be processed, queued, or rejected.
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum PreProcessDecision {
     /// Continue processing this message through verification and dispatch.
     Accept(Message),
