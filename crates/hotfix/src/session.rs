@@ -48,7 +48,7 @@ pub(crate) use crate::session::session_ref::InternalSessionRef;
 pub use crate::session::session_ref::InternalSessionRef;
 use crate::session::session_ref::OutboundRequest;
 use crate::session::state::SessionState;
-use crate::session::state::{AwaitingLogonState, AwaitingLogoutState, TestRequestId};
+use crate::session::state::{AwaitingLogonState, TestRequestId};
 use crate::session_schedule::{SessionPeriodComparison, SessionSchedule};
 use crate::store::MessageStore;
 use crate::transport::writer::WriterRef;
@@ -368,26 +368,9 @@ where
             .on_logout("peer has logged us out")
             .await;
 
-        match self.state {
-            // if the session is already disconnected, we have nothing else to do
-            SessionState::Disconnected(..) => {}
-            // if we initiated the logout, preserve the reconnect flag
-            SessionState::AwaitingLogout(AwaitingLogoutState { reconnect, .. }) => {
-                self.state.disconnect_writer().await;
-                self.apply_transition(TransitionResult::TransitionTo(
-                    SessionState::new_disconnected(reconnect, "logout completed"),
-                ))
-                .await;
-            }
-            // otherwise assume it makes sense to try to reconnect
-            _ => {
-                self.state.disconnect_writer().await;
-                self.apply_transition(TransitionResult::TransitionTo(
-                    SessionState::new_disconnected(true, "peer has logged us out"),
-                ))
-                .await;
-            }
-        }
+        self.state.disconnect_writer().await;
+        let transition = self.state.on_peer_logout();
+        self.apply_transition(transition).await;
 
         self.ctx.store.increment_target_seq_number().await?;
         Ok(())

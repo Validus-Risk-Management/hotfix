@@ -63,6 +63,24 @@ impl SessionState {
         })
     }
 
+    /// Returns the transition to apply when a Logout message is received from the peer.
+    /// Each state determines its own reconnect policy and disconnect reason.
+    pub(crate) fn on_peer_logout(&self) -> TransitionResult {
+        match self {
+            Self::AwaitingLogout(AwaitingLogoutState { reconnect, .. }) => {
+                TransitionResult::TransitionTo(Self::new_disconnected(
+                    *reconnect,
+                    "logout completed",
+                ))
+            }
+            Self::Disconnected(_) => TransitionResult::Stay,
+            _ => TransitionResult::TransitionTo(Self::new_disconnected(
+                true,
+                "peer has logged us out",
+            )),
+        }
+    }
+
     /// Returns the transition to apply when the transport layer reports a disconnect.
     /// Each state determines its own reconnect policy.
     pub(crate) fn on_disconnect(&self, reason: &str) -> TransitionResult {
