@@ -128,10 +128,43 @@ pub struct VerificationConfig {
     pub check_orig_sending_time_for_admin: bool,
 }
 
+impl VerificationConfig {
+    pub fn builder() -> VerificationConfigBuilder {
+        VerificationConfigBuilder::default()
+    }
+}
+
 impl Default for VerificationConfig {
+    fn default() -> Self {
+        VerificationConfigBuilder::default().build()
+    }
+}
+
+pub struct VerificationConfigBuilder {
+    check_orig_sending_time_for_admin: bool,
+}
+
+impl Default for VerificationConfigBuilder {
     fn default() -> Self {
         Self {
             check_orig_sending_time_for_admin: true,
+        }
+    }
+}
+
+impl VerificationConfigBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn check_orig_sending_time_for_admin(mut self, value: bool) -> Self {
+        self.check_orig_sending_time_for_admin = value;
+        self
+    }
+
+    pub fn build(self) -> VerificationConfig {
+        VerificationConfig {
+            check_orig_sending_time_for_admin: self.check_orig_sending_time_for_admin,
         }
     }
 }
