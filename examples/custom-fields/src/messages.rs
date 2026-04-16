@@ -16,13 +16,11 @@ pub struct NewOrderSingle {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum OutboundMsg {
     NewOrderSingle(NewOrderSingle),
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct ExecReportSummary {
     pub cl_ord_id: String,
     pub ord_status: fix44::OrdStatus,
