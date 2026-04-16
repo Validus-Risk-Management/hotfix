@@ -44,7 +44,7 @@ docker compose -f example.compose.yml up --build dummy-executor
 In another, from the repo root, run the example:
 
 ```shell
-cargo run -p custom-fields -- --config examples/custom-fields/config/test-config.toml
+cargo run -p custom-fields
 ```
 
 Expected log output:
