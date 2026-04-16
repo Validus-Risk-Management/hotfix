@@ -749,6 +749,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "custom-fields"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "clap",
+ "hotfix",
+ "hotfix-codegen",
+ "hotfix-dictionary",
+ "hotfix-message",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "darling"
 version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
