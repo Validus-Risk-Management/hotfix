@@ -109,6 +109,14 @@ func (e *Executor) onNewOrderSingle(msg newordersingle.NewOrderSingle, sessionID
 	log.Printf("Received NewOrderSingle: ClOrdID=%s Symbol=%s Side=%s Qty=%s",
 		clOrdID, symbol, string(side), orderQty.String())
 
+	// Read the optional custom tag (6001 = ClientStrategyId).
+	var clientStrategyID quickfix.FIXInt
+	hasClientStrategyID := false
+	if err := msg.Body.GetField(quickfix.Tag(6001), &clientStrategyID); err == nil {
+		hasClientStrategyID = true
+		log.Printf("  ClientStrategyId=%d", int(clientStrategyID))
+	}
+
 	// Look up FX rate; default to 1.0000 for unknown pairs.
 	price, ok := fxRates[symbol]
 	if !ok {
@@ -133,6 +141,9 @@ func (e *Executor) onNewOrderSingle(msg newordersingle.NewOrderSingle, sessionID
 	ack.Set(field.NewClOrdID(clOrdID))
 	ack.Set(field.NewSymbol(symbol))
 	ack.Set(field.NewOrderQty(orderQty, 2))
+	if hasClientStrategyID {
+		ack.Body.SetField(quickfix.Tag(6001), clientStrategyID)
+	}
 
 	if sendErr := quickfix.SendToTarget(ack.ToMessage(), sessionID); sendErr != nil {
 		log.Printf("Error sending ACK: %v", sendErr)
@@ -156,6 +167,9 @@ func (e *Executor) onNewOrderSingle(msg newordersingle.NewOrderSingle, sessionID
 	fill.Set(field.NewOrderQty(orderQty, 2))
 	fill.Set(field.NewLastQty(orderQty, 2))
 	fill.Set(field.NewLastPx(price, 4))
+	if hasClientStrategyID {
+		fill.Body.SetField(quickfix.Tag(6001), clientStrategyID)
+	}
 
 	if sendErr := quickfix.SendToTarget(fill.ToMessage(), sessionID); sendErr != nil {
 		log.Printf("Error sending FILL: %v", sendErr)
