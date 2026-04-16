@@ -9,8 +9,8 @@ fn main() -> std::io::Result<()> {
     let spec_path = "spec/FIX44-custom.xml";
     println!("cargo:rerun-if-changed={spec_path}");
 
-    let dict = Dictionary::load_from_file(spec_path)
-        .expect("failed to load custom FIX 4.4 dictionary");
+    let dict =
+        Dictionary::load_from_file(spec_path).expect("failed to load custom FIX 4.4 dictionary");
 
     let mut settings = codegen::Settings::default();
     // The generated code uses `<crate>::dict::FieldLocation`, `<crate>::FieldType`,

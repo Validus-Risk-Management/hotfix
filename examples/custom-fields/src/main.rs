@@ -1,23 +1,22 @@
+mod application;
 mod custom_fix;
 mod messages;
 
-use hotfix::field_types::Timestamp;
-use hotfix::fix44;
+use std::sync::Arc;
 
-use crate::messages::{NewOrderSingle, OutboundMsg};
+use tokio::sync::{Notify, mpsc};
 
-fn main() {
-    let _order = OutboundMsg::NewOrderSingle(NewOrderSingle {
-        cl_ord_id: "demo-1".to_string(),
-        symbol: "EUR/USD".to_string(),
-        side: fix44::Side::Buy,
-        order_qty: 100,
-        transact_time: Timestamp::utc_now(),
-        client_strategy_id: 42,
-    });
+use crate::application::TestApplication;
 
-    println!(
-        "constructed NewOrderSingle (custom tag {} = 42)",
-        custom_fix::CLIENT_STRATEGY_ID.tag,
-    );
+#[tokio::main]
+async fn main() {
+    let logon_signal = Arc::new(Notify::new());
+    let (exec_tx, _exec_rx) = mpsc::unbounded_channel();
+
+    let _app = TestApplication {
+        logon_signal: logon_signal.clone(),
+        exec_tx,
+    };
+
+    println!("custom-fields example: application wired up");
 }
