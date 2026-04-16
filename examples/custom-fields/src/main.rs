@@ -1,3 +1,8 @@
+mod custom_fix;
+
 fn main() {
-    println!("custom-fields example placeholder");
+    println!(
+        "ClientStrategyId tag = {}",
+        custom_fix::CLIENT_STRATEGY_ID.tag,
+    );
 }
