@@ -9,7 +9,6 @@ use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use hotfix::config::Config;
 use hotfix::field_types::Timestamp;
-use hotfix::fix44;
 use hotfix::initiator::Initiator;
 use hotfix::store::in_memory::InMemoryMessageStore;
 use tokio::sync::{Notify, mpsc};
@@ -71,7 +70,7 @@ async fn main() -> Result<()> {
     let order = NewOrderSingle {
         cl_ord_id: CL_ORD_ID.to_string(),
         symbol: "EUR/USD".to_string(),
-        side: fix44::Side::Buy,
+        side: custom_fix::Side::Buy,
         order_qty: 100,
         transact_time: Timestamp::utc_now(),
         client_strategy_id: STRATEGY_ID,
@@ -128,7 +127,7 @@ async fn wait_for_fill(exec_rx: &mut mpsc::UnboundedReceiver<ExecReportSummary>)
             ));
         }
 
-        if matches!(summary.ord_status, fix44::OrdStatus::Filled) {
+        if matches!(summary.ord_status, custom_fix::OrdStatus::Filled) {
             info!("order filled, custom field round-tripped successfully");
             return Ok(());
         }

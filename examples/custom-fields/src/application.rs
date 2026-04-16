@@ -3,9 +3,8 @@ use std::sync::Arc;
 use hotfix::Application;
 use hotfix::Message;
 use hotfix::application::{InboundDecision, OutboundDecision};
-use hotfix::fix44;
+use hotfix::message::Part;
 use hotfix::session::Status;
-use hotfix_message::Part;
 use tokio::sync::{Notify, mpsc};
 use tracing::{info, warn};
 
@@ -26,13 +25,13 @@ impl Application for TestApplication {
     }
 
     async fn on_inbound_message(&self, msg: &Message) -> InboundDecision {
-        let msg_type: Result<&str, _> = msg.header().get(hotfix_message::session_fields::MSG_TYPE);
+        let msg_type: Result<&str, _> = msg.header().get(custom_fix::MSG_TYPE);
         if !matches!(msg_type, Ok("8")) {
             return InboundDecision::Accept;
         }
 
-        let cl_ord_id: Result<&str, _> = msg.get(fix44::CL_ORD_ID);
-        let ord_status: Result<fix44::OrdStatus, _> = msg.get(fix44::ORD_STATUS);
+        let cl_ord_id: Result<&str, _> = msg.get(custom_fix::CL_ORD_ID);
+        let ord_status: Result<custom_fix::OrdStatus, _> = msg.get(custom_fix::ORD_STATUS);
         let client_strategy_id: Option<i32> = msg.get(custom_fix::CLIENT_STRATEGY_ID).ok();
 
         match (cl_ord_id, ord_status) {

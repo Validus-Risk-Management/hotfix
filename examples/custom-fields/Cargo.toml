@@ -7,8 +7,8 @@ license.workspace = true
 publish = false
 
 [dependencies]
-hotfix = { path = "../../crates/hotfix", features = ["fix44"] }
-hotfix-message = { path = "../../crates/hotfix-message", features = ["fix44"] }
+hotfix = { path = "../../crates/hotfix" }
+hotfix-message = { path = "../../crates/hotfix-message" }
 
 anyhow.workspace = true
 async-trait.workspace = true
@@ -19,4 +19,4 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [build-dependencies]
 hotfix-codegen = { path = "../../crates/hotfix-codegen" }
-hotfix-dictionary = { path = "../../crates/hotfix-dictionary", features = ["fix44"] }
+hotfix-dictionary = { path = "../../crates/hotfix-dictionary" }

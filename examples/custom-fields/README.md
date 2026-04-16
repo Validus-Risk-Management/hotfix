@@ -24,21 +24,21 @@ addition: a `<field number="6001" name="ClientStrategyId" type="INT"/>`
 in the `<fields>` block, plus an optional reference to it on
 `NewOrderSingle` and `ExecutionReport`.
 
-## Mixing `hotfix::fix44` and `custom_fix`
+## Using the generated constants
 
-The example uses stock field constants from `hotfix::fix44::*` (e.g.
-`fix44::CL_ORD_ID`) and the new constant from `custom_fix::CLIENT_STRATEGY_ID`.
-This is safe because the custom XML didn't change any FIX 4.4 tag — the
-`custom_fix` constants for stock tags are bit-for-bit identical to the ones
-in `hotfix::fix44`. If you'd prefer a single source of truth, switch your
-imports to `custom_fix::*` everywhere.
+All field constants and typed enums (`Side`, `OrdType`, `OrdStatus`, …) come
+from the `custom_fix` module — including the ones for standard FIX 4.4
+tags. This keeps the example aligned with a single source of truth: the
+custom XML drives both compile-time typing and runtime validation. The
+`hotfix::fix44` re-exports are deliberately not used here, so the
+`hotfix` dependency in `Cargo.toml` doesn't enable the `fix44` feature.
 
 ## Running the example
 
-In one terminal, start the dummy executor:
+In one terminal, build and start the dummy executor via the existing compose file:
 
 ```shell
-cd dummy-executor && go run .
+docker compose -f example.compose.yml up --build dummy-executor
 ```
 
 In another, from the repo root, run the example:
