@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.11.0...hotfix-v0.11.1) - 2026-04-20
+
+### Added
+
+- add validation config and provide ability to disable orig sent time for admin messages ([#334](https://github.com/Validus-Risk-Management/hotfix/pull/334))
+
+### Other
+
+- remove remaining pattern matching in session code ([#330](https://github.com/Validus-Risk-Management/hotfix/pull/330))
+
 ### Added
  - skip check for original sending time(tag 122) in sequence reset messages ([#322](https://github.com/Validus-Risk-Management/hotfix/pull/334))
 
