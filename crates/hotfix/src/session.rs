@@ -569,22 +569,13 @@ where
                 self.reset_on_next_logon = true;
             }
             AdminRequest::SetNextTargetSeqNum { seq_num, responder } => {
-                let current = self.state.as_status();
-                let response = if matches!(self.state, SessionState::Disconnected(_)) {
-                    self.ctx
-                        .store
-                        .set_target_seq_number(seq_num.get() - 1)
-                        .await
-                        .map_err(SetNextTargetSeqNumError::from)
-                } else {
-                    warn!(
-                        ?current,
-                        seq_num = seq_num.get(),
-                        "rejecting SetNextTargetSeqNum outside Disconnected state"
-                    );
-                    Err(SetNextTargetSeqNumError::InvalidState { current })
-                };
-
+                let response = self
+                    .state
+                    .try_set_next_target_seq_num(&mut self.ctx, seq_num)
+                    .await;
+                if let Err(ref err) = response {
+                    warn!(?err, seq_num = seq_num.get(), "SetNextTargetSeqNum rejected");
+                }
                 if responder.send(response).is_err() {
                     error!("failed to respond to SetNextTargetSeqNum request");
                 }

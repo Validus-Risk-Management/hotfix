@@ -16,12 +16,15 @@ use crate::message::logon::Logon;
 use crate::message::logout::Logout;
 use crate::message::verification::VerificationFlags;
 use crate::session::ctx::{PreProcessDecision, SessionCtx, TransitionResult, VerificationResult};
-use crate::session::error::{InternalSendError, InternalSendResultExt, SessionOperationError};
+use crate::session::error::{
+    InternalSendError, InternalSendResultExt, SessionOperationError, SetNextTargetSeqNumError,
+};
 use crate::session::event::ScheduleResponse;
 use crate::session::info::Status as SessionInfoStatus;
 use crate::transport::writer::WriterRef;
 use hotfix_message::message::Message;
 use hotfix_store::MessageStore;
+use std::num::NonZeroU64;
 use std::time::Duration;
 use tokio::sync::oneshot;
 use tokio::time::Instant;
@@ -244,6 +247,33 @@ impl SessionState {
                 error!("handle_verification_issue called while disconnected");
                 Ok(VerificationResult::Passed)
             }
+        }
+    }
+
+    /// Set the next expected target sequence number. Only permitted while
+    /// `Disconnected` — any other state returns `InvalidState`.
+    ///
+    /// The store stores "last seen" (see `inbound::on_sequence_reset` passing
+    /// `end - 1`), so we subtract 1 to make `next_target_seq_number()` return
+    /// `seq_num`. `NonZeroU64` guarantees the subtraction is safe.
+    pub(crate) async fn try_set_next_target_seq_num<A, S>(
+        &self,
+        ctx: &mut SessionCtx<A, S>,
+        seq_num: NonZeroU64,
+    ) -> Result<(), SetNextTargetSeqNumError>
+    where
+        A: Application,
+        S: MessageStore,
+    {
+        match self {
+            SessionState::Disconnected(_) => ctx
+                .store
+                .set_target_seq_number(seq_num.get() - 1)
+                .await
+                .map_err(SetNextTargetSeqNumError::from),
+            _ => Err(SetNextTargetSeqNumError::InvalidState {
+                current: self.as_status(),
+            }),
         }
     }
 
