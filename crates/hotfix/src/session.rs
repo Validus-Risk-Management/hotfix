@@ -39,7 +39,7 @@ use crate::session::admin_request::AdminRequest;
 use crate::session::ctx::{PreProcessDecision, SessionCtx, TransitionResult, VerificationResult};
 use crate::session::error::SessionCreationError;
 use crate::session::error::{InternalSendError, InternalSendResultExt, SessionOperationError};
-pub use crate::session::error::{SendError, SendOutcome};
+pub use crate::session::error::{SendError, SendOutcome, SetNextTargetSeqNumError};
 pub use crate::session::info::{SessionInfo, Status};
 pub use crate::session::session_handle::SessionHandle;
 #[cfg(not(feature = "test-utils"))]

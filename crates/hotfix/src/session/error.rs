@@ -128,6 +128,23 @@ impl<T> InternalSendResultExt<T> for Result<T, InternalSendError> {
     }
 }
 
+/// Error returned when setting the next expected target sequence number via admin.
+#[derive(Debug, Error)]
+pub enum SetNextTargetSeqNumError {
+    /// The session was not in a state where the target sequence number can be
+    /// safely adjusted. Only permitted while `Disconnected`.
+    #[error("operation rejected in state {current:?}; only permitted while disconnected")]
+    InvalidState { current: crate::session::Status },
+
+    /// Channel-level failure — the session task is gone or the responder was dropped.
+    #[error(transparent)]
+    Send(#[from] SendError),
+
+    /// Underlying store write failed.
+    #[error(transparent)]
+    Store(#[from] StoreError),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
