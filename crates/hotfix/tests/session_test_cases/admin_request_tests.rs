@@ -5,6 +5,7 @@ use crate::common::setup::given_an_active_session;
 use hotfix::session::Status;
 use hotfix_message::Part;
 use hotfix_message::fix44::{MsgType, RESET_SEQ_NUM_FLAG};
+use std::num::NonZeroU64;
 
 /// Tests that we can request the session to reset sequence numbers once.
 ///
@@ -71,4 +72,25 @@ async fn test_reset_sequence_numbers_once() {
     );
 
     finally(&session, &mut counterparty).disconnect().await;
+}
+
+/// Happy path: while `Disconnected`, setting the next expected target sequence
+/// number succeeds and the new value is visible via session info.
+#[tokio::test]
+async fn test_set_next_target_seq_num_while_disconnected() {
+    let session = crate::common::setup::given_a_disconnected_session();
+
+    let new_target = NonZeroU64::new(42).expect("42 is non-zero");
+    session
+        .session_handle()
+        .set_next_target_seq_num(new_target)
+        .await
+        .expect("set_next_target_seq_num to succeed");
+
+    let info = session
+        .session_handle()
+        .get_session_info()
+        .await
+        .expect("session info");
+    assert_eq!(info.next_target_seq_number, 42);
 }

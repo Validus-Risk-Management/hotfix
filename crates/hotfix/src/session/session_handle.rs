@@ -1,7 +1,8 @@
 use crate::session::admin_request::AdminRequest;
-use crate::session::error::{SendError, SendOutcome};
+use crate::session::error::{SendError, SendOutcome, SetNextTargetSeqNumError};
 use crate::session::session_ref::OutboundRequest;
 use crate::session::{InternalSessionRef, SessionInfo};
+use std::num::NonZeroU64;
 use tokio::sync::{mpsc, oneshot};
 
 /// A public handle to the session that can be used to interact with the session.
@@ -65,6 +66,26 @@ impl<Outbound> SessionHandle<Outbound> {
             .send(AdminRequest::ResetSequenceNumbersOnNextLogon)
             .await?;
         Ok(())
+    }
+
+    /// Sets the next expected target sequence number.
+    ///
+    /// Permitted only while the session is `Disconnected`. Use this to realign
+    /// after a counterparty-initiated sequence reset without forcing a bilateral
+    /// reset — the peer's subsequent `ResendRequest` is handled by the existing
+    /// resend/gap-fill logic.
+    pub async fn set_next_target_seq_num(
+        &self,
+        seq_num: NonZeroU64,
+    ) -> Result<(), SetNextTargetSeqNumError> {
+        let (responder, receiver) = oneshot::channel();
+        self.admin_request_sender
+            .send(AdminRequest::SetNextTargetSeqNum { seq_num, responder })
+            .await
+            .map_err(|_| SetNextTargetSeqNumError::Send(SendError::SessionGone))?;
+        receiver
+            .await
+            .map_err(|_| SetNextTargetSeqNumError::Send(SendError::SessionGone))?
     }
 }
 

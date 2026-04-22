@@ -1,4 +1,6 @@
 use crate::session::SessionInfo;
+use crate::session::error::SetNextTargetSeqNumError;
+use std::num::NonZeroU64;
 use tokio::sync::oneshot;
 
 /// Administrative actions exposed to users of the engine to control the session.
@@ -13,4 +15,10 @@ pub enum AdminRequest {
     /// which can be used to re-synchronise our state with the counterparty in
     /// unfortunate scenarios where such drastic recover is required.
     ResetSequenceNumbersOnNextLogon,
+    /// Set the next expected target sequence number. Permitted only while the
+    /// session is `Disconnected` — see `SetNextTargetSeqNumError::InvalidState`.
+    SetNextTargetSeqNum {
+        seq_num: NonZeroU64,
+        responder: oneshot::Sender<Result<(), SetNextTargetSeqNumError>>,
+    },
 }
