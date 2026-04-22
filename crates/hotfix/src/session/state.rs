@@ -250,12 +250,7 @@ impl SessionState {
         }
     }
 
-    /// Set the next expected target sequence number. Only permitted while
-    /// `Disconnected` — any other state returns `InvalidState`.
-    ///
-    /// The store stores "last seen" (see `inbound::on_sequence_reset` passing
-    /// `end - 1`), so we subtract 1 to make `next_target_seq_number()` return
-    /// `seq_num`. `NonZeroU64` guarantees the subtraction is safe.
+    /// Set the next expected target sequence number.
     pub(crate) async fn try_set_next_target_seq_num<A, S>(
         &self,
         ctx: &mut SessionCtx<A, S>,
@@ -265,12 +260,18 @@ impl SessionState {
         A: Application,
         S: MessageStore,
     {
+        // Only permitted while `Disconnected` — any other state returns `InvalidState`.
         match self {
-            SessionState::Disconnected(_) => ctx
-                .store
-                .set_target_seq_number(seq_num.get() - 1)
-                .await
-                .map_err(SetNextTargetSeqNumError::from),
+            SessionState::Disconnected(_) => {
+                // The store stores "last seen" (see `inbound::on_sequence_reset` passing `end - 1`),
+                // so we subtract 1 to make `next_target_seq_number()` return `seq_num`.
+                let target_seq_num = seq_num.get() - 1;
+
+                ctx.store
+                    .set_target_seq_number(target_seq_num)
+                    .await
+                    .map_err(SetNextTargetSeqNumError::from)
+            }
             _ => Err(SetNextTargetSeqNumError::InvalidState {
                 current: self.as_status(),
             }),

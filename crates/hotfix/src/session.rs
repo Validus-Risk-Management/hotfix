@@ -574,7 +574,11 @@ where
                     .try_set_next_target_seq_num(&mut self.ctx, seq_num)
                     .await;
                 if let Err(ref err) = response {
-                    warn!(?err, seq_num = seq_num.get(), "SetNextTargetSeqNum rejected");
+                    warn!(
+                        ?err,
+                        seq_num = seq_num.get(),
+                        "SetNextTargetSeqNum rejected"
+                    );
                 }
                 if responder.send(response).is_err() {
                     error!("failed to respond to SetNextTargetSeqNum request");
