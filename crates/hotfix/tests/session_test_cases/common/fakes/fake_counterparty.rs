@@ -250,6 +250,7 @@ where
 
     fn create_reader() -> (ReaderRef, oneshot::Sender<()>) {
         let (dc_sender, dc_receiver) = oneshot::channel();
-        (ReaderRef::new(dc_receiver), dc_sender)
+        let (kill_sender, _kill_receiver) = oneshot::channel();
+        (ReaderRef::new(dc_receiver, kill_sender), dc_sender)
     }
 }

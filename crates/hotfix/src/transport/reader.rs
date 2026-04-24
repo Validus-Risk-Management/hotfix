@@ -6,12 +6,19 @@ use tracing::warn;
 pub struct ReaderMessage;
 
 pub struct ReaderRef {
-    disconnect_signal: oneshot::Receiver<()>,
+    pub(crate) disconnect_signal: oneshot::Receiver<()>,
+    // Consumed by the watchdog in FixConnection::run_until_disconnect (follow-up commit).
+    // Kept wired now so the reader's select! already accepts an external kill signal.
+    #[allow(dead_code)]
+    pub(crate) kill: oneshot::Sender<()>,
 }
 
 impl ReaderRef {
-    pub fn new(disconnect_signal: oneshot::Receiver<()>) -> Self {
-        Self { disconnect_signal }
+    pub fn new(disconnect_signal: oneshot::Receiver<()>, kill: oneshot::Sender<()>) -> Self {
+        Self {
+            disconnect_signal,
+            kill,
+        }
     }
 
     pub async fn wait_for_disconnect(self) {

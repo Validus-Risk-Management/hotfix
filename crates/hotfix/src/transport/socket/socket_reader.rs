@@ -12,10 +12,11 @@ pub fn spawn_socket_reader(
     session_ref: InternalSessionRef<impl OutboundMessage>,
 ) -> ReaderRef {
     let (dc_sender, dc_receiver) = oneshot::channel();
+    let (kill_sender, kill_receiver) = oneshot::channel();
     let actor = ReaderActor::new(reader, session_ref, dc_sender);
-    tokio::spawn(run_reader(actor));
+    tokio::spawn(run_reader(actor, kill_receiver));
 
-    ReaderRef::new(dc_receiver)
+    ReaderRef::new(dc_receiver, kill_sender)
 }
 
 struct ReaderActor<M, R> {
@@ -38,8 +39,10 @@ impl<M, R: AsyncRead> ReaderActor<M, R> {
     }
 }
 
-async fn run_reader<Outbound, R>(mut actor: ReaderActor<Outbound, R>)
-where
+async fn run_reader<Outbound, R>(
+    mut actor: ReaderActor<Outbound, R>,
+    mut kill_rx: oneshot::Receiver<()>,
+) where
     Outbound: OutboundMessage,
     R: AsyncRead,
 {
@@ -47,31 +50,41 @@ where
     loop {
         let mut buf = vec![];
 
-        match actor.reader.read_buf(&mut buf).await {
-            Ok(0) => {
-                let _ = actor
-                    .session_ref
-                    .disconnect("received EOF".to_string())
-                    .await;
-                break;
-            }
-            Err(err) => {
-                let _ = actor.session_ref.disconnect(err.to_string()).await;
-                break;
-            }
-            Ok(_) => {
-                let messages = parser.parse(&buf);
-
-                for msg in messages {
-                    if actor
+        tokio::select! {
+            result = actor.reader.read_buf(&mut buf) => match result {
+                Ok(0) => {
+                    let _ = actor
                         .session_ref
-                        .new_fix_message_received(msg)
-                        .await
-                        .is_err()
-                    {
-                        debug!("reader received message but session has been terminated");
+                        .disconnect("received EOF".to_string())
+                        .await;
+                    break;
+                }
+                Err(err) => {
+                    let _ = actor.session_ref.disconnect(err.to_string()).await;
+                    break;
+                }
+                Ok(_) => {
+                    let messages = parser.parse(&buf);
+
+                    for msg in messages {
+                        if actor
+                            .session_ref
+                            .new_fix_message_received(msg)
+                            .await
+                            .is_err()
+                        {
+                            debug!("reader received message but session has been terminated");
+                        }
                     }
                 }
+            },
+            res = &mut kill_rx => {
+                let reason = match res {
+                    Ok(()) => "forced close by watchdog",
+                    Err(_) => "reader handle dropped",
+                };
+                let _ = actor.session_ref.disconnect(reason.to_string()).await;
+                break;
             }
         }
     }
@@ -227,5 +240,43 @@ mod tests {
 
         // wait for disconnect signal
         let _ = reader_ref.wait_for_disconnect().await;
+    }
+
+    /// Kill signal terminates the reader even when the peer is silent, and
+    /// the session observes the watchdog-sourced disconnect reason.
+    #[tokio::test]
+    async fn kill_signal_terminates_reader() {
+        let (_writer, reader) = duplex(1024);
+        let (reader_half, _writer_half) = tokio::io::split(reader);
+
+        let (session_ref, mut event_receiver) = create_test_session_ref();
+        let reader_ref = spawn_socket_reader(reader_half, session_ref);
+
+        // Destructure so we can both fire the kill and later await the disconnect signal.
+        let ReaderRef {
+            disconnect_signal,
+            kill,
+        } = reader_ref;
+
+        kill.send(()).expect("kill receiver dropped");
+
+        // Reader should publish the watchdog reason to the session.
+        match tokio::time::timeout(
+            tokio::time::Duration::from_millis(100),
+            event_receiver.recv(),
+        )
+        .await
+        {
+            Ok(Some(SessionEvent::Disconnected(reason))) => {
+                assert_eq!(reason, "forced close by watchdog");
+            }
+            other => panic!("expected Disconnected(\"forced close by watchdog\"), got {other:?}"),
+        }
+
+        // And the disconnect signal should fire shortly after.
+        tokio::time::timeout(tokio::time::Duration::from_millis(100), disconnect_signal)
+            .await
+            .expect("disconnect signal not fired within timeout")
+            .expect("disconnect sender dropped without signalling");
     }
 }
