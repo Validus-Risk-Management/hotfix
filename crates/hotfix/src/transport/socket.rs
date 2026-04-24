@@ -47,7 +47,7 @@ where
 {
     let (reader, writer) = tokio::io::split(stream);
 
-    let writer_ref = spawn_socket_writer(writer);
+    let (writer_ref, _writer_exit) = spawn_socket_writer(writer);
     let reader_ref = spawn_socket_reader(reader, session_ref);
 
     FixConnection::new(writer_ref, reader_ref)
