@@ -314,10 +314,7 @@ mod tests {
             Poll::Ready(Ok(()))
         }
 
-        fn poll_shutdown(
-            self: Pin<&mut Self>,
-            _cx: &mut Context<'_>,
-        ) -> Poll<std::io::Result<()>> {
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
             Poll::Pending
         }
     }
@@ -335,10 +332,11 @@ mod tests {
         writer_ref.disconnect().await;
 
         // Advance virtual time past the shutdown timeout.
-        tokio::time::advance(WRITER_SHUTDOWN_TIMEOUT + std::time::Duration::from_millis(100))
-            .await;
+        tokio::time::advance(WRITER_SHUTDOWN_TIMEOUT + std::time::Duration::from_millis(100)).await;
 
         // Exit should have fired by now.
-        exit_rx.await.expect("exit sender dropped without signalling");
+        exit_rx
+            .await
+            .expect("exit sender dropped without signalling");
     }
 }

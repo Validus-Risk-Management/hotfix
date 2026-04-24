@@ -37,7 +37,8 @@ where
     ) -> Result<Self> {
         let (writer_ref, receiver) = Self::create_writer();
         let (reader_ref, dc_sender) = Self::create_reader();
-        let connection = FixConnection::new(writer_ref, reader_ref);
+        let (_writer_exit_tx, writer_exit_rx) = oneshot::channel();
+        let connection = FixConnection::new(writer_ref, reader_ref, writer_exit_rx);
         let message_config = MessageConfig::default();
         let message_builder = MessageBuilder::new(Dictionary::fix44(), message_config)?;
 
@@ -61,7 +62,8 @@ where
     pub async fn reconnect(&mut self, reset_store: bool) -> Result<()> {
         let (writer_ref, receiver) = Self::create_writer();
         let (reader_ref, dc_sender) = Self::create_reader();
-        let connection = FixConnection::new(writer_ref, reader_ref);
+        let (_writer_exit_tx, writer_exit_rx) = oneshot::channel();
+        let connection = FixConnection::new(writer_ref, reader_ref, writer_exit_rx);
 
         self.receiver = receiver;
         self._dc_sender = dc_sender;

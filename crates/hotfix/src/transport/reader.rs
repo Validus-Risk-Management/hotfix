@@ -7,9 +7,6 @@ pub struct ReaderMessage;
 
 pub struct ReaderRef {
     pub(crate) disconnect_signal: oneshot::Receiver<()>,
-    // Consumed by the watchdog in FixConnection::run_until_disconnect (follow-up commit).
-    // Kept wired now so the reader's select! already accepts an external kill signal.
-    #[allow(dead_code)]
     pub(crate) kill: oneshot::Sender<()>,
 }
 
