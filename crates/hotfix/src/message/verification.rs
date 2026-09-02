@@ -238,6 +238,7 @@ fn check_target_comp_id(
 #[cfg(test)]
 mod tests {
     use super::{Message, SessionConfig, VerificationFlags, verify_message};
+    use crate::config::ValidationConfig;
     use crate::message::sequence_reset::SequenceReset;
     use crate::message::verification_issue::{CompIdType, MessageError, VerificationIssue};
     use hotfix_message::field_types::Timestamp;
@@ -258,6 +259,7 @@ mod tests {
             reconnect_interval: 0,
             reset_on_logon: false,
             schedule: None,
+            validation: ValidationConfig::default(),
         }
     }
 

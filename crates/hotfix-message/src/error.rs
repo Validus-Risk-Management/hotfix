@@ -27,6 +27,11 @@ pub enum ParserError {
     InvalidComponent(String),
     #[error("MsgType {0} is not a valid message type")]
     InvalidMsgType(String),
+    #[error(
+        "required field (tag = {tag}) is missing{}",
+        match group_tag { Some(g) => format!(" from repeating group (group tag = {g})"), None => String::new() }
+    )]
+    RequiredFieldMissing { tag: u32, group_tag: Option<u32> },
     #[error("malformed message: {0}")]
     Malformed(String),
 }

@@ -309,6 +309,7 @@ mod tests {
             reconnect_interval: 1, // Short for tests
             reset_on_logon: false,
             schedule: None,
+            validation: Default::default(),
         }
     }
 

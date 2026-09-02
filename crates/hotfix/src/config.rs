@@ -114,6 +114,63 @@ pub struct SessionConfig {
 
     /// The schedule configuration for the session
     pub schedule: Option<ScheduleConfig>,
+
+    /// The validation configuration for the session
+    #[serde(default)]
+    pub validation: ValidationConfig,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+/// The configuration of validation rules.
+pub struct ValidationConfig {
+    /// Specifies whether unknown user-defined tags (>= 5000) should cause the message to be rejected.
+    #[serde(default = "default_true")]
+    pub validate_user_defined_fields: bool,
+}
+
+impl ValidationConfig {
+    pub fn builder() -> ValidationConfigBuilder {
+        ValidationConfigBuilder::default()
+    }
+}
+
+impl Default for ValidationConfig {
+    fn default() -> Self {
+        ValidationConfigBuilder::default().build()
+    }
+}
+
+pub struct ValidationConfigBuilder {
+    validate_user_defined_fields: bool,
+}
+
+impl Default for ValidationConfigBuilder {
+    fn default() -> Self {
+        Self {
+            validate_user_defined_fields: true,
+        }
+    }
+}
+
+impl ValidationConfigBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn validate_user_defined_fields(mut self, value: bool) -> Self {
+        self.validate_user_defined_fields = value;
+        self
+    }
+
+    pub fn build(self) -> ValidationConfig {
+        ValidationConfig {
+            validate_user_defined_fields: self.validate_user_defined_fields,
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Errors that may occur when loading configuration.
@@ -128,7 +185,9 @@ pub enum ConfigError {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::{Config, ConfigError, TlsConfig};
+    use crate::config::{
+        Config, ConfigError, TlsConfig, ValidationConfig, ValidationConfigBuilder,
+    };
     use chrono::{NaiveTime, Weekday};
     use std::io::Write;
     use tempfile::NamedTempFile;
@@ -170,6 +229,7 @@ reset_on_logon = false
         assert_eq!(session_config.tls_config, Some(expected_tls_config));
         assert_eq!(session_config.reconnect_interval, 30);
         assert_eq!(session_config.logon_timeout, 10);
+        assert!(session_config.validation.validate_user_defined_fields);
     }
 
     #[test]
@@ -437,6 +497,86 @@ end_day = "Friday"
 
         let session_config = config.sessions.first().unwrap();
         assert_eq!(session_config.reconnect_interval, 15);
+    }
+
+    #[test]
+    fn test_verification_config_defaults_when_omitted() {
+        let config_contents = r#"
+[[sessions]]
+begin_string = "FIX.4.4"
+sender_comp_id = "send-comp-id"
+target_comp_id = "target-comp-id"
+connection_port = 443
+connection_host = "127.0.0.1"
+heartbeat_interval = 30
+        "#;
+
+        let config: Config = toml::from_str(config_contents).unwrap();
+        let session_config = config.sessions.first().unwrap();
+
+        assert!(session_config.validation.validate_user_defined_fields);
+    }
+
+    #[test]
+    fn test_verification_config_can_disable_user_defined_field_validation() {
+        let config_contents = r#"
+[[sessions]]
+begin_string = "FIX.4.4"
+sender_comp_id = "send-comp-id"
+target_comp_id = "target-comp-id"
+connection_port = 443
+connection_host = "127.0.0.1"
+heartbeat_interval = 30
+
+[sessions.validation]
+validate_user_defined_fields = false
+        "#;
+
+        let config: Config = toml::from_str(config_contents).unwrap();
+        let session_config = config.sessions.first().unwrap();
+
+        assert!(!session_config.validation.validate_user_defined_fields);
+    }
+
+    #[test]
+    fn test_validation_config_builder_produces_default() {
+        let config = ValidationConfig::builder().build();
+        assert!(config.validate_user_defined_fields);
+    }
+
+    #[test]
+    fn test_verification_config_builder_new_and_override() {
+        let enabled = ValidationConfigBuilder::new().build();
+        assert!(enabled.validate_user_defined_fields);
+
+        let disabled = ValidationConfigBuilder::new()
+            .validate_user_defined_fields(false)
+            .build();
+        assert!(!disabled.validate_user_defined_fields);
+    }
+
+    #[test]
+    fn test_validation_field_default_when_section_present_but_field_omitted() {
+        let config_contents = r#"
+[[sessions]]
+begin_string = "FIX.4.4"
+sender_comp_id = "send-comp-id"
+target_comp_id = "target-comp-id"
+connection_port = 443
+connection_host = "127.0.0.1"
+heartbeat_interval = 30
+
+[sessions.validation]
+        "#;
+
+        let config: Config = toml::from_str(config_contents).unwrap();
+        let session_config = config.sessions.first().unwrap();
+
+        // The [sessions.validation] table is present but omits the field, so the
+        // field-level serde default (`default_true`) supplies the value, unlike
+        // `test_verification_config_defaults_when_omitted` where the whole table
+        // is absent and `ValidationConfig::default()` is used instead.
+        assert!(session_config.validation.validate_user_defined_fields);
     }
 
     #[test]
