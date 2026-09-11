@@ -91,6 +91,7 @@ pub(crate) fn create_test_ctx(store: FakeMessageStore) -> SessionCtx<(), FakeMes
             reconnect_interval: 30,
             reset_on_logon: false,
             schedule: None,
+            validation: Default::default(),
         },
         store,
         application: (),

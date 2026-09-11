@@ -26,6 +26,7 @@ fn create_session_config(host: &str, port: u16, tls_config: Option<TlsConfig>) -
         reconnect_interval: 30,
         reset_on_logon: false,
         schedule: None,
+        validation: Default::default(),
     }
 }
 

@@ -27,6 +27,7 @@ pub enum InvalidReason {
     InvalidOrderInGroup { tag: u32, group_tag: u32 },
     InvalidComponent(String),
     InvalidMsgType(String),
+    RequiredFieldMissing { tag: u32, group_tag: Option<u32> },
 }
 
 #[derive(Debug)]

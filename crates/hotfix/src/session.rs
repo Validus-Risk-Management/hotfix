@@ -79,7 +79,8 @@ where
         let schedule_check_timer = sleep(Duration::from_secs(SCHEDULE_CHECK_INTERVAL));
 
         let dictionary = Self::get_data_dictionary(&config)?;
-        let message_config = MessageConfig::default();
+        let message_config = MessageConfig::default()
+            .validate_user_defined_fields(config.validation.validate_user_defined_fields);
         let message_builder = MessageBuilder::new(dictionary, message_config)?;
         let schedule = config.schedule.as_ref().try_into()?;
         let ctx = SessionCtx {
@@ -178,6 +179,27 @@ where
                             self.send_message(reject)
                                 .await
                                 .with_send_context("reject for invalid group order")?;
+                        }
+                        Err(err) => {
+                            error!("failed to get message seq num: {:?}", err);
+                        }
+                    }
+                }
+                InvalidReason::RequiredFieldMissing { tag, group_tag } => {
+                    match message.header().get(MSG_SEQ_NUM) {
+                        Ok(msg_seq_num) => {
+                            let text = match group_tag {
+                                Some(group_tag) => {
+                                    format!("required tag missing: {tag} (in group {group_tag})")
+                                }
+                                None => format!("required tag missing: {tag}"),
+                            };
+                            let reject = Reject::new(msg_seq_num)
+                                .session_reject_reason(SessionRejectReason::RequiredTagMissing)
+                                .text(&text);
+                            self.send_message(reject)
+                                .await
+                                .with_send_context("reject for missing required field")?;
                         }
                         Err(err) => {
                             error!("failed to get message seq num: {:?}", err);
@@ -771,6 +793,7 @@ async fn run_session<App, Store>(
 mod tests {
     use super::*;
     use crate::application::{InboundDecision, OutboundDecision};
+    use crate::config::ValidationConfig;
     use crate::message::OutboundMessage;
     use crate::store::{Result as StoreResult, StoreError};
     use chrono::{DateTime, Datelike, NaiveDate, NaiveTime, TimeDelta, Timelike};
@@ -907,6 +930,7 @@ mod tests {
             reconnect_interval: 30,
             reset_on_logon: false,
             schedule: None,
+            validation: ValidationConfig::default(),
         }
     }
 

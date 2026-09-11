@@ -347,6 +347,28 @@ pub fn build_execution_report_with_sending_time_too_old(msg_seq_num: u64) -> Vec
     msg.encode(&Config::default()).unwrap()
 }
 
+/// Builds a MassQuote (MsgType=i) whose single NoQuoteSets (296) entry omits the
+/// required TotNoQuoteEntries (304) field.
+///
+/// The message is well-framed and parses successfully up to the group, where the
+/// missing required in-group field makes it `Invalid(RequiredFieldMissing)`, so
+/// the session must reject it with `RequiredTagMissing`.
+pub fn build_mass_quote_with_missing_required_group_field(msg_seq_num: u64) -> Vec<u8> {
+    const SOH: char = '\u{1}';
+    // The NoQuoteSets entry carries only its delimiter QuoteSetID (302); the
+    // required TotNoQuoteEntries (304) is intentionally omitted.
+    let body = format!(
+        "35=i{SOH}49={COUNTERPARTY_COMP_ID}{SOH}56={OUR_COMP_ID}{SOH}\
+         34={msg_seq_num}{SOH}52=20250101-00:00:00{SOH}296=1{SOH}302=QSET1{SOH}"
+    );
+    let mut message = format!("8=FIX.4.4{SOH}9={}{SOH}", body.len()).into_bytes();
+    message.extend_from_slice(body.as_bytes());
+
+    let checksum = message.iter().fold(0u8, |acc, &b| acc.wrapping_add(b));
+    message.extend_from_slice(format!("10={checksum:03}{SOH}").as_bytes());
+    message
+}
+
 /// Replaces the value of a field in a raw FIX message.
 pub fn replace_field_value(raw_message: &mut Vec<u8>, tag: u32, new_value: &[u8]) {
     let tag_bytes = format!("{}=", tag).into_bytes();

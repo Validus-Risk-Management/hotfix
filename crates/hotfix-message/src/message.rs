@@ -119,16 +119,28 @@ impl Part for Message {
 #[derive(Clone, Copy)]
 pub struct Config {
     pub(crate) separator: u8,
+    pub(crate) validate_user_defined_fields: bool,
 }
 
 impl Config {
     pub const fn with_separator(separator: u8) -> Self {
-        Self { separator }
+        Self {
+            separator,
+            validate_user_defined_fields: true,
+        }
+    }
+
+    pub const fn validate_user_defined_fields(mut self, value: bool) -> Self {
+        self.validate_user_defined_fields = value;
+        self
     }
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { separator: SOH }
+        Self {
+            separator: SOH,
+            validate_user_defined_fields: true,
+        }
     }
 }

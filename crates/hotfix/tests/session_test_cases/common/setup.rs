@@ -119,6 +119,7 @@ pub fn create_session_config() -> SessionConfig {
         reconnect_interval: 30,
         reset_on_logon: false,
         schedule: None,
+        validation: Default::default(),
     }
 }
 

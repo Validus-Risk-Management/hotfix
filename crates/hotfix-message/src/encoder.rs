@@ -75,7 +75,7 @@ mod tests {
         msg.set(fix44::PRICE, 150);
         msg.set(fix44::ORDER_QTY, 60);
 
-        let config = Config { separator: b'|' };
+        let config = Config::with_separator(b'|');
         let raw_message = msg.encode(&config)?;
 
         let builder = MessageBuilder::new(Dictionary::fix44(), config)?;
@@ -146,7 +146,7 @@ mod tests {
         party_2.store_field(Field::new(fix44::PARTY_ROLE.tag(), b"2".to_vec()));
 
         msg.body.set_groups(vec![party_1, party_2])?;
-        let config = Config { separator: b'|' };
+        let config = Config::with_separator(b'|');
         let raw_message = msg.encode(&config)?;
 
         let builder = MessageBuilder::new(Dictionary::fix44(), config)?;

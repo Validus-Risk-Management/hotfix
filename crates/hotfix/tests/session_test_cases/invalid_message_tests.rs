@@ -11,6 +11,7 @@ use crate::common::test_messages::{
     build_execution_report_with_missing_orig_sending_time,
     build_execution_report_with_missing_sending_time,
     build_execution_report_with_sending_time_too_old,
+    build_mass_quote_with_missing_required_group_field,
 };
 use hotfix::session::Status;
 use hotfix_message::Part;
@@ -27,6 +28,35 @@ async fn test_message_with_invalid_field_gets_rejected() {
         .await;
     then(&mut counterparty)
         .receives(|msg| assert_msg_type(msg, MsgType::Reject))
+        .await;
+
+    finally(&session, &mut counterparty).disconnect().await;
+}
+
+/// Tests that when a counterparty sends a message whose repeating group is missing
+/// a required in-group field, the session rejects it with a Reject (MsgType=3)
+/// carrying SessionRejectReason=RequiredTagMissing.
+#[tokio::test]
+async fn test_message_with_missing_required_group_field_gets_rejected() {
+    let (session, mut counterparty) = given_an_active_session().await;
+
+    // MassQuote whose NoQuoteSets entry omits the required TotNoQuoteEntries field.
+    let invalid_message = build_mass_quote_with_missing_required_group_field(
+        counterparty.next_target_sequence_number(),
+    );
+    when(&mut counterparty)
+        .sends_raw_message(invalid_message)
+        .await;
+
+    then(&mut counterparty)
+        .receives(|msg| {
+            assert_msg_type(msg, MsgType::Reject);
+            assert_eq!(
+                msg.get::<SessionRejectReason>(SESSION_REJECT_REASON)
+                    .unwrap(),
+                SessionRejectReason::RequiredTagMissing
+            );
+        })
         .await;
 
     finally(&session, &mut counterparty).disconnect().await;
