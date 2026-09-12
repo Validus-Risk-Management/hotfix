@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.12.1...hotfix-v0.13.0) - 2026-09-11
+
+### Added
+
+- introduce flag validate_user_defined_fields ([#352](https://github.com/Validus-Risk-Management/hotfix/pull/352))
+
 ## [0.12.1](https://github.com/Validus-Risk-Management/hotfix/compare/hotfix-v0.12.0...hotfix-v0.12.1) - 2026-05-13
 
 ### Added
